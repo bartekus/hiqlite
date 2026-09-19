@@ -1,0 +1,57 @@
+{
+  "record": {
+    "created": "2026-09-18",
+    "establishes": [
+      {
+        "kind": "file",
+        "path": "ARCHITECTURE.md"
+      },
+      {
+        "kind": "file",
+        "path": "justfile"
+      },
+      {
+        "kind": "file",
+        "path": ".github/workflows/spec-spine.yaml"
+      },
+      {
+        "kind": "file",
+        "path": "spec-spine.toml"
+      },
+      {
+        "kind": "file",
+        "path": ".gitignore"
+      }
+    ],
+    "id": "000-hiqlite-ownership-bootstrap",
+    "implementation": "complete",
+    "origin": {
+      "paths": [
+        "ARCHITECTURE.md",
+        "justfile",
+        ".github/workflows/",
+        "spec-spine.toml"
+      ],
+      "retroactive": true
+    },
+    "owner": "hiqlite maintainers",
+    "risk": "high",
+    "sectionHeadings": [
+      "000: Bound the first hiqlite governance corpus",
+      "1. Purpose",
+      "2. Ownership boundary",
+      "3. Adoption state",
+      "4. Governance workflow",
+      "5. Pull-request trust boundary",
+      "6. Known limitations and follow-up",
+      "7. Provenance",
+      "Verification"
+    ],
+    "specPath": "specs/000-hiqlite-ownership-bootstrap/spec.md",
+    "status": "draft",
+    "summary": "Defines the authority boundary for a bounded retroactive spec-spine pilot and owns the local regeneration, validation, and pull-request coupling workflow.\n",
+    "title": "Bound the first hiqlite governance corpus"
+  },
+  "shardHash": "9395040b47ee4d9d456d3b7fccc59040c97416d037a18448424ff2faa35da804",
+  "specVersion": "1.3.0"
+}

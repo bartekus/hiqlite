@@ -282,3 +282,25 @@ that way. The `hiqlite::Client` exposes many functions for you to do any work on
 don't use anything else manually. The good thing is, if you decide to drop Hiqlite at some point for whatever reason,
 you can grab that database file and use it directly. Just never do both things at the same time. But, this is true for
 any database or application in general. If you modify its files without it knowing about it, bad things will happen.
+
+## Specification governance pilot
+
+The `specs/` corpus records four retroactive, draft contracts: the ownership bootstrap, WAL durability and completion,
+snapshot publication and recovery, and client consistency and retry outcomes. Draft means the contracts have not been
+ratified by an owner. `implementation: complete` means their acceptance commands describe and exercise the current
+tree.
+
+OpenRaft owns leader election, quorum rules, and the consensus algorithm. Hiqlite owns its WAL and vote persistence,
+SQLite and cache state machines, transport and client behavior, configuration, and recovery integration. External
+state-machine mode does not start a Hiqlite Raft group. Its caller owns consensus order, membership, durable log
+retention, and the outer snapshot manifest.
+
+Install the pinned tool with `just spine-install`. After a trusted contract or governed implementation edit, run
+`just spine-regenerate` and commit the changed `.derived/` shards. `just spine-check` is read-only. On a feature branch,
+run `just spine-couple <base-sha> HEAD` against the pull request's actual base. Run an executable acceptance block with
+`just spine-verify <spec-id>` only after reviewing that spec's commands. Pull-request CI intentionally does not execute
+commands authored by the pull request.
+
+This pilot leaves repository-wide ownership coverage, membership contracts, distributed leases, and broader transport
+coverage as follow-up work. `require_ownership` therefore remains disabled: coupling enforces specification
+participation for the paths explicitly claimed by these specs without treating every unclaimed Rust file as a failure.

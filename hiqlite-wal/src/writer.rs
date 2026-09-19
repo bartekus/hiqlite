@@ -164,6 +164,32 @@ fn flush_blocking(
     Ok(())
 }
 
+/// Report the append result, perform the mode-specific persistence step, and only then report
+/// log I/O completion to openraft.
+///
+/// The append acknowledgement and the completion callback are distinct events. The former says
+/// that the writer accepted or rejected the bytes. The latter is emitted only after `persist`
+/// succeeds. In async modes the supplied persistence step may only start writeback, so callback
+/// delivery does not by itself imply stable storage.
+fn complete_append<F>(
+    append_result: Result<(), Error>,
+    ack: oneshot::Sender<Result<(), Error>>,
+    callback: Box<dyn FnOnce() + Send>,
+    persist: F,
+) -> Result<(), Error>
+where
+    F: FnOnce() -> Result<(), Error>,
+{
+    if let Err(err) = ack.send(append_result) {
+        // this should usually not happen, but it may during an incorrect shutdown
+        error!("error sending back ack after logs append: {err:?}");
+    }
+
+    persist()?;
+    callback();
+    Ok(())
+}
+
 fn spawn_syncer(tx_writer: flume::Sender<Action>, mut interval: Interval) {
     task::spawn(async move {
         loop {
@@ -274,24 +300,18 @@ fn run(
                     lock.active().clone_from_no_mmap(wal.active());
                 }
 
-                if let Err(err) = ack.send(res) {
-                    // this should usually not happen, but it may during an incorrect shutdown
-                    error!("error sending back ack after logs append: {err:?}");
-                }
-
                 // The WAL now holds bytes that are not known to be on disk, and only a
                 // blocking flush can clear that state again. `flush_async` merely starts the
                 // writeback, which is why `Action::Remove` and `Action::Vote` below still flush.
                 is_dirty = true;
-                if sync == LogSync::Immediate {
-                    flush_blocking(&mut wal, &mut buf, &mut is_dirty)?;
-                } else if sync == LogSync::ImmediateAsync {
-                    wal.active().flush_async()?;
-                }
-                // openraft takes this callback as "these entries are on disk" and commits on
-                // a quorum of such acks. Only `Immediate` upholds that here: the async levels
-                // deliberately ack first and trade the writeback window for throughput.
-                callback();
+                complete_append(res, ack, callback, || {
+                    if sync == LogSync::Immediate {
+                        flush_blocking(&mut wal, &mut buf, &mut is_dirty)?;
+                    } else if sync == LogSync::ImmediateAsync {
+                        wal.active().flush_async()?;
+                    }
+                    Ok(())
+                })?;
 
                 // Roll WAL pre-emptively if only very few space is left at this point, because
                 // if we just wrote some chunks, me probably have a very short break now until the
@@ -420,6 +440,61 @@ fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn append_result_precedes_persistence_and_completion() {
+        let (ack_tx, mut ack_rx) = oneshot::channel();
+        let (callback_tx, callback_rx) = std::sync::mpsc::channel();
+
+        complete_append(
+            Ok(()),
+            ack_tx,
+            Box::new(move || callback_tx.send(()).unwrap()),
+            || {
+                assert!(matches!(ack_rx.try_recv(), Ok(Ok(()))));
+                assert!(callback_rx.try_recv().is_err());
+                Ok(())
+            },
+        )
+        .unwrap();
+
+        assert!(callback_rx.try_recv().is_ok());
+    }
+
+    #[test]
+    fn persistence_failure_suppresses_completion_callback() {
+        let (ack_tx, ack_rx) = oneshot::channel();
+        let (callback_tx, callback_rx) = std::sync::mpsc::channel();
+
+        let err = complete_append(
+            Ok(()),
+            ack_tx,
+            Box::new(move || callback_tx.send(()).unwrap()),
+            || Err(Error::IO(std::io::Error::other("injected sync failure"))),
+        )
+        .unwrap_err();
+
+        assert!(matches!(err, Error::IO(_)));
+        assert!(matches!(ack_rx.blocking_recv(), Ok(Ok(()))));
+        assert!(callback_rx.try_recv().is_err());
+    }
+
+    #[test]
+    fn append_failure_is_returned_but_completion_still_fires() {
+        let (ack_tx, ack_rx) = oneshot::channel();
+        let (callback_tx, callback_rx) = std::sync::mpsc::channel();
+
+        complete_append(
+            Err(Error::IO(std::io::Error::other("injected append failure"))),
+            ack_tx,
+            Box::new(move || callback_tx.send(()).unwrap()),
+            || Ok(()),
+        )
+        .unwrap();
+
+        assert!(matches!(ack_rx.blocking_recv(), Ok(Err(Error::IO(_)))));
+        assert!(callback_rx.try_recv().is_ok());
+    }
 
     #[cfg(feature = "oversized-entry-error")]
     fn append(tx: &flume::Sender<Action>, id: u64, bytes: Vec<u8>) -> Result<(), Error> {

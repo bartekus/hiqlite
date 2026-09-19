@@ -1,0 +1,114 @@
+{
+  "mapping": {
+    "dependsOn": [
+      "000-hiqlite-ownership-bootstrap",
+      "001-wal-durability-and-completion"
+    ],
+    "implementingPaths": [
+      {
+        "path": "hiqlite/src/client/",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/external_state_machine.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/network/",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/query/",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/server/proxy/stream.rs",
+        "source": "spec-edge"
+      }
+    ],
+    "resolvedUnits": [
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/client/"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/client/"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/network/"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/network/"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/query/"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/query/"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/server/proxy/stream.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/server/proxy/stream.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/external_state_machine.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "co_authority",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/external_state_machine.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/config.rs"
+          }
+        ],
+        "ownership": false,
+        "sourceField": "references",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/config.rs"
+        }
+      }
+    ],
+    "specId": "003-client-consistency-and-retry-outcomes",
+    "specStatus": "draft"
+  },
+  "schemaVersion": "1.1.0",
+  "shardHash": "567ca998e70b5c69b822799cceaf92766bd5c4c230167a6cef4a8ff56e6525b7"
+}

@@ -1,0 +1,97 @@
+{
+  "mapping": {
+    "implementingPaths": [
+      {
+        "path": ".github/workflows/spec-spine.yaml",
+        "source": "spec-edge"
+      },
+      {
+        "path": ".gitignore",
+        "source": "spec-edge"
+      },
+      {
+        "path": "ARCHITECTURE.md",
+        "source": "spec-edge"
+      },
+      {
+        "path": "justfile",
+        "source": "spec-edge"
+      },
+      {
+        "path": "spec-spine.toml",
+        "source": "spec-edge"
+      }
+    ],
+    "resolvedUnits": [
+      {
+        "locations": [
+          {
+            "file": ".github/workflows/spec-spine.yaml"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": ".github/workflows/spec-spine.yaml"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": ".gitignore"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": ".gitignore"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "ARCHITECTURE.md"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "ARCHITECTURE.md"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "justfile"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "justfile"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "spec-spine.toml"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "spec-spine.toml"
+        }
+      }
+    ],
+    "specId": "000-hiqlite-ownership-bootstrap",
+    "specStatus": "draft"
+  },
+  "schemaVersion": "1.1.0",
+  "shardHash": "ecdfbf69ccd3e19f9fc2c54af2f42fdf58382bec9aee14dca195fcc2ceb8bc21"
+}

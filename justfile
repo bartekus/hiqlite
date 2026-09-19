@@ -288,3 +288,30 @@ update:
     cd dashboard
     # min release is set via `dashboard/.npmrc`
     npm update
+
+# Governance tool pin. The revision is newer than the v0.20.0 tag while still
+# reporting 0.20.0, so the revision is the reproducibility boundary.
+spec-spine-rev := "aa559f5dcaa59bd9f27b0622b51ae5b57dc2185f"
+
+# Install the exact spec-spine revision used by CI.
+spine-install:
+    cargo install spec-spine-cli --git https://github.com/statecrafting/spec-spine --rev {{ spec-spine-rev }} --locked
+
+# Regenerate the committed registry and codebase-index shards after a trusted edit.
+spine-regenerate:
+    spec-spine compile
+    spec-spine index
+
+# Read-only corpus, freshness, lint, and bounded coverage checks.
+spine-check:
+    spec-spine check --fail-on-unresolved --fail-on-warn
+    spec-spine lint --fail-on-warn
+    spec-spine index coverage
+
+# Compare a branch to its actual pull-request base. Pass the base SHA in CI.
+spine-couple base="origin/main" head="HEAD":
+    spec-spine couple --base "{{ base }}" --head "{{ head }}"
+
+# Run one trusted specification's executable acceptance block locally.
+spine-verify spec:
+    spec-spine verify "{{ spec }}"

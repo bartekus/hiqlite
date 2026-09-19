@@ -1,0 +1,43 @@
+name: Spec spine
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+
+permissions:
+  contents: read
+
+env:
+  SPEC_SPINE_REV: aa559f5dcaa59bd9f27b0622b51ae5b57dc2185f
+
+jobs:
+  govern:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install pinned spec-spine
+        run: |
+          cargo install spec-spine-cli \
+            --git https://github.com/statecrafting/spec-spine \
+            --rev "$SPEC_SPINE_REV" \
+            --locked
+
+      - name: Validate committed governance artifacts
+        run: |
+          spec-spine check --fail-on-unresolved --fail-on-warn
+          spec-spine lint --fail-on-warn
+          spec-spine index coverage
+
+      - name: Check specification participation
+        run: |
+          spec-spine couple \
+            --base "${{ github.event.pull_request.base.sha }}" \
+            --head HEAD
+
+      # `spec-spine verify` executes commands authored in the specifications.
+      # Pull requests are untrusted input, so acceptance blocks stay a local,
+      # maintainer-invoked check and are not executed by this workflow.
