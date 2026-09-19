@@ -1,0 +1,80 @@
+{
+  "mapping": {
+    "dependsOn": [
+      "000-hiqlite-ownership-bootstrap",
+      "001-wal-durability-and-completion"
+    ],
+    "implementingPaths": [
+      {
+        "path": "hiqlite/src/external_state_machine.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/store/state_machine/sqlite/",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/tests/cluster/self_heal.rs",
+        "source": "spec-edge"
+      }
+    ],
+    "resolvedUnits": [
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/store/state_machine/sqlite/"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/store/state_machine/sqlite/"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/external_state_machine.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/external_state_machine.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/tests/cluster/self_heal.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/tests/cluster/self_heal.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/config.rs"
+          }
+        ],
+        "ownership": false,
+        "sourceField": "references",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/config.rs"
+        }
+      }
+    ],
+    "specId": "002-snapshot-publication-and-recovery",
+    "specStatus": "draft"
+  },
+  "schemaVersion": "1.1.0",
+  "shardHash": "726e3cde0cc75d7a48dd8fdef2e581c3979ba02a694b5fce78dd32d3d29e6354"
+}

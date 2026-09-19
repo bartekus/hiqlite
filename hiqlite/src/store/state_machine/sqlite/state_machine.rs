@@ -856,6 +856,207 @@ impl RaftStateMachine<TypeConfigSqlite> for StateMachineSqlite {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::helpers::serialize;
+    use hiqlite_wal::{Action, LogStore, LogSync};
+    use openraft::storage::{RaftLogReader, RaftStateMachine};
+    use openraft::{CommittedLeaderId, RaftSnapshotBuilder};
+
+    fn batch_entry(index: u64, sql: &'static str) -> Entry {
+        Entry {
+            log_id: LogId::new(CommittedLeaderId::new(1, 1), index),
+            payload: EntryPayload::Normal(QueryWrite::Batch(Cow::Borrowed(sql))),
+        }
+    }
+
+    async fn append_entries_to_wal(log_store: &LogStore<TypeConfigSqlite>, entries: &[Entry]) {
+        let (entry_tx, entry_rx) = flume::bounded(1);
+        let (ack_tx, ack_rx) = oneshot::channel();
+        let (completed_tx, completed_rx) = oneshot::channel();
+
+        log_store
+            .writer
+            .send_async(Action::Append {
+                rx: entry_rx,
+                callback: Box::new(move || {
+                    let _ = completed_tx.send(());
+                }),
+                ack: ack_tx,
+            })
+            .await
+            .unwrap();
+
+        for entry in entries {
+            entry_tx
+                .send_async(Some((entry.log_id.index, serialize(entry).unwrap())))
+                .await
+                .unwrap();
+        }
+        entry_tx.send_async(None).await.unwrap();
+
+        ack_rx.await.unwrap().unwrap();
+        completed_rx.await.unwrap();
+    }
+
+    async fn shutdown_state_machine(state_machine: &StateMachineSqlite) {
+        let (ack_tx, ack_rx) = oneshot::channel();
+        state_machine
+            .write_tx
+            .send_async(WriterRequest::Shutdown(ack_tx))
+            .await
+            .unwrap();
+        ack_rx.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn restart_reconstructs_snapshot_then_replays_retained_wal() {
+        let root =
+            std::env::temp_dir().join(format!("hiqlite-snapshot-retained-wal-{}", Uuid::now_v7()));
+        let root_str = root.to_string_lossy().into_owned();
+        let logs_path = root.join("logs").to_string_lossy().into_owned();
+
+        let snapshot_entry = batch_entry(
+            1,
+            "CREATE TABLE recovery (id INTEGER PRIMARY KEY, value TEXT NOT NULL);\
+             INSERT INTO recovery VALUES (1, 'from snapshot');",
+        );
+        let retained_entry =
+            batch_entry(2, "INSERT INTO recovery VALUES (2, 'from retained wal');");
+
+        let log_store =
+            LogStore::<TypeConfigSqlite>::start(logs_path.clone(), LogSync::Immediate, 64 * 1024)
+                .await
+                .unwrap();
+        append_entries_to_wal(
+            &log_store,
+            &[snapshot_entry.clone(), retained_entry.clone()],
+        )
+        .await;
+
+        let mut state_machine = StateMachineSqlite::new(
+            &root_str,
+            "state.sqlite",
+            1,
+            false,
+            2,
+            1,
+            #[cfg(feature = "s3")]
+            None,
+            false,
+            #[cfg(feature = "backup")]
+            1,
+        )
+        .await
+        .unwrap();
+        state_machine.apply([snapshot_entry]).await.unwrap();
+
+        let snapshot = state_machine
+            .get_snapshot_builder()
+            .await
+            .build_snapshot()
+            .await
+            .unwrap();
+        assert_eq!(snapshot.meta.last_log_id.unwrap().index, 1);
+
+        shutdown_state_machine(&state_machine).await;
+        drop(snapshot);
+        drop(state_machine);
+        log_store.stop().await.unwrap();
+
+        fs::remove_dir_all(root.join("state_machine/db"))
+            .await
+            .unwrap();
+
+        let mut recovered = StateMachineSqlite::new(
+            &root_str,
+            "state.sqlite",
+            1,
+            false,
+            2,
+            1,
+            #[cfg(feature = "s3")]
+            None,
+            false,
+            #[cfg(feature = "backup")]
+            1,
+        )
+        .await
+        .unwrap();
+        assert_eq!(recovered.applied_state().await.unwrap().0.unwrap().index, 1);
+
+        let mut retained_log_store =
+            LogStore::<TypeConfigSqlite>::start(logs_path, LogSync::Immediate, 64 * 1024)
+                .await
+                .unwrap();
+        let retained = retained_log_store.try_get_log_entries(2..=2).await.unwrap();
+        assert_eq!(retained.len(), 1);
+        recovered.apply(retained).await.unwrap();
+
+        let conn = recovered.read_pool.get().await.unwrap();
+        let rows = task::spawn_blocking(move || {
+            let mut stmt = conn
+                .prepare("SELECT id, value FROM recovery ORDER BY id")
+                .unwrap();
+            stmt.query_map([], |row| {
+                Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+            })
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap()
+        })
+        .await
+        .unwrap();
+        assert_eq!(
+            rows,
+            vec![
+                (1, "from snapshot".to_string()),
+                (2, "from retained wal".to_string()),
+            ]
+        );
+        assert_eq!(recovered.applied_state().await.unwrap().0.unwrap().index, 2);
+
+        shutdown_state_machine(&recovered).await;
+        drop(recovered);
+        retained_log_store.stop().await.unwrap();
+        fs::remove_dir_all(root).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn interrupted_staging_files_are_not_published_snapshots() {
+        let root =
+            std::env::temp_dir().join(format!("hiqlite-snapshot-staging-{}", Uuid::now_v7()));
+        fs::create_dir_all(&root).await.unwrap();
+        fs::write(root.join("temp"), b"partial receive")
+            .await
+            .unwrap();
+        fs::write(
+            root.join(format!("{}.temp", Uuid::now_v7())),
+            b"complete builder staging image",
+        )
+        .await
+        .unwrap();
+
+        let (write_tx, _write_rx) = flume::bounded(1);
+        let mut state_machine = StateMachineSqlite {
+            this_node: 1,
+            path_snapshots: root.to_string_lossy().into_owned(),
+            #[cfg(feature = "backup")]
+            path_backups: root.to_string_lossy().into_owned(),
+            path_lock_file: root.join("lock").to_string_lossy().into_owned(),
+            #[cfg(feature = "s3")]
+            s3_config: None,
+            read_pool: SqlitePool::from(Vec::<rusqlite::Connection>::new()),
+            write_tx,
+        };
+
+        assert!(
+            state_machine
+                .read_current_snapshot()
+                .await
+                .unwrap()
+                .is_none()
+        );
+        fs::remove_dir_all(root).await.unwrap();
+    }
 
     #[test]
     fn forbidden_functions_panic_on_purpose_and_fail_the_statement() {

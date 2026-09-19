@@ -1,0 +1,10 @@
+{
+  "package": {
+    "kind": "rust-lib",
+    "name": "hiqlite-derive",
+    "path": "hiqlite-derive",
+    "version": "0.14.0"
+  },
+  "schemaVersion": "1.1.0",
+  "shardHash": "a14360bac2d9ceb5329e910977398940dc78f4259321f15541d6969a6bbb46af"
+}

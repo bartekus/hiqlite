@@ -1,0 +1,63 @@
+[meta]
+required_version = "=0.20.0"
+
+[manifest]
+metadata_namespace = "spec-spine"
+
+[layout]
+specs_dir = "specs"
+derived_dir = ".derived"
+standards_dir = "standards/spec"
+schemas_dir = "standards/schemas"
+cargo_workspace = "Cargo.toml"
+npm_workspaces = ["package.json", "pnpm-workspace.yaml"]
+standalone_rust_workspaces = []
+standalone_npm_packages = []
+
+[index]
+# These are the bounded pilot's contract-bearing implementation and workflow bytes.
+# Directory claims are also walked by the pinned tool. Keeping the explicit globs
+# makes the intended freshness boundary visible in one place.
+extra_hashed_inputs = [
+  "hiqlite-wal/src/**/*.rs",
+  "hiqlite/src/config.rs",
+  "hiqlite/src/query/**/*.rs",
+  "hiqlite/src/client/**/*.rs",
+  "hiqlite/src/network/**/*.rs",
+  "hiqlite/src/server/proxy/stream.rs",
+  "hiqlite/src/store/state_machine/sqlite/**/*.rs",
+  "hiqlite/src/external_state_machine.rs",
+  "hiqlite/tests/cluster/**/*.rs",
+  "ARCHITECTURE.md",
+  ".gitignore",
+  "justfile",
+  ".github/workflows/spec-spine.yaml",
+]
+resolver_exclusions = ["target", "node_modules", ".derived", "dist", "build", ".next"]
+slices = {}
+
+[branding]
+compiler_id = "spec-spine"
+indexer_id = "spec-spine"
+
+[coupling]
+bypass_prefixes = []
+waiver_keyword = "Spec-Drift-Waiver:"
+# Bounded adoption: owned pilot paths are enforced by C-001. Unclaimed source
+# remains migration debt and does not produce repository-wide C-002 failures.
+require_ownership = false
+auto_waive_dependency_only = false
+
+[coverage]
+governed_scope = ["ARCHITECTURE.md", "justfile", "spec-spine.toml"]
+governed_scope_exclusions = []
+
+[provenance.uri_schemes]
+knowledge = "knowledge://"
+code-fingerprint = "fingerprint://"
+
+[frontmatter]
+extra_known_keys = []
+
+[lint]
+unwitnessed_allowed = []

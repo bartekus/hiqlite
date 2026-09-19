@@ -1,0 +1,62 @@
+{
+  "mapping": {
+    "dependsOn": [
+      "000-hiqlite-ownership-bootstrap"
+    ],
+    "implementingPaths": [
+      {
+        "path": "hiqlite-wal/src/",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/config.rs",
+        "source": "spec-edge"
+      }
+    ],
+    "resolvedUnits": [
+      {
+        "locations": [
+          {
+            "file": "hiqlite-wal/src/"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite-wal/src/"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/config.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/config.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite-wal/Cargo.toml"
+          }
+        ],
+        "ownership": false,
+        "sourceField": "references",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite-wal/Cargo.toml"
+        }
+      }
+    ],
+    "specId": "001-wal-durability-and-completion",
+    "specStatus": "draft"
+  },
+  "schemaVersion": "1.1.0",
+  "shardHash": "55b94bd4bce6b77dab1d1326c7fa346a5a4a366da28a67121ca7fdc9869453ad"
+}

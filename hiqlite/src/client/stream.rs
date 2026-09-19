@@ -464,10 +464,7 @@ async fn client_stream(
                 }
 
                 ClientStreamReq::CleanupBuffer => {
-                    for (_, ack) in in_flight_buf {
-                        let _ = ack.send(Err(Error::Connect("request timed out".to_string())));
-                    }
-                    in_flight_buf = HashMap::new();
+                    expire_buffered_requests(&mut in_flight_buf);
                     awaiting_timeout = false;
                     None
                 }
@@ -628,6 +625,14 @@ async fn try_forward_response(
     }
 }
 
+fn expire_buffered_requests(
+    in_flight_buf: &mut HashMap<usize, Sender<Result<ApiStreamResponsePayload, Error>>>,
+) {
+    for (_, ack) in in_flight_buf.drain() {
+        let _ = ack.send(Err(Error::Connect("request timed out".to_string())));
+    }
+}
+
 async fn update_leader(
     leader: &Arc<RwLock<(NodeId, String)>>,
     node_id: Option<u64>,
@@ -736,4 +741,49 @@ async fn try_connect(
         (lock.0, lock.1.clone())
     };
     web_socket_connect::try_connect(node_id, &addr, raft_type, tls_config, secret).await
+}
+
+#[cfg(all(test, feature = "sqlite"))]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn reconnect_buffer_delivers_a_late_response_during_its_window() {
+        let mut in_flight = HashMap::new();
+        let mut buffered = HashMap::new();
+        let (ack, rx) = oneshot::channel();
+        buffered.insert(7, ack);
+
+        try_forward_response(
+            &mut in_flight,
+            &mut buffered,
+            true,
+            ApiStreamResponse {
+                request_id: 7,
+                result: ApiStreamResponsePayload::Query(Ok(Vec::new())),
+            },
+        )
+        .await;
+
+        assert!(buffered.is_empty());
+        assert!(matches!(
+            rx.await.unwrap(),
+            Ok(ApiStreamResponsePayload::Query(Ok(rows))) if rows.is_empty()
+        ));
+    }
+
+    #[tokio::test]
+    async fn reconnect_buffer_expiry_reports_an_ambiguous_timeout() {
+        let mut buffered = HashMap::new();
+        let (ack, rx) = oneshot::channel();
+        buffered.insert(9, ack);
+
+        expire_buffered_requests(&mut buffered);
+
+        assert!(buffered.is_empty());
+        assert!(matches!(
+            rx.await.unwrap(),
+            Err(Error::Connect(message)) if message == "request timed out"
+        ));
+    }
 }
