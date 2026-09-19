@@ -1,0 +1,11 @@
+{
+  "package": {
+    "edition": "2021",
+    "kind": "rust-bin",
+    "name": "cache-only",
+    "path": "examples/cache-only",
+    "version": "0.1.0"
+  },
+  "schemaVersion": "1.1.0",
+  "shardHash": "8679ec96009ef11cedc7282ae397e14dc00b926f321b493eead861be19699cf0"
+}

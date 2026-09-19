@@ -1,0 +1,11 @@
+{
+  "package": {
+    "edition": "2021",
+    "kind": "rust-bin",
+    "name": "sqlite-only",
+    "path": "examples/sqlite-only",
+    "version": "0.1.0"
+  },
+  "schemaVersion": "1.1.0",
+  "shardHash": "a30ec768f7676d9c0aa7c0c0e444d1f5995a62e27165d89c8d141961eecb8c4b"
+}

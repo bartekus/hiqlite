@@ -319,6 +319,40 @@ All five are `draft` and retroactive. `implementation: complete` on this spec
 says its claimed units exist and its acceptance block passes against the tree.
 It does not mean approved, ratified, published, or released.
 
+### 12.1 The inventory configuration, and what each key actually does
+
+The adoption target now includes the dashboard and the examples, so
+`spec-spine.toml` declares them. Four configuration semantics were **probed
+against the pinned revision in an isolated checkout** before the keys were
+chosen, because three of the four do not behave the way their names suggest:
+
+- `layout.standalone_rust_workspaces` and `layout.standalone_npm_packages`
+  control **package discovery**, and therefore the per-package coverage
+  denominator. The six example crates and `dashboard` are declared there.
+  The npm walk counts `.ts` and `.js` only: the pinned indexer does **not**
+  treat `.svelte` as package source, and no configuration changes that.
+- `coverage.governed_scope` controls the **declared-scope denominator**, the
+  bucket the report calls "outside the package totals". It is the only key that
+  brings the 45 `.svelte` files into view, so the authored dashboard globs are
+  listed there.
+- `index.extra_hashed_inputs` controls **freshness only** and has no effect on
+  any denominator. Declaring a package does not hash it, so without these globs
+  a byte change in newly governed dashboard or example source would leave the
+  committed index reporting `fresh`. The same globs therefore appear in both
+  lists, for two different reasons.
+- `coverage.governed_scope_exclusions` and `index.resolver_exclusions` do
+  **not** remove package-discovered source. Three path forms of the latter were
+  tried against `hiqlite/static`; the count did not move. Neither key is used
+  for that purpose here, because dead configuration is worse than none.
+
+**Generated output remains in the denominator, and cannot be removed.** The 12
+uncompressed `.js` files under `hiqlite/static` are build output that the
+`hiqlite` package walk counts as source. No probed key excludes them. They are
+therefore permanently unclaimed by design, the denominator carries a known
+distortion of exactly 12 files, and any coverage figure quoted from this
+repository states that. Generated output is governed through its authored
+source and its build configuration, never by claiming its bytes.
+
 **The bound is deliberate.** `coupling.require_ownership` is false. Existing
 specific claims still produce `C-001` failures when a governed path changes
 without participation by an owning spec. Unclaimed source produces no `C-002`

@@ -1,0 +1,11 @@
+{
+  "package": {
+    "edition": "2021",
+    "kind": "rust-bin",
+    "name": "bench",
+    "path": "examples/bench",
+    "version": "0.1.0"
+  },
+  "schemaVersion": "1.1.0",
+  "shardHash": "b40939490d249177e3bfdc6e4885dffaee92ae5a528bc40fd020a00170aae446"
+}
