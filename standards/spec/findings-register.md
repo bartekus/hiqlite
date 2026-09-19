@@ -404,16 +404,86 @@ contract rather than the file.
 
 ---
 
+## Found by wave 1 (2026-09-19)
+
+Recorded by `006-cache-state-machine` and `007-cache-log-store` as known
+defects. Those specs are authoritative; the entries below exist so later work
+can cite a stable id. None is repaired.
+
+### F-021 `defect`, confidence `high`
+
+**`get_log_state` always reports `last_log_id: None`.**
+`hiqlite/src/store/logs/memory.rs:117-120` reads the last log id as
+`logs.get(logs.len())`, which is always one past the end of the deque.
+**Observed by execution**, not inference: the added characterization test
+`store::logs::memory::tests::get_log_state_reports_no_last_log_id_even_after_append`
+stores two entries and observes `None`.
+
+Configuration: `cache`. Consequence, traced but not executed: both consumers in
+OpenRaft 0.9.24 (`StorageHelper::get_initial_state` and `last_membership_in_log`)
+run on the initialization path, where this non-durable store is empty by
+construction, so `None` is accidentally correct and the defect is latent there.
+Whether any path reaches it with a non-empty deque was **not** established.
+`007` KD-1.
+
+### F-022 `defect`, confidence `high`
+
+**A `debug_assert!` in `truncate` compares an offset to an absolute index.**
+`memory.rs:186`. Equal only while the deque front is index 0, so it fires in a
+debug build on any truncate after a purge advanced the front. Untested: no test
+covers a non-zero front offset. `007` KD-2.
+
+### F-023 `defect`, confidence `medium`
+
+**`try_get_log_entries` underflows on an exclusive end bound of zero.**
+`memory.rs:64-68` computes `*i - 1`. Debug panics; release wraps to `u64::MAX`
+and then panics at the `logs.front().expect(...)`. **Reachability not
+established**: whether OpenRaft requests `0..0` was not determined, which is why
+this is `medium` and why it is recorded as an arithmetic defect rather than a
+demonstrated failure. `007` KD-3.
+
+### F-024 `defect`, confidence `high`
+
+**`purge` never updates `last_purged`.** `memory.rs:28` is returned by
+`get_log_state` but assigned only in `new()`. Consequence inferred:
+`last_purged_log_id` is under-reported, masked by the same emptiness that masks
+F-021. `007` KD-4.
+
+### F-025 `decision`, confidence `high`
+
+**A dead cache handler thread panics the applying task.** Every handler send in
+`hiqlite/src/store/state_machine/memory/state_machine.rs` uses `.expect(...)`.
+Crash-over-divergence is a defensible choice for a replicated state machine and
+is written down nowhere in the code; under this repository's `panic = "abort"`
+release profile it becomes process termination, and under a downstream
+consumer's unwinding profile it does not. Recorded as a decision because the
+intent is sound but unstated. Untested. `006` KD-1.
+
+### F-026 `limit`, confidence `high`
+
+**Lock validity is a compile-time constant.** `LOCK_VALID_SECONDS = 10`
+(`dlock_handler.rs:13`), with no configuration. A critical section legitimately
+longer than ten seconds has no supported way to extend it and nothing detects
+the overrun. Described as found per the owner's direction; no lease design is
+proposed. `006` KD-2.
+
+### F-027 `defect`, confidence `high`
+
+**`cache_idx` is an unvalidated index.** `.get(cache_idx).unwrap()` panics out of
+range. In-range-ness holds only while client and server are built from the same
+generated cache enum; a log entry from a build with more cache variants would
+panic every node applying it. Untested. `006` KD-3.
+
 ## Summary by class
 
 | class | ids | count |
 |---|---|---|
-| `defect` | F-001 to F-006, F-009 | 7 |
+| `defect` | F-001 to F-006, F-009, F-021 to F-024, F-027 | 12 |
 | `contradiction` | F-018 | 1 |
 | `gap` | F-010, F-013 | 2 |
 | `evidence` | F-011, F-012, F-017, F-019 | 4 |
-| `limit` | F-007, F-008, F-015, F-016 | 4 |
-| `decision` | F-014, F-020 | 2 |
+| `limit` | F-007, F-008, F-015, F-016, F-026 | 5 |
+| `decision` | F-014, F-020, F-025 | 3 |
 
 **Reclassified on 2026-09-19**, after each class test was applied rather than
 assumed: F-007 and F-008 from `defect` to `limit`, because a stated contract with
@@ -423,6 +493,7 @@ migration state rather than faults; and the consequences of F-001, F-002, and
 F-014 rewritten against traced source, with three earlier claims withdrawn in
 place.
 
-Seven defects, of which six were already recorded by the pilot specs and one
-(F-009) is new. No finding in this register authorizes a repair; each repair is
+Twelve defects: six from the pilot specs, F-009 from the whole-project pass, and
+five (F-021 to F-024, F-027) found by wave 1. F-013 is closed at M1 by wave 1 and
+is retained as a record rather than deleted. No finding in this register authorizes a repair; each repair is
 a separate governed change with its own spec and evidence.

@@ -64,6 +64,6 @@
     "summary": "Owns the two assessment documents under standards/spec: a reconciled whole-project inventory with a dependency-ordered adoption proposal, and a source-backed findings register with stable identifiers. Records what was measured and what is proposed. It adopts nothing, schedules nothing, enables no gate, and claims no territory outside the two documents.\n",
     "title": "Record the whole-project assessment and the proposed adoption plan"
   },
-  "shardHash": "f4887b5135a294038a3d60a8ae39437264ae4623e4c64cab8090eceaaccbecba",
+  "shardHash": "6965832e10de176c5d80b8bbea220b657b47b3473642249230b6d144e90dce98",
   "specVersion": "1.3.0"
 }

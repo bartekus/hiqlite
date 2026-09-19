@@ -224,3 +224,65 @@ impl RaftLogStorage<TypeConfigKV> for LogStoreMemory {
         self.clone()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use openraft::storage::RaftLogStorage;
+    use openraft::EntryPayload;
+
+    fn entry(index: u64) -> Entry<TypeConfigKV> {
+        Entry {
+            log_id: LogId::new(CommittedLeaderId::new(1, 1), index),
+            payload: EntryPayload::Blank,
+        }
+    }
+
+    /// Characterization, not endorsement.
+    ///
+    /// `get_log_state()` reports `last_log_id: None` no matter how many entries the store
+    /// holds, because it indexes the deque at `logs.len()`, which is always one past the
+    /// last element. This test records the behavior that is actually there so a repair has
+    /// a stated baseline; spec `007` records it as a known defect.
+    #[tokio::test]
+    async fn get_log_state_reports_no_last_log_id_even_after_append() {
+        let mut store = LogStoreMemory::new();
+
+        let state = store.get_log_state().await.unwrap();
+        assert!(state.last_log_id.is_none(), "empty store has no last log id");
+
+        {
+            let mut logs = store.logs.write().await;
+            logs.push_back(entry(1));
+            logs.push_back(entry(2));
+        }
+
+        let state = store.get_log_state().await.unwrap();
+        assert!(
+            state.last_log_id.is_none(),
+            "records the current off-by-one: two entries are stored, yet last_log_id is None"
+        );
+        assert!(state.last_purged_log_id.is_none());
+    }
+
+    /// Purge drops everything strictly below the given index and keeps the rest.
+    #[tokio::test]
+    async fn purge_removes_entries_below_the_given_index() {
+        let mut store = LogStoreMemory::new();
+        {
+            let mut logs = store.logs.write().await;
+            for i in 1..=5 {
+                logs.push_back(entry(i));
+            }
+        }
+
+        store
+            .purge(LogId::new(CommittedLeaderId::new(1, 1), 3))
+            .await
+            .unwrap();
+
+        let logs = store.logs.read().await;
+        let remaining: Vec<u64> = logs.iter().map(|e| e.log_id.index).collect();
+        assert_eq!(remaining, vec![3, 4, 5]);
+    }
+}

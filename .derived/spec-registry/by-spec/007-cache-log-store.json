@@ -1,0 +1,64 @@
+{
+  "record": {
+    "created": "2026-09-19",
+    "dependsOn": [
+      "000-hiqlite-ownership-bootstrap",
+      "001-wal-durability-and-completion",
+      "006-cache-state-machine"
+    ],
+    "establishes": [
+      {
+        "kind": "directory",
+        "path": "hiqlite/src/store/logs/"
+      }
+    ],
+    "id": "007-cache-log-store",
+    "implementation": "complete",
+    "origin": {
+      "paths": [
+        "hiqlite/src/store/logs/"
+      ],
+      "retroactive": true
+    },
+    "owner": "hiqlite maintainers",
+    "references": [
+      {
+        "role": "the durable log store this one is the non-durable counterpart to",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite-wal/src/"
+        }
+      },
+      {
+        "role": "the state machine whose Raft group uses this log store",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/store/state_machine/memory/"
+        }
+      }
+    ],
+    "risk": "high",
+    "sectionHeadings": [
+      "007: Define the in-memory log store for the cache Raft group",
+      "1. Purpose",
+      "2. Territory",
+      "3. Behavior",
+      "B-1. The store is deliberately non-durable, and that is the contract",
+      "B-2. Vote is stored in memory and read back unchanged",
+      "B-3. Append is synchronous and completes immediately",
+      "B-4. Truncate and purge are offset arithmetic over the deque",
+      "B-5. Several invariants are debug-only",
+      "4. Evidence and its limits",
+      "5. Known defects",
+      "6. Out of scope",
+      "7. Resolved decisions",
+      "Verification"
+    ],
+    "specPath": "specs/007-cache-log-store/spec.md",
+    "status": "draft",
+    "summary": "Records the existing non-durable in-memory log store that backs the cache Raft group: its RaftLogReader and RaftLogStorage implementation, the deliberate absence of persistence, the immediate completion callback, the truncate and purge index arithmetic, and the data-directory helpers. Adopts as found and records a confirmed off-by-one in get_log_state.\n",
+    "title": "Define the in-memory log store for the cache Raft group"
+  },
+  "shardHash": "9c7a67912d2201dffb88900d3a94d4f03a51036f6723aba84cea7e98f7c72011",
+  "specVersion": "1.3.0"
+}

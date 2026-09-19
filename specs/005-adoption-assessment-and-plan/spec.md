@@ -213,6 +213,14 @@ The configuration itself is owned by `000`, which records the probed semantics
 in its section 12.1. This spec records only that the plan's measurements were
 updated to match, which is why both files move in the same change.
 
+**D-5 (2026-09-19, wave 1 was executed, so both documents were updated).**
+`006` and `007` claim the cache state machine and the cache log store. The plan
+records wave 1 as executed rather than proposed, and the register gains F-021
+through F-027 for what wave 1 found. Those specs own their defects as `KD-n`
+entries and remain authoritative; the register carries stable ids so later work
+can cite one. Recording an executed wave does not adopt the remaining five: they
+stay proposals, and the plan still says so.
+
 ## Verification
 
 ```verify:cli
