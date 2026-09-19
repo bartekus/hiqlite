@@ -877,8 +877,10 @@ mod tests {
             .writer
             .send_async(Action::Append {
                 rx: entry_rx,
-                callback: Box::new(move || {
-                    let _ = completed_tx.send(());
+                // The completion notification is result-bearing, so this helper forwards it and
+                // the assertion below fails if the WAL reports a failed append.
+                callback: Box::new(move |res| {
+                    let _ = completed_tx.send(res);
                 }),
                 ack: ack_tx,
             })
@@ -894,7 +896,7 @@ mod tests {
         entry_tx.send_async(None).await.unwrap();
 
         ack_rx.await.unwrap().unwrap();
-        completed_rx.await.unwrap();
+        completed_rx.await.unwrap().unwrap();
     }
 
     async fn shutdown_state_machine(state_machine: &StateMachineSqlite) {

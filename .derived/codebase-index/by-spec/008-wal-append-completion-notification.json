@@ -1,0 +1,104 @@
+{
+  "mapping": {
+    "amends": [
+      "001-wal-durability-and-completion"
+    ],
+    "dependsOn": [
+      "000-hiqlite-ownership-bootstrap",
+      "001-wal-durability-and-completion"
+    ],
+    "implementingPaths": [
+      {
+        "path": "hiqlite-wal/src/",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/store/state_machine/sqlite/",
+        "source": "spec-edge"
+      },
+      {
+        "path": "standards/spec/adoption-plan.md",
+        "source": "spec-edge"
+      },
+      {
+        "path": "standards/spec/findings-register.md",
+        "source": "spec-edge"
+      },
+      {
+        "path": "standards/spec/wal-repair-proposal.md",
+        "source": "spec-edge"
+      }
+    ],
+    "resolvedUnits": [
+      {
+        "locations": [
+          {
+            "file": "hiqlite-wal/src/"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite-wal/src/"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/store/state_machine/sqlite/"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/store/state_machine/sqlite/"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "standards/spec/adoption-plan.md"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/adoption-plan.md"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "standards/spec/findings-register.md"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/findings-register.md"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "standards/spec/wal-repair-proposal.md"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/wal-repair-proposal.md"
+        }
+      }
+    ],
+    "specId": "008-wal-append-completion-notification",
+    "specStatus": "draft"
+  },
+  "schemaVersion": "1.1.0",
+  "shardHash": "be066e1403f0d88b6440736c8f1897890d6283251cfbd4e401ca4f32db07fb5a"
+}

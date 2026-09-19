@@ -6,6 +6,7 @@ use crate::reader::LogReadMemo;
 use crate::wal::WalFileSet;
 use openraft::{LeaderId, LogId};
 use std::fmt::{Debug, Formatter};
+use std::io;
 use std::sync::{Arc, RwLock};
 use std::thread;
 use std::time::Duration;
@@ -15,10 +16,18 @@ use tokio::time::Interval;
 use tokio::{task, time};
 use tracing::{debug, error, warn};
 
+/// The log I/O completion notification for one dispatched append.
+///
+/// It carries a result so that the writer can report *which* of the three outcomes in
+/// [`complete_append`] occurred. The OpenRaft adapter forwards the value verbatim to
+/// `LogFlushed::log_io_completed`; a callback that ignored its argument would report success for a
+/// failed append, which is the defect this type exists to make unrepresentable.
+pub type AppendCompletion = Box<dyn FnOnce(Result<(), io::Error>) + Send>;
+
 pub enum Action {
     Append {
         rx: flume::Receiver<Option<(u64, Vec<u8>)>>,
-        callback: Box<dyn FnOnce() + Send>,
+        callback: AppendCompletion,
         ack: oneshot::Sender<Result<(), Error>>,
     },
     Remove {
@@ -132,7 +141,20 @@ pub fn spawn(
     let (tx, rx) = flume::bounded::<Action>(1);
     let wal = wal_locked.clone();
     let snc = sync.clone();
-    thread::spawn(move || run(lockfile, meta, wal, set, rx, snc, wal_size));
+    let reported_path = set.base_path.clone();
+    thread::spawn(move || {
+        // The writer thread's `JoinHandle` is deliberately not retained: nothing in this crate
+        // manages its lifecycle, and joining it would be lifecycle management rather than error
+        // reporting. What was missing is the report itself. `run` only returns `Err` on a failure
+        // it could not handle, and that ends the thread, so logging here is the smallest place
+        // that reliably observes every unexpected termination.
+        if let Err(err) = run(lockfile, meta, wal, set, rx, snc, wal_size) {
+            error!(
+                "Raft logs WAL writer for `{reported_path}` terminated with an unrecoverable \
+                error: {err} - all further appends will fail until this process is restarted"
+            );
+        }
+    });
 
     if let LogSync::IntervalMillis(millis) = &sync {
         let interval = time::interval(Duration::from_millis(*millis));
@@ -164,30 +186,93 @@ fn flush_blocking(
     Ok(())
 }
 
-/// Report the append result, perform the mode-specific persistence step, and only then report
-/// log I/O completion to openraft.
+/// Deterministic persistence-failure injection for this crate's own tests.
 ///
-/// The append acknowledgement and the completion callback are distinct events. The former says
-/// that the writer accepted or rejected the bytes. The latter is emitted only after `persist`
-/// succeeds. In async modes the supplied persistence step may only start writeback, so callback
-/// delivery does not by itself imply stable storage.
+/// Compiled out entirely outside `cfg(test)`, so the writer carries no production branch for it.
+/// The armed value is a WAL base path, which keeps concurrently running tests from tripping each
+/// other's injection.
+#[cfg(test)]
+pub(crate) mod fault {
+    use std::sync::Mutex;
+
+    static FAIL_PERSIST_FOR: Mutex<Option<String>> = Mutex::new(None);
+
+    /// Arm exactly one persistence failure for the writer serving `base_path`.
+    pub(crate) fn arm_persistence_failure(base_path: &str) {
+        *FAIL_PERSIST_FOR.lock().unwrap() = Some(base_path.to_string());
+    }
+
+    /// Consume an armed failure for `base_path`, if one is armed for it.
+    pub(crate) fn take_persistence_failure(base_path: &str) -> bool {
+        let mut armed = FAIL_PERSIST_FOR.lock().unwrap();
+        if armed.as_deref() == Some(base_path) {
+            *armed = None;
+            true
+        } else {
+            false
+        }
+    }
+}
+
+/// Report the append result, perform the mode-specific persistence step, and then notify log I/O
+/// completion to openraft exactly once.
+///
+/// The append acknowledgement and the completion notification are distinct events, in that order.
+/// The acknowledgement says that the writer accepted or rejected the bytes and is sent before the
+/// persistence step, so a caller that returns on it has not waited for persistence. The
+/// notification is the result-bearing event openraft consumes, and exactly one of these three
+/// outcomes is delivered on every append this function is called for:
+///
+/// - **accepted, persisted**: `Ok(())`, after `persist` returned successfully.
+/// - **rejected**: `Err` carrying the append rejection. The rejection is the cause the caller was
+///   already given, so it takes precedence over anything `persist` reports on the same append.
+/// - **accepted, persistence failed**: `Err` carrying the persistence cause, delivered *before*
+///   that error is propagated out of this function.
+///
+/// Propagation is unchanged: a persistence failure still leaves the writer loop, which ends the
+/// writer thread. What changes is that openraft now learns the cause first, instead of only
+/// observing the dropped completion sender.
+///
+/// In async modes the supplied persistence step may only start writeback, so a successful
+/// notification does not by itself imply stable storage.
 fn complete_append<F>(
     append_result: Result<(), Error>,
     ack: oneshot::Sender<Result<(), Error>>,
-    callback: Box<dyn FnOnce() + Send>,
+    callback: AppendCompletion,
     persist: F,
 ) -> Result<(), Error>
 where
     F: FnOnce() -> Result<(), Error>,
 {
+    // The ack keeps the typed original; `Error` is not `Clone`, so the notification carries a
+    // reproduction of the same cause.
+    let rejection = append_result.as_ref().err().map(Error::as_io_error);
+
     if let Err(err) = ack.send(append_result) {
         // this should usually not happen, but it may during an incorrect shutdown
         error!("error sending back ack after logs append: {err:?}");
     }
 
-    persist()?;
-    callback();
-    Ok(())
+    // Unchanged on purpose: the persistence step runs for a rejected append too, because bytes
+    // written before the rejection are already in the mapping and `is_dirty` is already set.
+    let persisted = persist();
+
+    match (rejection, persisted) {
+        (Some(err), persisted) => {
+            callback(Err(err));
+            // A rejected append is not by itself a writer failure, so the writer keeps serving
+            // unless the persistence step also failed, which still ends it.
+            persisted
+        }
+        (None, Ok(())) => {
+            callback(Ok(()));
+            Ok(())
+        }
+        (None, Err(err)) => {
+            callback(Err(err.as_io_error()));
+            Err(err)
+        }
+    }
 }
 
 fn spawn_syncer(tx_writer: flume::Sender<Action>, mut interval: Interval) {
@@ -305,6 +390,10 @@ fn run(
                 // writeback, which is why `Action::Remove` and `Action::Vote` below still flush.
                 is_dirty = true;
                 complete_append(res, ack, callback, || {
+                    #[cfg(test)]
+                    if fault::take_persistence_failure(&wal.base_path) {
+                        return Err(Error::IO(io::Error::other("injected persistence failure")));
+                    }
                     if sync == LogSync::Immediate {
                         flush_blocking(&mut wal, &mut buf, &mut is_dirty)?;
                     } else if sync == LogSync::ImmediateAsync {
@@ -441,6 +530,119 @@ fn run(
 mod tests {
     use super::*;
 
+    /// Capture `tracing` ERROR events so a test can assert on a report whose only channel is a
+    /// log line. The writer runs on its own `std::thread`, which does not inherit a thread-local
+    /// subscriber, so the capture has to be the process-wide default.
+    mod capture {
+        use std::io;
+        use std::sync::{Arc, Mutex, OnceLock};
+
+        #[derive(Clone, Default)]
+        pub(super) struct Buffer(Arc<Mutex<Vec<u8>>>);
+
+        impl Buffer {
+            pub(super) fn contents(&self) -> String {
+                String::from_utf8_lossy(&self.0.lock().unwrap()).into_owned()
+            }
+        }
+
+        impl io::Write for Buffer {
+            fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+                self.0.lock().unwrap().extend_from_slice(buf);
+                Ok(buf.len())
+            }
+
+            fn flush(&mut self) -> io::Result<()> {
+                Ok(())
+            }
+        }
+
+        impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for Buffer {
+            type Writer = Buffer;
+
+            fn make_writer(&'a self) -> Self::Writer {
+                self.clone()
+            }
+        }
+
+        static CAPTURED: OnceLock<Buffer> = OnceLock::new();
+
+        /// Install the capture once and hand back the shared buffer. Every test in this binary
+        /// shares it, so assertions must look for a substring unique to their own case.
+        pub(super) fn errors() -> Buffer {
+            CAPTURED
+                .get_or_init(|| {
+                    let buf = Buffer::default();
+                    let subscriber = tracing_subscriber::fmt()
+                        .with_max_level(tracing::Level::ERROR)
+                        .with_ansi(false)
+                        .with_writer(buf.clone())
+                        .finish();
+                    let _ = tracing::subscriber::set_global_default(subscriber);
+                    buf
+                })
+                .clone()
+        }
+    }
+
+    /// Poll `check` until it holds or the budget runs out. Used where the observable is produced
+    /// by the writer thread and there is no channel to await.
+    fn eventually<F: FnMut() -> bool>(mut check: F) -> bool {
+        for _ in 0..50 {
+            if check() {
+                return true;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        false
+    }
+
+    /// One dispatched append against a live writer, returning the acknowledgement and the log I/O
+    /// completion notification separately so a test can assert on both.
+    #[allow(clippy::type_complexity)]
+    fn dispatch_append(
+        tx: &flume::Sender<Action>,
+        id: u64,
+        bytes: Vec<u8>,
+    ) -> (
+        oneshot::Receiver<Result<(), Error>>,
+        std::sync::mpsc::Receiver<Result<(), io::Error>>,
+    ) {
+        let (ack_tx, ack_rx) = oneshot::channel();
+        let (entry_tx, entry_rx) = flume::bounded(1);
+        let (note_tx, note_rx) = std::sync::mpsc::channel();
+
+        // Every send is allowed to fail: a test that asserts the writer terminated dispatches
+        // one more append afterwards, and by then the writer's receiver is gone. The assertion
+        // there is that nothing is acknowledged, not that the send succeeded.
+        let _ = tx.send(Action::Append {
+            rx: entry_rx,
+            callback: Box::new(move |res| {
+                let _ = note_tx.send(res);
+            }),
+            ack: ack_tx,
+        });
+        let _ = entry_tx.send(Some((id, bytes)));
+        let _ = entry_tx.send(None);
+
+        (ack_rx, note_rx)
+    }
+
+    fn start_writer(base: &str, sync: LogSync) -> flume::Sender<Action> {
+        let _ = std::fs::remove_dir_all(base);
+        std::fs::create_dir_all(base).unwrap();
+
+        let lockfile = LockFile::create(base).unwrap();
+        lockfile.lock().unwrap();
+        let meta = Arc::new(RwLock::new(Metadata::read_or_create(base).unwrap()));
+
+        let (tx, _wal) = spawn(base.to_string(), lockfile, sync, 64 * 1024, false, meta).unwrap();
+        tx
+    }
+
+    /// The acknowledgement is observable before the persistence step runs, and the completion
+    /// notification only after it returns. This ordering is the contract `001` section 2 records
+    /// and the repair does not change it.
     #[test]
     fn append_result_precedes_persistence_and_completion() {
         let (ack_tx, mut ack_rx) = oneshot::channel();
@@ -449,7 +651,7 @@ mod tests {
         complete_append(
             Ok(()),
             ack_tx,
-            Box::new(move || callback_tx.send(()).unwrap()),
+            Box::new(move |res| callback_tx.send(res).unwrap()),
             || {
                 assert!(matches!(ack_rx.try_recv(), Ok(Ok(()))));
                 assert!(callback_rx.try_recv().is_err());
@@ -458,42 +660,196 @@ mod tests {
         )
         .unwrap();
 
-        assert!(callback_rx.try_recv().is_ok());
+        assert!(matches!(callback_rx.try_recv(), Ok(Ok(()))));
     }
 
+    /// Replaces `append_failure_is_returned_but_completion_still_fires`, which pinned F-001: the
+    /// old helper reported success to openraft for an append it had just rejected. The
+    /// notification must now carry the rejection, and must never be a success.
     #[test]
-    fn persistence_failure_suppresses_completion_callback() {
-        let (ack_tx, ack_rx) = oneshot::channel();
-        let (callback_tx, callback_rx) = std::sync::mpsc::channel();
-
-        let err = complete_append(
-            Ok(()),
-            ack_tx,
-            Box::new(move || callback_tx.send(()).unwrap()),
-            || Err(Error::IO(std::io::Error::other("injected sync failure"))),
-        )
-        .unwrap_err();
-
-        assert!(matches!(err, Error::IO(_)));
-        assert!(matches!(ack_rx.blocking_recv(), Ok(Ok(()))));
-        assert!(callback_rx.try_recv().is_err());
-    }
-
-    #[test]
-    fn append_failure_is_returned_but_completion_still_fires() {
+    fn append_rejection_notifies_error_and_never_success() {
         let (ack_tx, ack_rx) = oneshot::channel();
         let (callback_tx, callback_rx) = std::sync::mpsc::channel();
 
         complete_append(
             Err(Error::IO(std::io::Error::other("injected append failure"))),
             ack_tx,
-            Box::new(move || callback_tx.send(()).unwrap()),
+            Box::new(move |res| callback_tx.send(res).unwrap()),
             || Ok(()),
         )
         .unwrap();
 
         assert!(matches!(ack_rx.blocking_recv(), Ok(Err(Error::IO(_)))));
-        assert!(callback_rx.try_recv().is_ok());
+
+        let notified = callback_rx
+            .try_recv()
+            .expect("a rejected append must still notify exactly once");
+        let err = notified.expect_err("a rejected append must never notify success");
+        assert!(
+            err.to_string().contains("injected append failure"),
+            "the notification must carry the rejection cause, got: {err}"
+        );
+        assert!(
+            callback_rx.try_recv().is_err(),
+            "exactly one notification per append"
+        );
+    }
+
+    /// Replaces `persistence_failure_suppresses_completion_callback`, which pinned F-002: the
+    /// callback was dropped rather than invoked, so openraft only ever saw a closed channel. The
+    /// cause must now be notified, and the error must still propagate so the failure policy is
+    /// unchanged.
+    #[test]
+    fn persistence_failure_notifies_error_before_propagating() {
+        let (ack_tx, ack_rx) = oneshot::channel();
+        let (callback_tx, callback_rx) = std::sync::mpsc::channel();
+
+        let err = complete_append(
+            Ok(()),
+            ack_tx,
+            Box::new(move |res| callback_tx.send(res).unwrap()),
+            || Err(Error::IO(std::io::Error::other("injected sync failure"))),
+        )
+        .unwrap_err();
+
+        assert!(matches!(err, Error::IO(_)), "the error still propagates");
+        assert!(matches!(ack_rx.blocking_recv(), Ok(Ok(()))));
+
+        let notified = callback_rx
+            .try_recv()
+            .expect("a persistence failure must notify, not drop the callback");
+        let notified = notified.expect_err("a persistence failure must not notify success");
+        assert!(
+            notified.to_string().contains("injected sync failure"),
+            "the notification must carry the persistence cause, got: {notified}"
+        );
+        assert!(
+            callback_rx.try_recv().is_err(),
+            "exactly one notification per append"
+        );
+    }
+
+    /// An append rejection that is followed by a failing persistence step still produces exactly
+    /// one notification, and it names the rejection: that is the cause the caller was given on
+    /// the acknowledgement channel.
+    #[test]
+    fn rejection_takes_precedence_over_a_failing_persistence_step() {
+        let (ack_tx, ack_rx) = oneshot::channel();
+        let (callback_tx, callback_rx) = std::sync::mpsc::channel();
+
+        let err = complete_append(
+            Err(Error::IO(std::io::Error::other("injected append failure"))),
+            ack_tx,
+            Box::new(move |res| callback_tx.send(res).unwrap()),
+            || Err(Error::IO(std::io::Error::other("injected sync failure"))),
+        )
+        .unwrap_err();
+
+        assert!(err.to_string().contains("injected sync failure"));
+        assert!(matches!(ack_rx.blocking_recv(), Ok(Err(Error::IO(_)))));
+
+        let notified = callback_rx.try_recv().unwrap().unwrap_err();
+        assert!(
+            notified.to_string().contains("injected append failure"),
+            "the rejection is the notified cause, got: {notified}"
+        );
+        assert!(callback_rx.try_recv().is_err());
+    }
+
+    /// Every supported `LogSync` mode reports exactly one success through a live writer, in the
+    /// documented order. `IntervalMillis` performs no per-append persistence at all and must
+    /// still notify once.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn success_notifies_once_per_append_in_every_log_sync_mode() {
+        for (name, sync) in [
+            ("immediate", LogSync::Immediate),
+            ("immediate_async", LogSync::ImmediateAsync),
+            ("interval", LogSync::IntervalMillis(50)),
+        ] {
+            let base = format!("test_data/notify_once_{name}");
+            let tx = start_writer(&base, sync.clone());
+
+            for id in 1..=3u64 {
+                let (ack_rx, note_rx) = dispatch_append(&tx, id, format!("entry-{id}").into_bytes());
+
+                ack_rx
+                    .await
+                    .unwrap_or_else(|err| panic!("{name}: ack channel closed: {err}"))
+                    .unwrap_or_else(|err| panic!("{name}: append rejected: {err}"));
+
+                let notified = note_rx
+                    .recv_timeout(Duration::from_secs(5))
+                    .unwrap_or_else(|err| panic!("{name}: no completion notification: {err}"));
+                assert!(
+                    notified.is_ok(),
+                    "{name}: a successful append must notify success, got {notified:?}"
+                );
+                assert!(
+                    note_rx.recv_timeout(Duration::from_millis(50)).is_err(),
+                    "{name}: exactly one notification per append"
+                );
+            }
+
+            let (ack_tx, ack_rx) = oneshot::channel();
+            tx.send(Action::Shutdown(ack_tx)).unwrap();
+            ack_rx.await.unwrap();
+        }
+    }
+
+    /// The whole F-002 chain through the live writer loop, which the helper-level test cannot
+    /// see: the append is acknowledged, the injected persistence failure is notified with its
+    /// cause, and the writer then terminates as it did before the repair, so every later append
+    /// goes unacknowledged.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn persistence_failure_notifies_then_terminates_the_writer() {
+        let base = "test_data/persistence_failure_terminates".to_string();
+        let tx = start_writer(&base, LogSync::Immediate);
+
+        fault::arm_persistence_failure(&base);
+        let (ack_rx, note_rx) = dispatch_append(&tx, 1, b"entry".to_vec());
+
+        assert!(
+            matches!(ack_rx.await, Ok(Ok(()))),
+            "the append is acknowledged before the persistence step"
+        );
+
+        let notified = note_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("the persistence failure must be notified")
+            .expect_err("it must not be notified as success");
+        assert!(
+            notified.to_string().contains("injected persistence failure"),
+            "the notification must carry the injected cause, got: {notified}"
+        );
+
+        // Failure policy preserved: the writer is gone, so a later append is never acknowledged.
+        let (mut later_ack, _later_note) = dispatch_append(&tx, 2, b"later".to_vec());
+        assert!(
+            !eventually(|| later_ack.try_recv().is_ok()),
+            "the writer must still terminate after a persistence failure"
+        );
+    }
+
+    /// The termination itself is reported. The thread's `JoinHandle` is not retained; the report
+    /// is a single ERROR log naming the WAL the writer served and the cause.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn writer_termination_is_reported() {
+        let captured = capture::errors();
+        let base = "test_data/termination_reported".to_string();
+        let tx = start_writer(&base, LogSync::Immediate);
+
+        fault::arm_persistence_failure(&base);
+        let (ack_rx, _note_rx) = dispatch_append(&tx, 1, b"entry".to_vec());
+        assert!(matches!(ack_rx.await, Ok(Ok(()))));
+
+        assert!(
+            eventually(|| {
+                let log = captured.contents();
+                log.contains(&base) && log.contains("terminated with an unrecoverable error")
+            }),
+            "the writer's termination must be reported; captured ERROR log was:\n{}",
+            captured.contents()
+        );
     }
 
     #[cfg(feature = "oversized-entry-error")]
@@ -502,7 +858,7 @@ mod tests {
         let (entry_tx, entry_rx) = flume::bounded(1);
         tx.send(Action::Append {
             rx: entry_rx,
-            callback: Box::new(|| {}),
+            callback: Box::new(|_| {}),
             ack: ack_tx,
         })
         .unwrap();
@@ -574,7 +930,7 @@ mod tests {
             // the assertion is that the append is never acked.
             let _ = tx.send(Action::Append {
                 rx: entry_rx,
-                callback: Box::new(|| {}),
+                callback: Box::new(|_| {}),
                 ack: ack_tx,
             });
             let _ = entry_tx.send(Some((id, bytes)));

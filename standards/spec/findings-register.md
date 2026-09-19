@@ -75,8 +75,12 @@ Evidence and its limits: `hiqlite-wal/src/writer.rs:483-496`
 so it is pinned as current, not incidental. No test establishes what OpenRaft
 does with the conflicting pair. Recorded at `001` section 8, bullet 1.
 
-Next action: repair under an amending spec that decides the callback error
-contract. See the proposed first implementation task.
+**Repaired (2026-09-19) by `008-wal-append-completion-notification`.** The
+completion notification is result-bearing and a rejected append now notifies the
+rejection. Regression:
+`writer::tests::append_rejection_notifies_error_and_never_success`, demonstrated
+failing against the pre-repair behavior. The entry stays in the register as the
+baseline the repair was reviewed against; the identifier is not reused.
 
 ### F-002 `defect`, confidence `high`
 
@@ -110,6 +114,20 @@ proves the helper suppresses the callback; it does not exercise loop exit, threa
 death, or what OpenRaft observes. The chain above was read at source in the
 locked OpenRaft and in the WAL crate, and was **not executed**. Recorded at `001`
 section 8, bullet 2.
+
+**Repaired (2026-09-19) by `008-wal-append-completion-notification`.** The
+persistence cause is notified to OpenRaft before the error propagates, and the
+writer's termination is reported through an `ERROR` log rather than vanishing
+with a discarded `JoinHandle`. The fail-stop policy is deliberately unchanged:
+the writer still terminates and the log store is still dead until restart.
+Regressions: `writer::tests::persistence_failure_notifies_then_terminates_the_writer`
+and `log_store_impl::tests::append_adapter_forwards_a_persistence_failure_to_openraft`,
+both demonstrated failing against the pre-repair behavior. The second was also
+run against a mutation that repaired only the writer and left the adapter
+hardcoding `Ok(())`, and it failed there too, which is what makes it evidence
+about the adapter rather than about the writer. The previously inferred
+consequence is now **observed**: on the pre-repair behavior that test reports
+`when Write Logs: channel closed`.
 
 ### F-003 `defect`, confidence `high`
 
@@ -474,11 +492,26 @@ range. In-range-ness holds only while client and server are built from the same
 generated cache enum; a log entry from a build with more cache variants would
 panic every node applying it. Untested. `006` KD-3.
 
+### F-028 `defect`, confidence `high`
+
+**A truncated entry stream is acknowledged and notified as a successful
+append.** `hiqlite-wal/src/writer.rs`, the collection loop
+`while let Ok(Some((id, bytes))) = rx.recv()`. A `recv` error, which is what a
+dropped entry sender produces, is indistinguishable from the `None` that marks a
+normal end of stream: both end the loop with `res` still `Ok`. The writer then
+acknowledges success and notifies success for an append that did not receive
+every entry.
+
+Configurations: all `LogSync` modes. Found while tracing the notification paths
+for the `008` repair and deliberately left unrepaired there, because it is a
+different defect from F-001 and F-002 and its fix changes what the writer does
+with a partial append. Recorded at `008` KD-2. Untested.
+
 ## Summary by class
 
 | class | ids | count |
 |---|---|---|
-| `defect` | F-001 to F-006, F-009, F-021 to F-024, F-027 | 12 |
+| `defect` | F-001 to F-006, F-009, F-021 to F-024, F-027, F-028 | 13 |
 | `contradiction` | F-018 | 1 |
 | `gap` | F-010, F-013 | 2 |
 | `evidence` | F-011, F-012, F-017, F-019 | 4 |
@@ -493,7 +526,15 @@ migration state rather than faults; and the consequences of F-001, F-002, and
 F-014 rewritten against traced source, with three earlier claims withdrawn in
 place.
 
-Twelve defects: six from the pilot specs, F-009 from the whole-project pass, and
-five (F-021 to F-024, F-027) found by wave 1. F-013 is closed at M1 by wave 1 and
+Thirteen defects: six from the pilot specs, F-009 from the whole-project pass,
+five (F-021 to F-024, F-027) found by wave 1, and F-028 found while tracing the
+`008` repair. F-013 is closed at M1 by wave 1 and
 is retained as a record rather than deleted. No finding in this register authorizes a repair; each repair is
 a separate governed change with its own spec and evidence.
+
+**Repaired so far.** F-001 and F-002, by
+`008-wal-append-completion-notification` on 2026-09-19. A repaired entry is
+annotated in place and keeps its identifier and its original text, so the
+baseline a repair was reviewed against stays readable. The remaining ten
+defects are open, and F-021 through F-024 are a separate cache-log repair that
+was deliberately not bundled into `008`.

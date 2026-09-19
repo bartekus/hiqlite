@@ -328,7 +328,12 @@ All five must hold, and each is separately checkable.
 1. **Every authored source file in the corrected denominator has an owning
    spec.** `spec-spine index coverage` reports zero unclaimed, with the
    denominator corrected per section 5 so that it includes `dashboard/` and
-   `examples/` and excludes generated output.
+   `examples/` and excludes generated output. **Blocked**: the pinned tool
+   cannot exclude generated output or third-party source from the denominator
+   without also exempting it from the coupling gate, so 16 files stay unclaimed
+   no matter how much first-party adoption is done. See "Rung 0 is blocked on
+   the pinned tool" in section 5 for the exact sets and the recommended
+   resolution.
 2. **Every claimed unit is specified, not merely owned.** Each spec carries an
    acceptance block that fails if the behavior it names changes, names the
    configuration each claim holds under, and states its evidence limits beside
@@ -371,6 +376,79 @@ The exact key semantics must be **probed against the pinned revision** before
 adoption, the way `004` D-3 probed the bypass floor. Expect the reported
 percentage to move sharply, and in both directions: the dashboard adds authored
 files to the denominator, and removing build output takes 12 unclaimed files out.
+
+#### Rung 0 is blocked on the pinned tool (probed 2026-09-19)
+
+The first two bullets are done and are in `spec-spine.toml` today. The third is
+**not achievable with the keys this document names**, and the blocker is a
+prerequisite for rung 2, not a detail of it.
+
+**The affected sets, exactly.** Sixteen tracked files are in the coverage
+denominator and can never be claimed, because milestones 3 and 4 of section 4
+forbid claiming either set:
+
+- **Generated JavaScript, 12 files**, all under `hiqlite/static/_app/immutable/`:
+  `chunks/Bjy-W4x2.js`, `chunks/DYl5dUZ5.js`, `chunks/HS78R7GZ.js`,
+  `chunks/Rzvk3oo4.js`, `chunks/ucR_hd6Y.js`, `chunks/xihTtKlq.js`,
+  `chunks/yhtOcEv9.js`, `entry/app.BN4hQcvT.js`, `entry/start.BSvfSFwO.js`,
+  `nodes/0.CCzH6Rmr.js`, `nodes/1.DxhH6ylA.js`, `nodes/2.BxpRrFU6.js`. They
+  enter through the `hiqlite` cargo package walk (109 files = 97 `.rs` + these
+  12), which is why they are counted as that package's unclaimed source. A16
+  and milestone 4 say generated output is governed by its build contract and
+  its bytes are never claimed.
+- **Third-party vendored source, 4 files**, under `dashboard/src/spow/`:
+  `spow-wasm.d.ts`, `spow-wasm.js`, `spow-wasm_bg.js`, `spow-wasm_bg.wasm.d.ts`.
+  They enter through the `dashboard` npm package declaration. The `.wasm`
+  binary is not counted. A15 and milestone 3 say this set is referenced and
+  never claimed.
+
+**What was probed, on revision `aa559f5dcaa59bd9f27b0622b51ae5b57dc2185f`.**
+Each candidate was set in `spec-spine.toml`, the index regenerated, and
+`spec-spine index coverage` re-read. Baseline: `68/226 claimed, 158 unclaimed`.
+
+| Candidate | Result |
+|---|---|
+| `coverage.governed_scope_exclusions = ["hiqlite/static/**", "dashboard/src/spow/**"]` | **No effect.** Still `68/226`, all 16 still listed unclaimed. The key filters only the declared-scope set; it cannot reach files a package walk contributed. |
+| `index.resolver_exclusions += ["hiqlite/static", "dashboard/src/spow"]` | **No effect.** Still `68/226`, all 16 still listed. |
+| `coupling.bypass_prefixes = ["hiqlite/static/", "dashboard/src/spow/"]` | **Works.** `68/210 claimed, 142 unclaimed`; none of the 16 is listed. |
+
+**The blocker.** The only key that removes these files from the denominator is
+`coupling.bypass_prefixes`, and on the pinned revision that key does two things
+at once: it exempts the paths from the coupling gate *and* it removes them from
+the coverage denominator. There is no key that does the second alone. Rung 3 of
+this ladder states that source paths are never added to the bypass floor, and
+`dashboard/src/spow/` is source-shaped even though it is third-party, so
+applying the one working lever to it contradicts this document's own rule and
+would silently exempt vendored bindings from `C-001` for as long as it stands.
+
+**Consequence for the plan.** Rung 2,
+`spec-spine index coverage --fail-on-untraced`, **cannot pass under the current
+configuration even after first-party adoption is complete**. Sixteen files
+would remain unclaimed, and the gate does not distinguish "unclaimed because
+nobody got to it" from "unclaimed on purpose". Section 4 milestone 1 is
+therefore not reachable as written, and any plan that schedules rung 2 after
+the last adoption wave is scheduling a gate that will fail.
+
+**Recommended resolution**, in preference order, and **none of them is done
+here**:
+
+1. **A later pin upgrade** that separates the two concerns: a
+   `coverage.denominator_exclusions` key, or making
+   `governed_scope_exclusions` apply to package-walk output as well as to the
+   declared scope. This is the only resolution that keeps `C-001` on
+   `dashboard/src/spow/` while taking it out of the denominator, and it is the
+   one to ask the tool for.
+2. **If and only if 1 is unavailable**, add `hiqlite/static/` alone to
+   `coupling.bypass_prefixes`, once wave 4's build contract exists, which rung 3
+   already contemplates for generated output. That clears 12 of the 16 and
+   leaves the 4 third-party files as a known, documented rung-2 exception
+   rather than a hidden one. It does not make rung 2 passable on its own.
+
+**Explicitly rejected.** Claiming the generated bytes or the vendored bindings
+under some spec to make the number go up: that inflates coverage with files no
+spec can meaningfully describe, and milestones 3 and 4 exist to prevent it.
+Also rejected here: changing the tool pin, and enabling any rung. This entry
+records the prerequisite; it does not resolve it.
 
 ### Rung 1: `coupling.require_ownership = true`
 
