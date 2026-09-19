@@ -60,9 +60,15 @@ contradicting no `specs/000` `unamendable` anchor. The constitution is a
 standing statement, so unlike an amended `spec.md` it is edited in place.
 
 Before ratification no spec is `approved`, so that rule has no subject yet. Until
-the corpus is ratified the constitution is authored text owned by `specs/000`
-and is edited in place under that ownership, with the coupling gate still
-requiring an owning spec to move in the same range (constitution, Amendment).
+then the constitution is authored text owned by `specs/000` and is edited in
+place under that ownership, with the coupling gate still requiring an owning
+spec to move in the same range (constitution, Amendment).
+
+That route closes **per document**, when the owner sets `status: approved` on the
+spec that establishes it: `specs/000` for the constitution, the contract, and
+the templates; `004` for `AGENTS.md`. Ratification is per-spec, there is no
+aggregate "corpus ratified" state, and approving any other spec changes nothing
+about how these documents are amended.
 
 ## Amending a spec
 
@@ -88,7 +94,13 @@ relationships <amended-id>`.
 Every spec in this corpus is `draft`. Draft is never a claim about code, and
 `implementation: complete` is never a claim about approval. Ratification, merge,
 publication, release, and upstream acceptance are five further, separate things
-(constitution X).
+(constitution X). Ratification is per-spec: approving one spec settles that
+spec, not the corpus.
+
+Ratifying a spec that carries a known-defects section ratifies the record, not
+the behavior. It does not endorse the defect and does not bar a repair, which is
+an ordinary later spec that `refines`, `amends`, or `supersedes` the adopting
+one and carries its own evidence (constitution VI).
 
 ## What the gate actually enforces
 

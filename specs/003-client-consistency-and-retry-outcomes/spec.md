@@ -112,27 +112,59 @@ These rules provide bounded duplicate suppression for exact retained retries at 
 the caller's consensus log and SQLite one atomic storage system. The caller must retry from its durable log after an
 uncertain process failure and must preserve a stable command digest and receipt codec.
 
-## 7. Known limitations and follow-up
+## 7. Known defects
+
+Behavior this spec found and would not have chosen, left unfixed here.
 
 - Ordinary cluster writes have no durable operation id or response receipt. Lost-response retries may repeat effects.
 - The ten-second reconnect buffer is fixed in code and starts only after a successful connection. The public timeout is
   separately fixed at 120 seconds.
-- Focused tests exercise late-response routing and expiry directly. A transport-level fault test that drops the socket
-  after apply but before response remains follow-up work.
 - Explicitly consistent query documentation currently overstates what a quorum has applied. The implementation calls
   `ensure_linearizable` and then reads the leader; this spec limits its claim to that observable sequence.
-- External receipt retention is count-based, not time-based. Applications must size it for their maximum retry horizon.
+
+## 8. Evidence gaps, intentional limits, and follow-up
+
+Neither entry below is behavior this spec would not have chosen, so neither belongs in section 7.
+
+**Evidence gap.** Focused tests exercise late-response routing and expiry directly. A transport-level fault test that
+drops the socket after apply but before response remains follow-up work.
+
+**Intentional limit.** External receipt retention is count-based, not time-based. Applications must size it for their
+maximum retry horizon.
 
 Future work SHOULD add an ordinary-cluster idempotency key and durable receipt design before making any stronger retry
 claim. It SHOULD also add a deterministic lost-response integration harness. Broader membership and distributed-lease
 semantics remain outside this pilot.
 
-## 8. Provenance
+## 9. Provenance
 
 The client-id and serial-number pattern in the Raft literature and raft-corpus was evaluated as an idea, not assumed to
 exist. Hiqlite ordinary cluster mode has no such persisted table. The external engine implements a bounded receipt
 variant with its own dense sequence and exact identity rules, so its contract is written from hiqlite source and tests.
 The raft-corpus client outline supplied no usable acceptance criteria.
+
+## 10. Resolved decisions
+
+**D-1 (2026-09-19, the known-defects heading was missing and its entries were
+reclassified).** This spec recorded its adopted-as-found behavior under
+`## 7. Known limitations and follow-up`. Constitution VI identifies that section
+by its computed slug, `known-defects` or a slug ending in `-known-defects`, and
+`known-limitations-and-follow-up` matches neither, so a consumer extracting
+defects from this spec found none and three real defect records were invisible
+to the corpus. `001` and `002` both used the recognized heading; this spec was
+the outlier.
+
+The five original entries were split by what they actually are, and no text was
+dropped or softened. The ordinary-cluster receipt gap, the hardcoded reconnect
+buffer and timeout, and the overstated consistent-query documentation are
+behavior this spec would not have chosen, and are now section 7. The missing
+transport-level fault test is an evidence gap, and the count-based receipt
+retention is a deliberate design limit with a stated caller obligation; both are
+now section 8, which is not a defect heading and does not pretend to be. The
+follow-up paragraph is unchanged. Provenance moved from section 8 to section 9.
+
+The classification is a documentation correction. No runtime behavior, no
+acceptance command, and no claim in sections 2 through 6 changed.
 
 ## Verification
 

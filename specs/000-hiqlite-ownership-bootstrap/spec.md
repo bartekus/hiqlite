@@ -84,8 +84,16 @@ before ratification that rule has no subject. Until then the constitution, the
 contract, and the templates are authored text this spec establishes and owns,
 and they are corrected in place under that ownership: an edit to any of them
 still needs an authoring edit to an owning spec in the same range, so the
-coupling gate still refuses a silent one. After ratification, the approved-spec
-route in the constitution's Amendment section is the only way in.
+coupling gate still refuses a silent one.
+
+The transition is **per document**, and its trigger is the owner setting
+`status: approved` on the spec that establishes that document: this spec for the
+constitution, the contract, and the templates; `004` for `AGENTS.md`. From that
+moment the approved-spec route in the constitution's Amendment section is the
+only way into that document. `status` is per-spec frontmatter and ratification
+is a per-spec act, so there is no aggregate "the corpus is ratified" state, no
+document may invoke one, and partial ratification is the normal case. Ratifying
+this spec and ratifying the corpus are different events with different effects.
 
 ## 2. Authored truth and derived truth
 

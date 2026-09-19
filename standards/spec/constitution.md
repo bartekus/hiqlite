@@ -104,7 +104,20 @@ The heading is identified by its computed slug: `known-defects`, or any slug
 ending in `-known-defects`, at any level. `## Known defects` and
 `## 6. Known defects` both name the section; `## Known defects and open
 questions` does not, because a section that continues past the anchor is about
-something wider.
+something wider. A heading that names something else entirely, such as "Known
+limitations and follow-up", does not name this section at all, and entries that
+belong under it are reclassified into a recognized heading rather than left
+where a consumer cannot find them.
+
+**Ratifying a defect record is not endorsing the defect.** An approved spec that
+carries a known-defects section says the description was accurate for the code
+as adopted and that the defect was known when authority attached. It does not
+declare the behavior desirable, it does not make the behavior a requirement, and
+it does not bar a repair. A repair is an ordinary governed change: a later spec
+that `refines`, `amends`, or `supersedes` the adopting spec, carrying the
+behavior change and its own evidence. Nothing here makes a recorded defect
+harder to fix than an unrecorded one; the record is what lets the repair be
+reviewed against a stated baseline instead of against memory.
 
 ## VII. OpenRaft owns consensus; hiqlite owns its side of the trait boundary
 
@@ -176,10 +189,32 @@ branch; they never name upstream.
 
 ## XII. Bounded adoption is a declared state, not a defect
 
-This corpus deliberately governs part of the repository. `coupling.require_ownership`
-is off, so unclaimed source is migration debt that `spec-spine index coverage`
-reports rather than a repository-wide refusal. The bound is recorded in the
-bootstrap spec and is widened by an explicit adoption decision, not by drift.
+This corpus deliberately governs part of the repository. Three different things
+are routinely collapsed into the word "adoption", and no document may cite one
+of them as evidence for another:
+
+- **Current coverage** is a measurement. `spec-spine index coverage` reports
+  which files in its indexed denominator a spec specifically claims, at the
+  moment it runs. It is a fact about the ledger and never a statement about test
+  coverage or behavioral completeness: a claimed file may be only partly
+  specified, and an unclaimed file may be thoroughly tested. The denominator is
+  itself a configured artifact, so what it omits is part of what the number
+  means.
+- **Intended adoption scope** is a plan: which parts of the repository this
+  corpus means to govern eventually, and which are deliberately excluded and
+  why. It is authored text, it may exceed current coverage by a wide margin, and
+  a gap between the two is an expected state rather than a defect.
+- **Enforcement settings** are configuration. `coupling.require_ownership` is
+  off, so unclaimed source is migration debt that coverage reports rather than a
+  repository-wide refusal, and `index coverage` is not run with
+  `--fail-on-untraced`. Explicit, ownership-bearing unit claims still raise
+  `C-001` on the paths that carry them, including paths on the built-in bypass
+  floor.
+
+Each moves independently. Coverage rises when a spec claims new territory; the
+intended scope changes when an owner decides it should; an enforcement setting
+changes only by an explicit owner decision recorded in this corpus, never by
+drift and never as a side effect of coverage rising.
 
 ---
 
@@ -199,9 +234,22 @@ corpus is unratified, this document remains authored text that
 `specs/000-hiqlite-ownership-bootstrap` establishes and owns, and it is edited
 in place under that ownership: the coupling gate still requires an owning spec to
 move in the same range, and the tier order and the `unamendable` anchors still
-bind. The approved-spec requirement above governs amendment once the corpus is
-ratified, and nothing in this paragraph ratifies anything or widens what a
-session may change.
+bind.
+
+**The transition is per document, and its trigger is exact.** The in-place route
+for a document under `standards/spec/` closes at the moment the owner sets
+`status: approved` on the spec that **establishes that document**, and not
+before. For this file, for `standards/spec/contract.md`, and for
+`standards/spec/templates/`, that spec is
+`specs/000-hiqlite-ownership-bootstrap`. For `AGENTS.md` it is
+`specs/004-governance-harness`. Approving any other spec changes nothing here.
+
+`status` is per-spec frontmatter and ratification is a per-spec act, so **this
+corpus has no aggregate "the corpus is ratified" state** to reach and no document
+may invoke one. Partial ratification is the normal case: ratifying `000` and
+ratifying the corpus are different events with different effects, and ratifying
+`001` through `003` changes nothing about how this file is amended. Nothing in
+this paragraph ratifies anything or widens what a session may change.
 
 The claim uses the ordinary ownership vocabulary over a **section unit of this
 file**, not the `amends` edge:
