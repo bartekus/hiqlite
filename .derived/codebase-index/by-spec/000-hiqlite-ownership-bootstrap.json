@@ -20,6 +20,18 @@
       {
         "path": "spec-spine.toml",
         "source": "spec-edge"
+      },
+      {
+        "path": "standards/spec/constitution.md",
+        "source": "spec-edge"
+      },
+      {
+        "path": "standards/spec/contract.md",
+        "source": "spec-edge"
+      },
+      {
+        "path": "standards/spec/templates/",
+        "source": "spec-edge"
       }
     ],
     "resolvedUnits": [
@@ -87,11 +99,50 @@
           "kind": "file",
           "path": "spec-spine.toml"
         }
+      },
+      {
+        "locations": [
+          {
+            "file": "standards/spec/constitution.md"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/constitution.md"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "standards/spec/contract.md"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/contract.md"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "standards/spec/templates/"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/templates/"
+        }
       }
     ],
     "specId": "000-hiqlite-ownership-bootstrap",
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "ecdfbf69ccd3e19f9fc2c54af2f42fdf58382bec9aee14dca195fcc2ceb8bc21"
+  "shardHash": "600c68598fed3a1ac83aff2ea017bb3b39686e0c6281ee3cd7c44adfd3dc15e6"
 }
