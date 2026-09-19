@@ -60,13 +60,20 @@ implementation: pending        # pending | in-progress | complete | n-a | deferr
 # text as a section unit of that file instead (constitution, Amendment):
 #   establishes:
 #     - { kind: section, file: "standards/spec/constitution.md", anchor: "xiii-new-principle" }
-# The file is on the coupling gate's built-in bypass floor, so that claim is a
-# ledger fact rather than an enforced refusal. Human review is the control.
+# The file is on the coupling gate's built-in bypass floor, but an explicit,
+# ownership-bearing unit claim overrides that floor, and spec 000 claims this
+# file as an explicit `file` unit. Editing it without an authoring edit to an
+# owning spec therefore raises C-001 here. The gate still only checks that the
+# file and an owning spec moved together; whether an amendment is sound is a
+# question for human review.
 #
 # --- bootstrap marker (NOT an edge) ---
-# Every spec in this corpus is retroactive: hiqlite existed before the graph.
 # `origin.retroactive: true` records authority held since before the graph
-# existed, so the claim does not pose as a fresh `establishes`.
+# existed, so the claim does not pose as a fresh `establishes`. Every spec in
+# the corpus today is retroactive, because hiqlite existed before the graph.
+# A spec whose subject does not yet exist declares its origin truthfully
+# instead, and marks the units it has not written `planned: true`; do not copy
+# a retroactive marker this spec has not earned (constitution VI).
 origin:
   retroactive: true
   paths: ["hiqlite/src/"]

@@ -78,6 +78,15 @@ that later work cannot quietly erode it. While this spec is `draft` the freeze
 binds the corpus as drafted; it takes final force when an owner ratifies the
 spec.
 
+The same applies to tiers 2 and 3. The constitution's Amendment section requires
+an `approved` spec to change it, and no spec in this corpus is approved yet, so
+before ratification that rule has no subject. Until then the constitution, the
+contract, and the templates are authored text this spec establishes and owns,
+and they are corrected in place under that ownership: an edit to any of them
+still needs an authoring edit to an owning spec in the same range, so the
+coupling gate still refuses a silent one. After ratification, the approved-spec
+route in the constitution's Amendment section is the only way in.
+
 ## 2. Authored truth and derived truth
 
 There are exactly two kinds of governance truth in this repository.
@@ -260,6 +269,15 @@ Seven states, never collapsed: *(anchor: `lifecycle-words-are-distinct`)*
 
 Every spec in this corpus is `draft`. No spec ratifies another spec.
 
+`implementation` is measured against the obligations a spec places on **this
+tree**, and against nothing else. A clause that states a conditional policy for
+an artifact the repository does not carry, such as the hook policy of `004` B-5,
+places no obligation on the tree and leaves nothing unimplemented; the tree
+satisfies it by carrying no such artifact. `implementation: complete` is
+therefore never a claim that every sentence of a spec is mechanically enforced.
+Which sentences are enforced, and by which of the four mechanisms of section 13,
+is stated by each spec's evidence section.
+
 ## 11. Fork governance is local
 
 This corpus governs `bartekus/hiqlite` and binds work on this fork alone.
@@ -392,7 +410,8 @@ enabling `require_ownership` or `index coverage --fail-on-untraced`.
 
 No hooks are installed in this repository. Spec `004` states the policy a hook
 would have to satisfy and records its absence; nothing here claims a hook-level
-control that does not exist.
+control that does not exist. Installing one is optional future work, not
+outstanding implementation debt of `004`, per section 10 and `004` D-4.
 
 Ratification of this corpus, waivers, publication, and release remain separate
 owner actions.

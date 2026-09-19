@@ -78,10 +78,19 @@ prompt-time defense. *(Bootstrap anchor: `refusal-rule`.)*
 
 ## VI. Adopted code is specced as found
 
-Every spec in this corpus is retroactive. hiqlite existed, and worked, before
-any of it was written. A spec that claims authority over pre-existing code
-declares `origin.retroactive: true` and then describes the behavior that is
-actually there, including the behavior it would not have chosen.
+A spec that claims authority over pre-existing code declares
+`origin.retroactive: true` and then describes the behavior that is actually
+there, including the behavior it would not have chosen. hiqlite existed, and
+worked, before any of this corpus was written, so every spec in it today,
+`000` through `004`, is retroactive.
+
+That is a fact about the corpus as it stands, not a requirement on what may be
+written next. `origin.retroactive` records when authority began. A future spec
+whose subject does not yet exist states that truthfully, declares the territory
+it will own (`planned: true` on a unit that is not yet written), and does not
+claim a retroactive origin it does not have. Misdeclaring origin to match the
+shape of the existing corpus would corrupt the one field that answers whether
+the text or the code came first.
 
 Behavior the spec would not have chosen is recorded under a **known-defects**
 heading, named, and left unfixed by that spec. Recording a defect does not bless
@@ -181,6 +190,18 @@ affected text as an authority unit of this file**, and contradicts no anchor in
 the `unamendable` list of `specs/000-hiqlite-ownership-bootstrap`. The bootstrap
 spec's freeze surface is the hard boundary; everything else here is revisable
 through the normal governed flow.
+
+**Before ratification, that rule has no subject.** No spec in this corpus is
+`approved`, ratification is an owner act, and an agent never performs one
+(section X), so requiring an approved amending spec would freeze this document
+against its own corrections until the day it is ratified. It does not. While the
+corpus is unratified, this document remains authored text that
+`specs/000-hiqlite-ownership-bootstrap` establishes and owns, and it is edited
+in place under that ownership: the coupling gate still requires an owning spec to
+move in the same range, and the tier order and the `unamendable` anchors still
+bind. The approved-spec requirement above governs amendment once the corpus is
+ratified, and nothing in this paragraph ratifies anything or widens what a
+session may change.
 
 The claim uses the ordinary ownership vocabulary over a **section unit of this
 file**, not the `amends` edge:

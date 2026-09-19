@@ -6,7 +6,7 @@ kind: "governance"
 created: "2026-09-19"
 owner: "hiqlite maintainers"
 risk: medium
-implementation: in-progress
+implementation: complete
 depends_on:
   - "000-hiqlite-ownership-bootstrap"
 origin:
@@ -128,10 +128,13 @@ value is that the comparison range is the one that will actually merge.
 
 No governance command, recipe, workflow, or document in this repository may
 target the upstream project or assume the repository's default branch (`000`
-section 11). One pre-existing, unrelated reference survives and is deliberately
-left alone: the `build-image` recipe's default name is the upstream container
-image coordinate. It names a registry path, not a governance target, and the
-acceptance below is scoped to the governance surface for that reason.
+section 11). Pre-existing, unrelated references to the upstream organization do
+survive and are deliberately left alone: the `build-image` recipe's default
+image name, the three `ghcr.io/sebadob/nioca` invocations in the TLS recipes,
+the builder image in `.github/workflows/code_style.yaml`, and
+`.github/FUNDING.yml`. Each names a registry path or forge metadata, not a
+governance target, which is why the acceptance below greps a named governance
+surface rather than the repository at large.
 
 ### B-4. Pull-request CI runs the read-only gate and nothing that executes the corpus
 
@@ -172,6 +175,10 @@ something rather than inventing its own rules. A session hook, if installed:
 - MUST NOT write a `Spec-Drift-Waiver:` line. That is a human act (`000`
   section 6).
 
+Every clause above is conditioned on a hook existing. Installing one is not an
+obligation of this spec, and no clause is unmet while none is installed: the
+tree satisfies B-5 today by carrying no hook. See D-4.
+
 Until a hook exists, these controls are performed by the contributor running
 `just spine-check` and by pull-request CI. This spec does not claim a hook-level
 control that does not exist.
@@ -191,10 +198,20 @@ Conventional commits naming the spec ordinal as the scope, for example
 
 ## 4. Evidence and its limits
 
-The acceptance block below runs the read-only gate and asserts that `AGENTS.md`
-and the five recipes exist, that the local default base is `origin/spec-spine`,
-that no `origin/main` or upstream target survives in the governance surface, and
-that CI neither verifies nor regenerates.
+The acceptance block below runs the read-only gate and asserts that `AGENTS.md`,
+the constitution, the contract, and both templates exist; that the five `spine-*`
+recipes are defined and that `just --list` parses the file; that `spine-couple`'s
+default base is `origin/spec-spine` and that CI passes the pull request's base
+SHA; and that the workflow carries no uncommented `spec-spine verify`, no
+`spec-spine compile`, and no bare `spec-spine index`.
+
+Two lines are narrower than they may read. The `origin/main` grep covers four
+files (`justfile`, `AGENTS.md`, `standards/spec/contract.md`, and the workflow),
+and the upstream-organization grep covers three of them, excluding the `justfile`
+because of the pre-existing container coordinates named in B-3. Neither sweeps
+`standards/spec/constitution.md`, the templates, or `specs/`, so a stray upstream
+target in those is caught by review rather than here. The em-dash line, by
+contrast, is recursive over `AGENTS.md`, `standards/spec`, and `specs`.
 
 What it does **not** establish: that any contributor or assistant follows
 `AGENTS.md`, or that the hook policy of B-5 is enforced by anything, since no
@@ -277,6 +294,27 @@ and `.gitignore` all raise `C-001`, while unclaimed floor paths such as
 Amendment section, `standards/spec/contract.md`, `AGENTS.md`, `ARCHITECTURE.md`
 and KD-1 were corrected to say what the tool does. The claims stay: they are
 both a ledger fact and, here, real enforcement.
+
+**D-4 (2026-09-19, the harness is implemented; B-5 is a policy, not a
+deliverable).** `implementation` moves from `in-progress` to `complete`. Section
+1, B-5, and section 4 agree when read together: section 1 says B-5 states what a
+hook *would* have to satisfy *before* one is installed, every MUST in B-5 is
+conditioned on "A session hook, if installed", and section 4 records that the
+hook policy is enforced by nothing because no hook exists. B-5 therefore places
+no obligation on this tree. Every unconditional obligation of the spec (B-1
+through B-4 and B-6) is present in the tree, and the acceptance block passes in
+full against it.
+
+`implementation: complete` means what `000` section 10 and constitution X say it
+means: the described implementation and its executable acceptance are present
+and pass. It is not a claim that every sentence here is mechanically enforced,
+which section 4 and KD-1 through KD-3 deny in detail, and it is not a claim
+about approval; this spec remains `draft`.
+
+D-2's closing clause read B-5's conditional policy as an unmet implementation
+obligation and set `in-progress` on that reading. That clause is superseded
+here. D-2's substantive decision, that hook policy is stated while no hook is
+installed, stands unchanged, and no hook is installed by this change.
 
 ## Verification
 
