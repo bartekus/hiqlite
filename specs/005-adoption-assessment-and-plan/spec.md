@@ -15,6 +15,7 @@ origin:
 establishes:
   - "standards/spec/adoption-plan.md"
   - "standards/spec/findings-register.md"
+  - "standards/spec/wal-repair-proposal.md"
 references:
   - unit: { kind: file, path: "standards/spec/constitution.md" }
     role: "context"
@@ -61,7 +62,9 @@ change:
 - `standards/spec/adoption-plan.md`, the reconciled inventory, the wave
   proposal, the completion criteria, and the enforcement ladder;
 - `standards/spec/findings-register.md`, the findings with stable `F-NNN`
-  identifiers.
+  identifiers;
+- `standards/spec/wal-repair-proposal.md`, the traced repair proposal for F-001
+  and F-002, which implements nothing and changes no runtime behavior.
 
 `standards/spec/constitution.md` and `standards/spec/contract.md` are
 **referenced**, not claimed. `000` owns both, and `references` is non-owning.
@@ -203,6 +206,9 @@ unmet implementation debt.
 ```verify:cli
 test -f standards/spec/adoption-plan.md
 test -f standards/spec/findings-register.md
+test -f standards/spec/wal-repair-proposal.md
+grep -q 'changes no runtime behavior' standards/spec/wal-repair-proposal.md
+grep -q 'log_io_completed' standards/spec/wal-repair-proposal.md
 grep -q 'Status: proposed, not adopted' standards/spec/adoption-plan.md
 grep -q 'M1, ownership recorded' standards/spec/adoption-plan.md
 grep -q 'M2, behavior specified with evidence' standards/spec/adoption-plan.md
@@ -210,11 +216,12 @@ grep -q 'M3, enforcement enabled' standards/spec/adoption-plan.md
 grep -q 'F-001' standards/spec/findings-register.md
 grep -q 'F-020' standards/spec/findings-register.md
 grep -q 'record, not a mandate' standards/spec/findings-register.md
-sh -c '! grep -n "origin/main" standards/spec/adoption-plan.md standards/spec/findings-register.md'
-sh -c '! grep -rl "$(printf "\342\200\224")" standards/spec/adoption-plan.md standards/spec/findings-register.md'
+sh -c '! grep -n "origin/main" standards/spec/adoption-plan.md standards/spec/findings-register.md standards/spec/wal-repair-proposal.md'
+sh -c '! grep -rl "$(printf "\342\200\224")" standards/spec/adoption-plan.md standards/spec/findings-register.md standards/spec/wal-repair-proposal.md'
 spec-spine check --fail-on-unresolved --fail-on-warn
 spec-spine lint --fail-on-warn
 spec-spine index coverage
 sh -c 'spec-spine index owner standards/spec/adoption-plan.md | grep -q 005-adoption-assessment-and-plan'
 sh -c 'spec-spine index owner standards/spec/findings-register.md | grep -q 005-adoption-assessment-and-plan'
+sh -c 'spec-spine index owner standards/spec/wal-repair-proposal.md | grep -q 005-adoption-assessment-and-plan'
 ```

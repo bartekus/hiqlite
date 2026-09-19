@@ -36,9 +36,19 @@ better than it is.
    responsible. It says nothing about whether the behavior is described.
 2. **M2, behavior specified with evidence.** The spec states the contract, names
    the configuration each claim holds under, states the limit of its evidence
-   next to the claim, and carries an acceptance block that fails before the work
-   and passes after. Behavior it would not have chosen is under a recognized
-   `known-defects` heading.
+   next to the claim, and carries an acceptance block that **characterizes
+   accurately and detects meaningfully**: every line asserts a specific claimed
+   behavior and would fail if that behavior changed. These are retroactive
+   adoption specs over working code, so their acceptance is expected to pass the
+   moment it is written; a manufactured before-state failure proves nothing and
+   is not required. The fail-then-pass standard belongs to behavioral repairs,
+   which must demonstrate a regression test failing against the implementation
+   being repaired and passing after, and for which a command that merely errors
+   on the base because the test is absent there is not that demonstration
+   (`standards/spec/templates/spec-template.md`). Behavior the spec would not
+   have chosen goes under a recognized `known-defects` heading, and the test for
+   that heading is a mismatch between what the code promises and what it does,
+   not the availability of a different design.
 3. **M3, enforcement enabled.** A configuration change makes the absence of M1 a
    refusal rather than a report. This is the only milestone that changes what
    CI rejects, it is an owner decision, and it is reached last.
@@ -86,11 +96,21 @@ that became governed, which is the distinction constitution XII draws and a
 worked example of why a coverage percentage is not a progress metric.
 
 **What the percentage means.** 43.5% is the share of a configured denominator
-that some spec names. It is not test coverage, not behavioral completeness, and
-not a share of the repository: as a fraction of tracked files, claimed territory
-is 57 of 333, about 17%. The denominator currently **includes** minified build
-output and **excludes** more than a thousand lines of authored Svelte and
-TypeScript, so correcting it (section 5) must precede quoting any coverage
+that some spec names. It is not test coverage and not behavioral completeness.
+
+An earlier revision also quoted "57 of 333, about 17%" as a share of the
+repository. That figure is **withdrawn**: its numerator is the count of claims
+resolved inside the 131-file denominator, and it was never reconciled against the
+other 202 tracked paths, several of which (`AGENTS.md`, `justfile`, `.gitignore`,
+`spec-spine.toml`, `standards/spec/**`) *are* claimed while others can never be.
+Dividing one set's numerator by another set's denominator produces a number that
+means nothing. No repository-wide ownership percentage is quoted here until every
+tracked path has been independently resolved to an owner or to a recorded
+exclusion, which is work item 1 of rung 0.
+
+What can be said without that reconciliation: the denominator currently
+**includes** 12 minified build-output files and **excludes** all 81 authored
+dashboard files, so correcting it (section 5) precedes quoting any coverage
 figure as progress.
 
 ### 2.2 Areas
@@ -255,7 +275,7 @@ All five must hold, and each is separately checkable.
    denominator corrected per section 5 so that it includes `dashboard/` and
    `examples/` and excludes generated output.
 2. **Every claimed unit is specified, not merely owned.** Each spec carries an
-   acceptance block that fails before its work and passes after, names the
+   acceptance block that fails if the behavior it names changes, names the
    configuration each claim holds under, and states its evidence limits beside
    its claims. This is the milestone that cannot be measured by a percentage
    and is confirmed by review.
@@ -299,8 +319,10 @@ files to the denominator, and removing build output takes 12 unclaimed files out
 
 ### Rung 1: `coupling.require_ownership = true`
 
-Turns unclaimed source into a `C-002` refusal. Safe only after waves 1 to 6 reach
-M1 for every non-excluded path. Verification: not by reading the config, but by
+Turns unclaimed source into a `C-002` refusal. Safe only once every
+non-excluded path has reached M1, which is the end state of the waves rather
+than any single one of them; this is the one control that genuinely requires all
+of them, and it is unrelated to the ratification question of OD-4. Verification: not by reading the config, but by
 a probe pull request that edits a path deliberately left unclaimed and confirming
 the gate refuses, plus one that edits a claimed path with its owning spec and
 confirming it passes.
@@ -347,94 +369,107 @@ exists, at which point ownership and coupling attach normally.
 
 ---
 
-## 6. Owner decisions that block progress
+## 6. Owner decisions
 
-### OD-1: are `examples/` and `dashboard/` in scope?
+OD-1 through OD-3 were **decided by the owner on 2026-09-19** and are recorded
+here as settled direction for this plan. They are direction, not ratification:
+nothing about them approves a spec.
 
-They are 116 of 333 tracked files and are currently invisible to the ledger by
-configuration, not by decision.
-**Alternatives.** (a) Both in scope: examples as governed executable
-documentation, dashboard as a specified product surface. (b) Examples in scope,
-dashboard declared permanently excluded as a separate product. (c) Both
-excluded, and "whole-project" is redefined to mean the Rust libraries.
-**Implications.** (a) is the only reading under which "whole-project adoption"
-is true as stated, and it is the only one that puts the fork's sole
-authentication surface under a spec. (c) leaves 35% of the repository ungoverned
-while the corpus claims completeness.
-**Recommendation: (a).** It sets rung 0's shape and waves 4 and 6.
+### OD-1: are `examples/` and `dashboard/` in scope? **Decided: yes, both.**
 
-### OD-2: how are generated assets governed?
+They are 116 of 333 tracked files and were invisible to the ledger by
+configuration rather than by decision. Both are in the adoption target: examples
+as governed executable documentation, the dashboard as a specified product
+surface, which also places the fork's only authentication surface under a spec.
+This sets rung 0's shape and waves 4 and 6, and it is implemented by the layout
+changes of section 5 rather than by claiming anything here.
 
-`hiqlite/static` is committed build output with no drift check (F-012).
-**Alternatives.** (a) Keep it committed and add the wave 4 build contract plus a
-CI drift check. (b) Stop committing it and build the dashboard in CI and in the
-release image. (c) Leave it as is.
-**Implications.** (a) preserves the current workflow, in which `cargo install`
-works without Node, and closes the drift hole; it costs one CI job that needs
-Node. (b) is cleaner but changes how the crate is consumed and is a runtime and
-packaging change, which this task does not authorize. (c) leaves the shipped
-dashboard unverifiable against its source.
-**Recommendation: (a).**
+### OD-2: how are generated assets governed? **Decided: keep them committed.**
 
-### OD-3: what is the split-brain watchdog for?
+`hiqlite/static` stays committed, and packaging does not change: `cargo install`
+continues to work without Node. Governance runs through the **authored source**
+(`dashboard/src`), the **build configuration** (`dashboard/svelte.config.js`,
+`vite.config.ts`, `package.json`), and a **reproducibility and drift check** that
+rebuilds and compares. The generated bytes are referenced, never claimed as
+authored units. This is wave 4's `015-dashboard-build-contract`, and F-012 closes
+when that reaches M2.
 
-F-014: a task that aborts the process up to ten minutes after the checker dies,
-labeled a temporary safety net in the code.
-**Alternatives.** (a) Intended fail-fast: specify it, document the abort, keep
-it. (b) Leftover scaffolding: record it as a defect and repair it under wave 2.
-**Implications.** Only the owner knows the intent; guessing here would put a
-speculative claim in a spec, which constitution IX forbids.
-**Recommendation: ask before wave 2 is written.** No default.
+### OD-3: the split-brain watchdog. **Decided: preserve behavior; investigate first.**
 
-### OD-4: ratification sequencing
+Runtime behavior is preserved during retroactive adoption, and no policy is
+proposed until the actual behavior is established. That investigation is now
+done and F-014 is rewritten against it, with its earlier claim withdrawn: under
+`panic = "abort"` the checker's own panic already terminates the process, so the
+watchdog is unreachable for its stated purpose; under unwinding, which is the
+default for dev and test profiles and for any downstream consumer that does not
+set abort, both the checker and the watchdog panic into `JoinHandle`s nobody
+awaits, so split-brain checking stops silently and nothing terminates. Wave 2
+describes this as found. A future policy, repair, remove, or report, is a
+separate decision with no default here.
 
-Carried from PR #3, restated because it gates everything above. The in-place
-correction route for the constitution, contract, and templates closes when `000`
-is approved.
-**Alternatives.** (a) Ratify `000` last, after waves 1 to 6 have exercised it.
-(b) Ratify `000` now to lock the freeze surface, and accept that further
-constitutional corrections then require a drafted-then-approved amending spec.
-**Implications.** This assessment found four corrections to tier-1 and tier-2
-text in one pass. Under (b) each would have needed its own amending spec and an
-owner ratification. Under (a) the freeze surface is not yet final, which is the
-cost.
-**Recommendation: (a).** Ratify `001` through `004` whenever they are ready;
-hold `000` until the corpus has been exercised by at least wave 1.
+### OD-4: ratification sequencing, and when to reassess
 
----
+Carried from PR #3, restated because it gates everything above. The owner has
+directed that ratification be **deferred**, with readiness reassessed after the
+first substantive adoption wave, and has stated that completing all six waves is
+**not** a prerequisite for reconsidering it.
+
+An earlier revision of this document contradicted itself on this point, saying
+in one place that `000` should be ratified after waves 1 to 6 and in another
+that wave 1 was enough. The single rule is the one above: **reassess after wave
+1 completes**, and treat any later wave as additional evidence rather than as a
+gate.
+
+**Alternatives.** (a) Defer ratification of `000`; reassess when wave 1 reaches
+M2. (b) Ratify `000` now to lock the freeze surface, and accept that further
+corrections to the constitution, contract, and templates then require a
+drafted-then-approved amending spec under the proposed per-document rule.
+**Implications.** This assessment alone produced corrections to tier-1 and
+tier-2 text in two successive passes, including reclassifications of its own
+earlier findings. Under (b) each would have needed its own amending spec and an
+owner ratification. The cost of (a) is that the freeze surface is not yet final.
+**Recommendation: (a)**, which is also the owner's stated direction. Ratifying
+`001` through `005` is a separate per-spec question and is not blocked by this
+one; there is no aggregate corpus ratification to wait for.
+
 
 ## 7. The first implementation task this plan recommends
 
-Not started, and not authorized by this document.
+Not started, and not authorized by this document. It is now traced rather than
+sketched, and the full proposal is
+`standards/spec/wal-repair-proposal.md`.
 
 **Repair the WAL append and completion error contract (F-001 and F-002).**
 
-Chosen over a demonstration because it is a confirmed defect at a claimed unit
-with an existing test that pins the defective behavior, so the repair is
-measurable, bounded, and already inside governed territory.
+Chosen because it is a confirmed mismatch at an already-claimed unit with an
+existing test that pins the defective behavior, so the repair is measurable and
+bounded.
 
-- **Intended behavior.** A failed append must not report completion. When
-  `append_result` is `Err`, `complete_append` acknowledges the error and returns
-  without invoking the completion callback. When the blocking persistence step
-  fails after a successful append acknowledgement, the writer reports the
-  failure to OpenRaft explicitly rather than exiting the loop and dropping the
-  callback. Which explicit form that takes is the decision the spec must make
-  and record; `001` section 8 already says the callback error contract is
-  undecided.
-- **Regression tests.** `append_failure_is_returned_but_completion_still_fires`
-  currently asserts the defect and must be replaced, not deleted, by a test
-  asserting the new contract, with the old name retired in the amending spec so
-  the change is visible. Add a test that drives a blocking persistence failure
-  through the writer loop rather than the helper, closing the evidence gap
-  F-002 names.
-- **Amendment relationships.** A new spec `amends: ["001-wal-durability-and-completion"]`
-  with `amends_sections` naming the append and completion anchors, and
-  `co_authority` over `hiqlite-wal/src/` for the duration. `001` section 8
-  already requires that future work on this "MUST amend this contract rather
-  than silently rewriting its baseline", so the edge is prescribed by the spec
-  being amended, not chosen here.
-- **Acceptance boundary.** `cargo test -p hiqlite-wal --lib` for the writer
-  tests, old and new, under both `LogSync` modes the spec names. No cluster run.
-  The acceptance must fail on today's tree and pass after.
-- **Out of scope for that task.** F-003 to F-008, the power-cut harness, and
-  anything in `002` or `003`.
+The proposal traces the locked OpenRaft (0.9.24, from a `"0.9.21"` caret
+requirement) and establishes that the error channel hiqlite needs already
+exists: `LogFlushed::log_io_completed` takes `Result<(), io::Error>`, consumes
+`self` so cardinality is exactly one, and forwards an error to `RaftCore`.
+hiqlite discards it at `hiqlite-wal/src/log_store_impl.rs:214`, which hardcodes
+`Ok(())` into a `Box<dyn FnOnce() + Send>` that cannot carry a result.
+
+An earlier revision of this section recommended deciding "the callback error
+contract" as one question. That was too coarse. The repair separates **success
+completion** (the entries reached the durability the `LogSync` mode promises;
+the only thing that may produce `Ok(())`) from **error notification** (the append
+or its persistence failed, with the cause). Both belong to the adapter, which
+holds the `LogFlushed`; the writer's job is to report which occurred, which its
+current callback type makes impossible.
+
+One design decision is deliberately left open and does not block the repair:
+whether the writer keeps exiting its loop after a persistence failure, keeps
+running and fails subsequent appends, or exits with its thread error surfaced.
+The proposal recommends notifying correctly and surfacing the thread error while
+deferring the survival question, so a durability policy decision does not hold up
+a notification defect.
+
+Amendment and acceptance relationships, ownership justification, the three
+regression tests, and the smallest sufficient integration boundary (the writer
+loop, not the OpenRaft adapter) are in the proposal. One consequence to note
+here: `001`'s acceptance block names the test that pins the defect, so retiring
+it makes `001`'s block fail, and the amending spec must carry the replacement
+acceptance and say that it supersedes that line.

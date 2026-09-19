@@ -11,11 +11,15 @@ instead of restating it, and so a repair can be reviewed against a fixed
 baseline. Identifiers are never reused; a finding that turns out to be wrong is
 marked withdrawn in place, with the reason.
 
-**Classes.** `defect` is behavior confirmed at source that the corpus would not
-have chosen. `contradiction` is two authored texts, or a text and the code,
-that disagree. `evidence` is a claim whose support is thinner than a reader
-would assume. `limit` is a deliberate boundary with a stated consequence.
-`decision` is an open design or ownership question that no document answers.
+**Classes.** `defect` is a mismatch confirmed at source between what the code
+states or promises and what it does. The existence of a better design is not a
+defect: something must actually disagree. `contradiction` is two authored texts,
+or a text and the code, making incompatible claims; an incomplete claim is not a
+contradiction. `gap` is territory inside the intended adoption scope that no
+spec claims yet, which is migration state, not a fault. `evidence` is a claim
+whose support is thinner than a reader would assume. `limit` is a deliberate
+boundary with a stated consequence. `decision` is an open design or ownership
+question that no document answers.
 
 **Confidence.** `high` means read at the cited source or asserted by a passing
 test. `medium` means read at source with a consequence inferred from
@@ -44,10 +48,29 @@ the ack channel, then runs `persist()?` and calls `callback()`. Nothing branches
 on `append_result` being `Err`, so a rejected append acknowledges the error to
 the caller and reports completion to OpenRaft.
 
-Configurations: all `LogSync` modes. Consequence: the storage method reports an
-error while the completion callback conveys success for the same entries, so the
-two events disagree about whether the log advanced. Evidence and its limits:
-`hiqlite-wal/src/writer.rs:483-496`
+The root cause is at the adapter boundary: `hiqlite-wal/src/log_store_impl.rs:214`
+builds the callback as `Box::new(move || callback.log_io_completed(Ok(())))`, a
+`Box<dyn FnOnce() + Send>` that hardcodes success and has no way to carry a
+result. The writer therefore could not report an error through it even if it
+branched on one.
+
+Configurations: all `LogSync` modes.
+
+**Consequence, traced rather than assumed.** An earlier revision of this entry
+said the two events leave OpenRaft disagreeing about whether the log advanced.
+Tracing the locked OpenRaft (0.9.24 per `Cargo.lock`; `Cargo.toml:78` requests
+`"0.9.21"`) shows a narrower effect. `RaftCore::append_to_log`
+(`core/raft_core.rs`) is `self.log_store.append(entries, callback).await?` and
+only then `rx.await`. When the adapter returns `Err`, the `?` returns before the
+callback is ever awaited and the receiver is dropped, so the stray
+`log_io_completed(Ok(()))` finds no receiver and only logs "failed to send log io
+completion event" (`storage/callback.rs:41-44`). The practical consequence in
+this version is a misleading error log and a callback contract that cannot
+express failure, not a corrupted `RaftCore` view of the log. The defect is real
+and the API hole is real; the earlier consequence was overstated and is
+withdrawn.
+
+Evidence and its limits: `hiqlite-wal/src/writer.rs:483-496`
 (`append_failure_is_returned_but_completion_still_fires`) asserts this behavior,
 so it is pinned as current, not incidental. No test establishes what OpenRaft
 does with the conflicting pair. Recorded at `001` section 8, bullet 1.
@@ -64,12 +87,29 @@ loop, so the callback is never invoked and no explicit `log_io_completed(Err)`
 is sent.
 
 Configuration: `LogSync::Immediate`, where the persistence step is
-`flush_blocking`. Consequence: the caller has already been told the append was
-accepted, and the completion event that would report the failure is lost with
-the loop. Evidence and its limits:
+`flush_blocking`. `ImmediateAsync` calls `flush_async`, which starts writeback
+and can fail on the same path.
+
+**Consequence, traced.** An earlier revision said OpenRaft is left without any
+completion event. It is not, and the real chain is worse in one way and better in
+another. The ack was already sent as `Ok`, so the adapter's `append()` returned
+`Ok` and `RaftCore` is parked on `rx.await`. `complete_append(...)?` at
+`writer.rs:307-315` returns from `run()` (`writer.rs:211-232`), which ends the
+dedicated OS thread spawned at `writer.rs:135`; that thread's `JoinHandle` is
+discarded, so the underlying IO error is never surfaced anywhere. The boxed
+callback is dropped with the loop, dropping the `LogFlushed` and its oneshot
+sender, so `rx.await` does resolve, as `RecvError`, which `RaftCore` maps to
+`StorageIOError::write_logs`. OpenRaft therefore learns that something failed but
+never learns what: the real `io::Error` is replaced by a channel-receive error.
+Worse, the writer thread is gone, so every subsequent append fails and the node's
+log store is dead until restart.
+
+Evidence and its limits:
 `writer.rs:465-479` (`persistence_failure_suppresses_completion_callback`)
-proves the helper suppresses the callback; it does not exercise loop exit, nor
-what OpenRaft observes afterwards. Recorded at `001` section 8, bullet 2.
+proves the helper suppresses the callback; it does not exercise loop exit, thread
+death, or what OpenRaft observes. The chain above was read at source in the
+locked OpenRaft and in the WAL crate, and was **not executed**. Recorded at `001`
+section 8, bullet 2.
 
 ### F-003 `defect`, confidence `high`
 
@@ -98,22 +138,37 @@ states hiqlite owns, so the gap is on hiqlite's side of the boundary.
 greatest UUID and then validates the embedded snapshot id, with no fallback when
 the newest file is corrupt. `002` section 7, bullet 4.
 
-### F-007 `defect`, confidence `high`
+### F-007 `limit`, confidence `high`
 
-**Ordinary cluster writes have no durable operation id or response receipt.**
-Lost-response retries may repeat effects. `003` section 7. The external
-state-machine engine implements a bounded receipt window; ordinary cluster mode
-does not. Consequence: at-least-once effects on retry after a lost response,
-with no duplicate suppression.
+**Ordinary cluster mode is at-least-once by stated contract.** Writes carry a
+process-local correlation identifier and no durable client operation identity,
+and hiqlite neither persists a response receipt nor suppresses a later duplicate.
+`003` section 3 states this and places the matching obligation on the caller:
+callers MUST treat retry after an ambiguous outcome as potentially repeating the
+operation.
 
-### F-008 `defect`, confidence `high`
+**Reclassified from `defect` on 2026-09-19.** Nothing in the code or its
+documentation promises exactly-once in this mode, so there is no mismatch. The
+earlier classification inferred a defect from the availability of a better
+design, which is the inference the class definition excludes; that the external
+state-machine engine implements a bounded receipt window (`003` section 6) shows
+the alternative exists, not that this contract is broken. Recorded so a future
+spec proposing durable idempotency has a stated baseline. Now `003` section 8.
 
-**The reconnect buffer window and the public timeout are hardcoded and
-unrelated.** The reconnect buffer is ten seconds, fixed in code, and starts only
-after a successful connection; the public timeout is separately fixed at 120
-seconds. `003` section 7. Consequence: the buffer cannot be tuned to a
-deployment's reconnect profile, and the two constants can disagree about how
-long an outcome remains recoverable.
+### F-008 `limit`, confidence `high`
+
+**The reconnect window and the request timeout are fixed, and nested.** The
+late-response window is ten seconds and starts after a successful reconnect; the
+outer request wait is 120 seconds.
+
+**Reclassified from `defect` on 2026-09-19, and one claim withdrawn.** The
+earlier entry said the two constants can disagree about how long an outcome
+remains recoverable. `003` section 5 already describes them as composing rather
+than competing: if reconnect takes longer than the window, buffered entries
+remain until a connection succeeds or the outer wait expires. That claim was
+wrong and is withdrawn rather than carried forward. What remains is that neither
+value is configurable and neither carries a recorded rationale. That is a limit
+with an open question attached, not a mismatch. Now `003` section 8.
 
 ---
 
@@ -140,12 +195,11 @@ Next action: fold into the configuration-contract spec of wave 2; decide
 whether a malformed or missing value is a startup error or a panic, and state
 it once for all readers.
 
-### F-010 `contradiction`, confidence `high`
+### F-010 `gap`, confidence `high`
 
-**The configuration contract is dispersed, and the claimed unit does not bound
-it.** `001` claims `hiqlite/src/config.rs` as a `file` unit, which invites a
-reader to treat that file as the configuration surface. It is not: the tree
-holds 46 `env::var` reads, 20 of them in `config.rs`. The remaining 26 live in
+**The configuration surface is dispersed and only partly claimed.** `001` claims
+`hiqlite/src/config.rs` as a `file` unit. The tree holds 46 `env::var` reads, 20
+of them in `config.rs`. The remaining 26 live in
 `backup.rs`, `s3.rs`, `tls.rs`, `init.rs`, `split_brain_check.rs`,
 `server/proxy/config.rs`, `dashboard/mod.rs`, and `dashboard/session.rs`, and
 include the `HQL_DANGER_RAFT_STATE_RESET`, `HQL_BACKUP_SKIP_VALIDATION`,
@@ -153,10 +207,20 @@ include the `HQL_DANGER_RAFT_STATE_RESET`, `HQL_BACKUP_SKIP_VALIDATION`,
 `hiqlite/src/config_toml.rs` is unclaimed although it loads the same contract
 from `hiqlite.toml`.
 
-Consequence: no single authored text states what configures hiqlite, and the
-ownership ledger implies a boundary the code does not respect. Evidence and its
-limits: counted by grep across `hiqlite/src` and `hiqlite-wal/src`; the
-semantics of each variable were not individually verified.
+**Reclassified from `contradiction` on 2026-09-19.** The earlier entry said the
+ledger "implies a boundary the code does not respect". Re-examined, nothing
+authored makes that implication: `001` claims one file and never states that
+`config.rs` is the whole configuration surface, and a claim that covers part of a
+contract is incomplete, not contradictory. Dispersed configuration and partial
+ownership are ordinary migration state.
+
+What is real, and unchanged: no single authored text states what configures
+hiqlite, the coupling gate defends `config.rs` while `config_toml.rs` and the
+other 26 reads move freely, and F-009's panic-on-parse pattern lives in that
+unclaimed remainder. Consequence: a reader has no one place to learn the
+configuration contract, and half of it changes without an owning spec. Evidence
+and its limits: counted by grep across `hiqlite/src` and `hiqlite-wal/src`; the
+semantics of each variable were not individually verified. Addressed by wave 2.
 
 ### F-011 `evidence`, confidence `high`
 
@@ -188,35 +252,69 @@ Second consequence, on the ledger: the 12 uncompressed `.js` files under
 `hiqlite/static` are counted in the coverage denominator as unclaimed source,
 so build output inflates the reported migration debt. See F-016.
 
-### F-013 `decision`, confidence `high`
+### F-013 `gap`, confidence `high`
 
-**A stated ownership territory has no spec.** Constitution VII and `000`
-section 7 both name "the SQLite **and cache** state machines, their snapshots,
-and recovery integration" as hiqlite-owned and specifiable. `002` claims
-`hiqlite/src/store/state_machine/sqlite/`. Nothing claims
+**Cache state machine and log-store adapter are unclaimed.**
 `hiqlite/src/store/state_machine/memory/` (6 files, 2192 lines: the cache state
-machine, the KV, dlock, TTL, and notify handlers) or `hiqlite/src/store/logs/`
-(2 files, 238 lines, the OpenRaft log-store adapter and its in-memory variant).
+machine and the KV, dlock, TTL, and notify handlers) and
+`hiqlite/src/store/logs/` (2 files, 238 lines: the OpenRaft log-store adapter and
+its in-memory variant) have no owning spec. `002` claims the SQLite state machine
+directory; nothing claims these.
 
-Consequence: the boundary statement promises coverage the ledger does not
-carry, which is exactly the confusion constitution XII now forbids. Next action:
-wave 1.
+**Reclassified from `decision` on 2026-09-19, and an earlier claim withdrawn.**
+The earlier entry said a boundary statement "promises coverage the ledger does
+not carry". It does not. Constitution VII says hiqlite "owns, **and this corpus
+may specify**" these areas, and `000` section 7 is likewise a statement of
+responsibility, not of existing spec coverage. Being hiqlite's responsibility
+establishes what a spec would be permitted to claim, never that one already does,
+and reading it otherwise would collapse exactly the distinction constitution XII
+draws. This is an adoption gap: unclaimed territory inside the intended scope,
+which is migration state and not a fault. Closed at M1 by wave 1.
 
 ### F-014 `decision`, confidence `medium`
 
-**A watchdog converts a checker failure into process termination, by design and
-without a stated contract.** `hiqlite/src/split_brain_check.rs:15-21` spawns a
-task that every 600 seconds asserts the split-brain checker task has not
-finished, with the comment "TODO just a safety net until everything runs super
-smooth and stable". `check_split_brain` loops forever, so the assertion can only
-fire after the checker has already panicked; under `panic = "abort"` the
-assertion then aborts the process.
+**The split-brain watchdog does nothing under either panic strategy, for
+different reasons.** The earlier entry said it "converts a checker failure into
+process termination ... up to ten minutes later". That conflated the two panic
+strategies and is withdrawn. Corrected below, with observation and inference
+kept apart.
 
-Consequence: a fault in an observability path escalates to node termination up
-to ten minutes later, which may be intended fail-fast behavior or may be
-leftover scaffolding. The comment says the latter. Evidence and its limits: read
-at source; not executed. This is recorded as a decision rather than a defect
-because the intent is genuinely unclear and the owner may want fail-fast.
+**Observed at source.** `hiqlite/src/split_brain_check.rs:12-22`: `spawn` starts
+`check_split_brain` as a tokio task, keeps its `JoinHandle`, and starts a second
+task that loops on `time::sleep(600)` then `assert!(!handle.is_finished())`,
+under the comment "TODO just a safety net until everything runs super smooth and
+stable". `check_split_brain` (line 24 onward) is an unbounded `loop`, so it
+returns only by panicking. `spawn` returns `()`; the watchdog's own `JoinHandle`
+is dropped immediately, and the call site at `hiqlite/src/start.rs:114` discards
+the result. No `std::panic::set_hook` exists anywhere in `hiqlite/src` or
+`hiqlite-wal/src`. `Cargo.toml:15` sets `panic = "abort"` under
+`[profile.release]`, inherited by `[profile.profiling]`; no other profile sets
+it, so dev and test builds use the default unwind.
+
+**Inferred, not executed.** Under `panic = "abort"`, the checker's own panic
+terminates the process at the moment it happens. The watchdog can therefore never
+observe a finished handle, because there is no process left to observe it: under
+abort the watchdog is unreachable with respect to its stated purpose, and
+termination is caused by the original panic, not by the assertion. Under
+unwinding, the checker's panic is caught by the tokio runtime and stored in its
+`JoinHandle`, which nobody awaits; up to 600 seconds later the watchdog's
+`assert!` fires and panics the watchdog task, whose own handle was already
+dropped, so that panic is stored and discarded too. Net effect under unwind:
+both tasks die, split-brain checking stops silently, the default panic hook
+prints to stderr, and nothing else reports it or terminates anything.
+
+**Why this matters beyond the profile in this repository.** Cargo profile
+settings apply to the workspace being built. hiqlite is primarily an embeddable
+library, so a downstream application linking it builds under **its own** profile;
+`panic = "abort"` here governs this repository's own release binaries, not every
+consumer. The unwind path is therefore the reachable one for an unknown share of
+users.
+
+Consequence: a fault in an observability path silently disables that
+observability, and the mechanism intended to catch it cannot report it. The owner
+has directed that runtime behavior be preserved during retroactive adoption, so
+this is recorded as found. Whether the watchdog should be repaired, removed, or
+replaced by a reported error is a future policy decision with no default here.
 
 ### F-015 `limit`, confidence `high`
 
@@ -310,12 +408,21 @@ contract rather than the file.
 
 | class | ids | count |
 |---|---|---|
-| `defect` | F-001 to F-009 | 9 |
-| `contradiction` | F-010, F-018 | 2 |
+| `defect` | F-001 to F-006, F-009 | 7 |
+| `contradiction` | F-018 | 1 |
+| `gap` | F-010, F-013 | 2 |
 | `evidence` | F-011, F-012, F-017, F-019 | 4 |
-| `limit` | F-015, F-016 | 2 |
-| `decision` | F-013, F-014, F-020 | 3 |
+| `limit` | F-007, F-008, F-015, F-016 | 4 |
+| `decision` | F-014, F-020 | 2 |
 
-Nine defects, of which eight were already recorded by the pilot specs and one
+**Reclassified on 2026-09-19**, after each class test was applied rather than
+assumed: F-007 and F-008 from `defect` to `limit`, because a stated contract with
+a caller obligation is not a mismatch; F-010 and F-013 from `contradiction` and
+`decision` to `gap`, because incomplete ownership and unclaimed territory are
+migration state rather than faults; and the consequences of F-001, F-002, and
+F-014 rewritten against traced source, with three earlier claims withdrawn in
+place.
+
+Seven defects, of which six were already recorded by the pilot specs and one
 (F-009) is new. No finding in this register authorizes a repair; each repair is
 a separate governed change with its own spec and evidence.
