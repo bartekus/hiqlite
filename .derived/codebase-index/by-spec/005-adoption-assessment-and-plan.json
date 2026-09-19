@@ -1,19 +1,16 @@
 {
   "mapping": {
     "dependsOn": [
-      "000-hiqlite-ownership-bootstrap"
+      "000-hiqlite-ownership-bootstrap",
+      "004-governance-harness"
     ],
     "implementingPaths": [
       {
-        "path": ".github/workflows/spec-spine.yaml",
+        "path": "standards/spec/adoption-plan.md",
         "source": "spec-edge"
       },
       {
-        "path": "AGENTS.md",
-        "source": "spec-edge"
-      },
-      {
-        "path": "justfile",
+        "path": "standards/spec/findings-register.md",
         "source": "spec-edge"
       }
     ],
@@ -21,40 +18,27 @@
       {
         "locations": [
           {
-            "file": "AGENTS.md"
+            "file": "standards/spec/adoption-plan.md"
           }
         ],
         "ownership": true,
         "sourceField": "establishes",
         "unit": {
           "kind": "file",
-          "path": "AGENTS.md"
+          "path": "standards/spec/adoption-plan.md"
         }
       },
       {
         "locations": [
           {
-            "file": ".github/workflows/spec-spine.yaml"
+            "file": "standards/spec/findings-register.md"
           }
         ],
         "ownership": true,
-        "sourceField": "extends",
+        "sourceField": "establishes",
         "unit": {
           "kind": "file",
-          "path": ".github/workflows/spec-spine.yaml"
-        }
-      },
-      {
-        "locations": [
-          {
-            "file": "justfile"
-          }
-        ],
-        "ownership": true,
-        "sourceField": "extends",
-        "unit": {
-          "kind": "file",
-          "path": "justfile"
+          "path": "standards/spec/findings-register.md"
         }
       },
       {
@@ -84,9 +68,9 @@
         }
       }
     ],
-    "specId": "004-governance-harness",
+    "specId": "005-adoption-assessment-and-plan",
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "592d2a84c41052495bbbdf208e8529fe50ab5fef83dafd36c0d40f87124b7c98"
+  "shardHash": "5ddb724faf1418f15f609654ea031d48fdb7f9d162c3a835ae81343814c723db"
 }
