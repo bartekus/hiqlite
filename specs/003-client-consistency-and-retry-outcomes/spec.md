@@ -114,23 +114,46 @@ uncertain process failure and must preserve a stable command digest and receipt 
 
 ## 7. Known defects
 
-Behavior this spec found and would not have chosen, left unfixed here.
+Behavior this spec found and would not have chosen, left unfixed here. The test for
+entry here is a mismatch between what the code states or promises and what it does,
+not the existence of a different design that someone might prefer.
 
-- Ordinary cluster writes have no durable operation id or response receipt. Lost-response retries may repeat effects.
-- The ten-second reconnect buffer is fixed in code and starts only after a successful connection. The public timeout is
-  separately fixed at 120 seconds.
-- Explicitly consistent query documentation currently overstates what a quorum has applied. The implementation calls
-  `ensure_linearizable` and then reads the leader; this spec limits its claim to that observable sequence.
+- Explicitly consistent query documentation overstates what the implementation establishes. The public doc comment at
+  `hiqlite/src/client/query.rs:13` and `:38` describes "replication at a point, where all 'current' logs have been
+  applied to at least a quorum". The implementation at `hiqlite/src/query/mod.rs:29` calls
+  `raft.ensure_linearizable()` and then reads the local pool, which establishes leadership and a read index, not
+  quorum application. The promise and the code disagree, which is what makes this a defect rather than a limitation.
+  This spec limits its own claim to the observable sequence.
 
-## 8. Evidence gaps, intentional limits, and follow-up
+## 8. Intentional limits, evidence gaps, and follow-up
 
-Neither entry below is behavior this spec would not have chosen, so neither belongs in section 7.
+Nothing below is a defect. Each is either a deliberate boundary this spec found stated in the code and its caller
+contract, or evidence that has not been produced. A design that could have been chosen differently is not thereby a
+defect, and this section exists so that distinction survives.
+
+**Intentional limit: ordinary cluster mode is at-least-once by contract.** Ordinary cluster writes carry a
+process-local correlation identifier and no durable client operation identity, and hiqlite neither persists a response
+receipt nor suppresses a later duplicate write in this mode. Section 3 states this as the contract and places the
+matching obligation on the caller: callers MUST treat retry after an ambiguous outcome as potentially repeating the
+operation, and SHOULD use application-level unique keys, conditional SQL, or another idempotency design. Nothing in
+the code or its documentation promises exactly-once in this mode, so there is no mismatch to record as a defect. That
+a durable idempotency design exists, and is implemented for external state-machine mode in section 6, shows the
+alternative was available, not that the ordinary-mode contract is broken. Recorded here so a future spec proposing
+that design has a stated baseline.
+
+**Intentional limit: the reconnect window and the request timeout are fixed, and nested.** The late-response window is
+ten seconds and starts after a successful reconnect; the outer request wait is 120 seconds. Section 5 describes how
+they compose: if reconnect takes longer than the window, buffered entries remain until a connection succeeds or the
+outer wait expires. The two values are therefore coherent rather than contradictory, and an earlier reading of this
+entry that claimed they could disagree about how long an outcome remains recoverable was wrong and is withdrawn. What
+remains is that neither value is configurable and neither carries a recorded rationale, which is an open question for
+a future spec rather than a defect in this one.
+
+**Intentional limit: external receipt retention is count-based, not time-based.** Applications must size it for their
+maximum retry horizon. Section 6 states the bound and the caller obligation.
 
 **Evidence gap.** Focused tests exercise late-response routing and expiry directly. A transport-level fault test that
 drops the socket after apply but before response remains follow-up work.
-
-**Intentional limit.** External receipt retention is count-based, not time-based. Applications must size it for their
-maximum retry horizon.
 
 Future work SHOULD add an ordinary-cluster idempotency key and durable receipt design before making any stronger retry
 claim. It SHOULD also add a deterministic lost-response integration harness. Broader membership and distributed-lease
@@ -165,6 +188,27 @@ follow-up paragraph is unchanged. Provenance moved from section 8 to section 9.
 
 The classification is a documentation correction. No runtime behavior, no
 acceptance command, and no claim in sections 2 through 6 changed.
+
+**D-2 (2026-09-19, two of those three entries were not defects, and moved
+again).** D-1 placed the missing ordinary-cluster idempotency and the fixed
+reconnect and timeout values under Known defects. Re-examined against the
+stated test for that heading, neither qualifies, and both moved to section 8.
+
+Ordinary cluster mode has a stated at-least-once contract with an explicit
+caller obligation (section 3): no text in the code or its documentation promises
+exactly-once, so nothing disagrees with the implementation. Classifying it as a
+defect inferred one from the mere existence of a better design, which is exactly
+the inference constitution VI's known-defects test excludes.
+
+The reconnect window and the request timeout were recorded as possibly
+disagreeing about how long an outcome remains recoverable. Section 5 already
+describes them as nested rather than competing, and that earlier reading was
+wrong; it is withdrawn rather than carried forward. Their non-configurability
+and the absence of a recorded rationale remain, as an open question.
+
+The consistent-query documentation entry stays a defect, and now cites both
+sides of the mismatch: the promise at `hiqlite/src/client/query.rs:13` and `:38`
+against the implementation at `hiqlite/src/query/mod.rs:29`.
 
 ## Verification
 

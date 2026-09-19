@@ -138,9 +138,30 @@ surface the contradiction rather than editing the spec to match the code
 ## Verification
 
 The acceptance, as commands. `just spine-verify <id>` runs this block; each line
-is one command and no shell variable survives to the next. Write lines that fail
-against the tree this spec is built on and pass after: a block that is green
-before the work asserts nothing.
+is one command and no shell variable survives to the next.
+
+**What the block must prove depends on what the spec is doing**, and the two
+cases have different standards. Do not apply one to the other.
+
+*A retroactive adoption spec* describes code that already works. Its acceptance
+is expected to pass the moment it is written, and manufacturing a before-state
+failure would prove nothing about the code. What it MUST do instead is
+**characterize accurately and detect meaningfully**: each line asserts a
+specific behavior the spec claims, phrased so that it **fails if that behavior
+changes**. A line that would stay green after the behavior it names was removed
+is not acceptance, it is decoration. Name the exact test, the exact symbol, or
+the exact configuration; `cargo test -p <crate> --lib <path::to::test> --
+--exact` beats a whole-suite run, which passes for reasons unrelated to the
+claim.
+
+*A behavioral repair spec* changes what the code does. Its acceptance MUST
+include at least one regression test demonstrated to **fail against the
+implementation being repaired and pass after the repair**, and the spec states
+where that was demonstrated. A test command that merely errors on the base
+because the test does not exist there is **not** that demonstration: absence of
+a test is not evidence of the defect. Where the old behavior was pinned by a
+test that asserted it, say which test is replaced and why, rather than deleting
+it silently.
 
 This block executes. It is therefore run by a maintainer who has read the
 commands, and never by pull-request CI, which treats a proposed tree as

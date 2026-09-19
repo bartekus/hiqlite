@@ -229,27 +229,33 @@ through the normal governed flow.
 **Before ratification, that rule has no subject.** No spec in this corpus is
 `approved`, ratification is an owner act, and an agent never performs one
 (section X), so requiring an approved amending spec would freeze this document
-against its own corrections until the day it is ratified. It does not. While the
-corpus is unratified, this document remains authored text that
+against its own corrections until the day it is ratified. It does not. While no spec
+in this corpus is approved, this document remains authored text that
 `specs/000-hiqlite-ownership-bootstrap` establishes and owns, and it is edited
 in place under that ownership: the coupling gate still requires an owning spec to
 move in the same range, and the tier order and the `unamendable` anchors still
-bind.
+bind. This is a statement about the present, in which no spec is approved, not a
+claim that the corpus has a ratification state of its own.
 
-**The transition is per document, and its trigger is exact.** The in-place route
-for a document under `standards/spec/` closes at the moment the owner sets
-`status: approved` on the spec that **establishes that document**, and not
-before. For this file, for `standards/spec/contract.md`, and for
-`standards/spec/templates/`, that spec is
-`specs/000-hiqlite-ownership-bootstrap`. For `AGENTS.md` it is
-`specs/004-governance-harness`. Approving any other spec changes nothing here.
+**Ratification is per spec.** `status` is per-spec frontmatter and approving a
+spec settles that spec. There is no aggregate state in which "the corpus" becomes
+ratified, and no document in this repository may invoke one. Partial ratification
+is the normal case, and approving `001` through `003` changes nothing about how
+this file is amended.
 
-`status` is per-spec frontmatter and ratification is a per-spec act, so **this
-corpus has no aggregate "the corpus is ratified" state** to reach and no document
-may invoke one. Partial ratification is the normal case: ratifying `000` and
-ratifying the corpus are different events with different effects, and ratifying
-`001` through `003` changes nothing about how this file is amended. Nothing in
-this paragraph ratifies anything or widens what a session may change.
+**Proposed policy, not yet settled: the transition is per document.** The
+in-place route for a document under `standards/spec/` would close at the moment
+the owner sets `status: approved` on the spec that **establishes that document**:
+`specs/000-hiqlite-ownership-bootstrap` for this file, for
+`standards/spec/contract.md`, and for `standards/spec/templates/`;
+`specs/004-governance-harness` for `AGENTS.md`.
+
+That is one defensible reading of ownership, and it is written here so the
+question is answerable rather than open. It is **a proposal awaiting an owner
+decision**, not a ratified rule: an owner who wants to approve `000` early while
+continuing to correct this document in place may choose otherwise, and the rule
+is then whatever they record. Nothing in this section ratifies anything, extends
+the proposal beyond the documents named, or widens what a session may change.
 
 The claim uses the ordinary ownership vocabulary over a **section unit of this
 file**, not the `amends` edge:

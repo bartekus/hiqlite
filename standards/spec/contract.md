@@ -64,11 +64,11 @@ then the constitution is authored text owned by `specs/000` and is edited in
 place under that ownership, with the coupling gate still requiring an owning
 spec to move in the same range (constitution, Amendment).
 
-That route closes **per document**, when the owner sets `status: approved` on the
-spec that establishes it: `specs/000` for the constitution, the contract, and
-the templates; `004` for `AGENTS.md`. Ratification is per-spec, there is no
-aggregate "corpus ratified" state, and approving any other spec changes nothing
-about how these documents are amended.
+Ratification is **per spec**, and there is no aggregate corpus-level ratified
+state. The constitution **proposes**, pending an owner decision, that the
+in-place route close per document when the spec establishing it is approved
+(`specs/000` for the constitution, the contract, and the templates; `004` for
+`AGENTS.md`). Treat that as a proposal, not a settled rule.
 
 ## Amending a spec
 
@@ -94,8 +94,8 @@ relationships <amended-id>`.
 Every spec in this corpus is `draft`. Draft is never a claim about code, and
 `implementation: complete` is never a claim about approval. Ratification, merge,
 publication, release, and upstream acceptance are five further, separate things
-(constitution X). Ratification is per-spec: approving one spec settles that
-spec, not the corpus.
+(constitution X). Ratification is per spec: approving one spec settles that
+spec, and the corpus has no ratified state of its own.
 
 Ratifying a spec that carries a known-defects section ratifies the record, not
 the behavior. It does not endorse the defect and does not bar a repair, which is

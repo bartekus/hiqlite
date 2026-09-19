@@ -86,14 +86,17 @@ and they are corrected in place under that ownership: an edit to any of them
 still needs an authoring edit to an owning spec in the same range, so the
 coupling gate still refuses a silent one.
 
-The transition is **per document**, and its trigger is the owner setting
-`status: approved` on the spec that establishes that document: this spec for the
-constitution, the contract, and the templates; `004` for `AGENTS.md`. From that
-moment the approved-spec route in the constitution's Amendment section is the
-only way into that document. `status` is per-spec frontmatter and ratification
-is a per-spec act, so there is no aggregate "the corpus is ratified" state, no
-document may invoke one, and partial ratification is the normal case. Ratifying
-this spec and ratifying the corpus are different events with different effects.
+Ratification is **per spec**: `status` is per-spec frontmatter, approving a spec
+settles that spec, and there is no aggregate state in which the corpus as a whole
+becomes ratified. No document here may invoke one, and partial ratification is
+the normal case.
+
+The constitution's Amendment section additionally **proposes**, as a policy
+choice awaiting an owner decision, that the in-place route close per document
+when the spec establishing it is approved: this spec for the constitution, the
+contract, and the templates; `004` for `AGENTS.md`. That proposal is recorded
+there rather than frozen here, and this spec's `unamendable` anchors do not
+include it.
 
 ## 2. Authored truth and derived truth
 
