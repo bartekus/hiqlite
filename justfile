@@ -308,8 +308,11 @@ spine-check:
     spec-spine lint --fail-on-warn
     spec-spine index coverage
 
-# Compare a branch to its actual pull-request base. Pass the base SHA in CI.
-spine-couple base="origin/main" head="HEAD":
+# Compare a branch to its actual pull-request base. The default is this fork's
+# integration branch, which is a convenience for a local run and is correct only
+# for a branch that merges there. CI does not use it: the workflow passes the
+# pull request's real base SHA.
+spine-couple base="origin/spec-spine" head="HEAD":
     spec-spine couple --base "{{ base }}" --head "{{ head }}"
 
 # Run one trusted specification's executable acceptance block locally.

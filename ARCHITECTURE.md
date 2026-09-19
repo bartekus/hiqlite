@@ -285,10 +285,17 @@ any database or application in general. If you modify its files without it knowi
 
 ## Specification governance pilot
 
-The `specs/` corpus records four retroactive, draft contracts: the ownership bootstrap, WAL durability and completion,
-snapshot publication and recovery, and client consistency and retry outcomes. Draft means the contracts have not been
-ratified by an owner. `implementation: complete` means their acceptance commands describe and exercise the current
-tree.
+The `specs/` corpus records five retroactive, draft contracts: the ownership bootstrap, WAL durability and completion,
+snapshot publication and recovery, client consistency and retry outcomes, and the governance harness. Draft means the
+contracts have not been ratified by an owner. `implementation: complete` means a spec's claimed units exist and its
+acceptance commands pass against the current tree; it says nothing about approval. Ratification, merge, publication,
+release, and upstream acceptance are five further, separate things.
+
+`specs/000-hiqlite-ownership-bootstrap/spec.md` is tier 1 and defines what a spec is here.
+`standards/spec/constitution.md` is tier 2, `standards/spec/contract.md` is a tier-3 summary, and the ordinary specs
+sit inside that envelope. `AGENTS.md` is the shared agent protocol and carries the project's commands and policies so
+they are not duplicated elsewhere. This governance applies to the `bartekus` fork only; nothing in it has been
+proposed to or approved by the upstream project.
 
 OpenRaft owns leader election, quorum rules, and the consensus algorithm. Hiqlite owns its WAL and vote persistence,
 SQLite and cache state machines, transport and client behavior, configuration, and recovery integration. External
@@ -296,10 +303,18 @@ state-machine mode does not start a Hiqlite Raft group. Its caller owns consensu
 retention, and the outer snapshot manifest.
 
 Install the pinned tool with `just spine-install`. After a trusted contract or governed implementation edit, run
-`just spine-regenerate` and commit the changed `.derived/` shards. `just spine-check` is read-only. On a feature branch,
-run `just spine-couple <base-sha> HEAD` against the pull request's actual base. Run an executable acceptance block with
-`just spine-verify <spec-id>` only after reviewing that spec's commands. Pull-request CI intentionally does not execute
-commands authored by the pull request.
+`just spine-regenerate` and commit the changed `.derived/` shards. `just spine-check` is read-only, and regeneration is
+deliberately kept out of it. On a feature branch, run `just spine-couple <base> HEAD`; the local default base is
+`origin/spec-spine`, the integration branch, and CI instead passes the pull request's actual base SHA. Run an
+executable acceptance block with `just spine-verify <spec-id>` only after reviewing that spec's commands. Pull-request
+CI intentionally does not execute commands authored by the pull request.
+
+Four mechanisms are distinct: ownership records (ledger facts), freshness detection (`spec-spine check`), coupling
+enforcement (`C-001`), and human review. The coupling gate ships a built-in bypass floor that this repository cannot
+shrink, covering `.github/`, `docs/`, `README.md`, `CHANGELOG.md`, `LICENSE`, `CODEOWNERS`, `.gitignore`,
+`.gitattributes`, `standards/spec/constitution.md`, `.derived/`, and lockfiles. An explicit unit claim overrides that
+floor, so the constitution, the governance workflow, and `.gitignore` are enforced here because spec 000 claims each of
+them explicitly. Floor paths no spec claims are held by review instead.
 
 This pilot leaves repository-wide ownership coverage, membership contracts, distributed leases, and broader transport
 coverage as follow-up work. `require_ownership` therefore remains disabled: coupling enforces specification

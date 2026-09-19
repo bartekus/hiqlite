@@ -21,10 +21,23 @@
       {
         "kind": "file",
         "path": ".gitignore"
+      },
+      {
+        "kind": "file",
+        "path": "standards/spec/constitution.md"
+      },
+      {
+        "kind": "file",
+        "path": "standards/spec/contract.md"
+      },
+      {
+        "kind": "file",
+        "path": "standards/spec/templates/"
       }
     ],
     "id": "000-hiqlite-ownership-bootstrap",
     "implementation": "complete",
+    "kind": "constitutional-bootstrap",
     "origin": {
       "paths": [
         "ARCHITECTURE.md",
@@ -38,20 +51,44 @@
     "risk": "high",
     "sectionHeadings": [
       "000: Bound the first hiqlite governance corpus",
-      "1. Purpose",
-      "2. Ownership boundary",
-      "3. Adoption state",
-      "4. Governance workflow",
-      "5. Pull-request trust boundary",
-      "6. Known limitations and follow-up",
-      "7. Provenance",
+      "1. The constitutional hierarchy",
+      "2. Authored truth and derived truth",
+      "3. Identity: directory name equals id",
+      "4. The typed authority graph",
+      "5. Determinism",
+      "6. The refusal rule",
+      "7. Ownership boundary: OpenRaft",
+      "8. Ownership boundary: external state-machine callers",
+      "9. Evidence: configuration and limits are part of the claim",
+      "10. Lifecycle words are distinct",
+      "11. Fork governance is local",
+      "12. Adoption scope",
+      "13. What each mechanism actually enforces",
+      "13.1 The coupling bypass floor, and what overrides it",
+      "14. Governance workflow",
+      "15. Pull-request trust boundary",
+      "16. Known limitations and follow-up",
+      "17. Provenance",
       "Verification"
     ],
     "specPath": "specs/000-hiqlite-ownership-bootstrap/spec.md",
     "status": "draft",
-    "summary": "Defines the authority boundary for a bounded retroactive spec-spine pilot and owns the local regeneration, validation, and pull-request coupling workflow.\n",
-    "title": "Bound the first hiqlite governance corpus"
+    "summary": "Tier-1 bootstrap for the hiqlite fork's specification corpus. Defines what a spec is here: the authored versus derived boundary, spec identity, the typed authority graph, determinism, and the refusal rule. Fixes the ownership boundary against OpenRaft and against external state-machine callers, states what evidence and lifecycle words mean, and records the explicit, bounded adoption scope of the pilot. Owns the local regeneration, validation, and pull-request coupling workflow, and the tier-2 and tier-3 governance documents under standards/spec.\n",
+    "title": "Bound the first hiqlite governance corpus",
+    "unamendable": [
+      "markdown-truth-boundary",
+      "json-truth-boundary",
+      "directory-name-equals-id",
+      "typed-authority-graph",
+      "determinism-requirement",
+      "refusal-rule",
+      "openraft-consensus-boundary",
+      "external-caller-consensus-boundary",
+      "evidence-names-configuration",
+      "lifecycle-words-are-distinct",
+      "fork-governance-boundary"
+    ]
   },
-  "shardHash": "9395040b47ee4d9d456d3b7fccc59040c97416d037a18448424ff2faa35da804",
+  "shardHash": "80e61ffe1da7366a85e828fffdbe77a316f47592934d4e7eed815ceeebc89658",
   "specVersion": "1.3.0"
 }

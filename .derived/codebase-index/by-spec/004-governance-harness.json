@@ -1,0 +1,92 @@
+{
+  "mapping": {
+    "dependsOn": [
+      "000-hiqlite-ownership-bootstrap"
+    ],
+    "implementingPaths": [
+      {
+        "path": ".github/workflows/spec-spine.yaml",
+        "source": "spec-edge"
+      },
+      {
+        "path": "AGENTS.md",
+        "source": "spec-edge"
+      },
+      {
+        "path": "justfile",
+        "source": "spec-edge"
+      }
+    ],
+    "resolvedUnits": [
+      {
+        "locations": [
+          {
+            "file": "AGENTS.md"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "AGENTS.md"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": ".github/workflows/spec-spine.yaml"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": ".github/workflows/spec-spine.yaml"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "justfile"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "justfile"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "standards/spec/constitution.md"
+          }
+        ],
+        "ownership": false,
+        "sourceField": "references",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/constitution.md"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "standards/spec/contract.md"
+          }
+        ],
+        "ownership": false,
+        "sourceField": "references",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/contract.md"
+        }
+      }
+    ],
+    "specId": "004-governance-harness",
+    "specStatus": "draft"
+  },
+  "schemaVersion": "1.1.0",
+  "shardHash": "e8f9d0ea883767db61ebfeb4da61e3672a7b9af0697cf52a7658d8ec15976106"
+}
