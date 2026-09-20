@@ -1,0 +1,59 @@
+{
+  "mapping": {
+    "dependsOn": [
+      "000-hiqlite-ownership-bootstrap",
+      "002-snapshot-publication-and-recovery"
+    ],
+    "implementingPaths": [
+      {
+        "path": "hiqlite/src/store/state_machine/memory/",
+        "source": "spec-edge"
+      }
+    ],
+    "resolvedUnits": [
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/store/state_machine/memory/"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/store/state_machine/memory/"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/store/state_machine/sqlite/"
+          }
+        ],
+        "ownership": false,
+        "sourceField": "references",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/store/state_machine/sqlite/"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/store/logs/memory.rs"
+          }
+        ],
+        "ownership": false,
+        "sourceField": "references",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/store/logs/memory.rs"
+        }
+      }
+    ],
+    "specId": "006-cache-state-machine",
+    "specStatus": "draft"
+  },
+  "schemaVersion": "1.1.0",
+  "shardHash": "8ad1ecfec2e7336c20b3049b4dd6487823b74754a5a2906e82bb66b1dea73593"
+}

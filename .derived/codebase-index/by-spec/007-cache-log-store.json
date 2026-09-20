@@ -1,0 +1,60 @@
+{
+  "mapping": {
+    "dependsOn": [
+      "000-hiqlite-ownership-bootstrap",
+      "001-wal-durability-and-completion",
+      "006-cache-state-machine"
+    ],
+    "implementingPaths": [
+      {
+        "path": "hiqlite/src/store/logs/",
+        "source": "spec-edge"
+      }
+    ],
+    "resolvedUnits": [
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/store/logs/"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/store/logs/"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite-wal/src/"
+          }
+        ],
+        "ownership": false,
+        "sourceField": "references",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite-wal/src/"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/store/state_machine/memory/"
+          }
+        ],
+        "ownership": false,
+        "sourceField": "references",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/store/state_machine/memory/"
+        }
+      }
+    ],
+    "specId": "007-cache-log-store",
+    "specStatus": "draft"
+  },
+  "schemaVersion": "1.1.0",
+  "shardHash": "69f936e779b1b3f16eb030c815df5c3ceeba6adf3d8af56ef24ca8e86d875f8c"
+}

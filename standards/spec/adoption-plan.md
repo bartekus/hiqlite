@@ -182,7 +182,32 @@ intentionally excluded.
 Dependency-ordered. Each wave is one or more draft specs, each retroactive
 unless stated, each with its own acceptance block and review.
 
-### Wave 1: the storage territory the boundary already promises
+### Wave 1: the cache state machine and its log store. **Executed 2026-09-19**
+
+Delivered as `006-cache-state-machine` (directory claim on
+`hiqlite/src/store/state_machine/memory/`) and `007-cache-log-store` (directory
+claim on `hiqlite/src/store/logs/`). Both retroactive, both `draft`, both
+`implementation: complete` against their own stated obligations. M1 reached for
+both; M2 reached with the evidence limits each spec states in its own section 4.
+Coverage moved 60 to 68 of 226 as a result, this time because territory was
+actually claimed.
+
+Four new defects were found and recorded, none repaired: `007` KD-1, a confirmed
+off-by-one in `get_log_state` that always reports `last_log_id: None`, observed
+by an added characterization test; KD-2, a `debug_assert!` comparing an offset to
+an absolute index; KD-3, an underflow on an exclusive end bound of zero; KD-4,
+`purge` never updating `last_purged`. `006` records three: panic-on-dead-handler
+escalating to process abort under this repository's release profile, a
+compile-time lock validity constant, and an unvalidated `cache_idx`.
+
+Distributed-lock behavior is described as found, per the owner's direction: the
+queue, the ten-second constant, and the wall-clock expiry with its own source
+comment about clock skew. No lease design, no fencing, no membership
+integration.
+
+The original wave-1 plan follows, for reference.
+
+### Wave 1 as originally planned: the storage territory the boundary already promises
 
 **Scope.** A6, A7. **Proposed specs:** `006-cache-state-machine-and-handlers`,
 `007-log-store-adapter`.

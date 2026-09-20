@@ -1,0 +1,64 @@
+{
+  "record": {
+    "created": "2026-09-19",
+    "dependsOn": [
+      "000-hiqlite-ownership-bootstrap",
+      "002-snapshot-publication-and-recovery"
+    ],
+    "establishes": [
+      {
+        "kind": "directory",
+        "path": "hiqlite/src/store/state_machine/memory/"
+      }
+    ],
+    "id": "006-cache-state-machine",
+    "implementation": "complete",
+    "origin": {
+      "paths": [
+        "hiqlite/src/store/state_machine/memory/"
+      ],
+      "retroactive": true
+    },
+    "owner": "hiqlite maintainers",
+    "references": [
+      {
+        "role": "the sibling state machine, for contrast",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/store/state_machine/sqlite/"
+        }
+      },
+      {
+        "role": "the log store this state machine's Raft group uses",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/store/logs/memory.rs"
+        }
+      }
+    ],
+    "risk": "high",
+    "sectionHeadings": [
+      "006: Define the in-memory cache state machine and its handlers",
+      "1. Purpose",
+      "2. Territory",
+      "3. Behavior",
+      "B-1. The request and response contract",
+      "B-2. Apply is deterministic, and delegates to per-cache handler threads",
+      "B-3. TTL expiry is a registration, and a re-put without a TTL clears it",
+      "B-4. Distributed locks, described as found",
+      "B-5. Snapshots, under both snapshot strategies",
+      "B-6. Handler channel failures panic",
+      "4. Evidence and its limits",
+      "5. Known defects",
+      "6. Out of scope",
+      "7. Resolved decisions",
+      "Verification"
+    ],
+    "specPath": "specs/006-cache-state-machine/spec.md",
+    "status": "draft",
+    "summary": "Records the existing in-memory cache state machine: the CacheRequest and CacheResponse contract, deterministic apply across the per-cache handler threads, TTL expiry, the distributed lock queue as found, snapshot build and install under both snapshot features, and the panic-on-failure behavior of the handler channels. Retroactive: describes what is there, repairs nothing.\n",
+    "title": "Define the in-memory cache state machine and its handlers"
+  },
+  "shardHash": "448605767dd94ca6d3c4301a488cd65e8a62ef9d10d857f4f4b472e9c3dcd02a",
+  "specVersion": "1.3.0"
+}
