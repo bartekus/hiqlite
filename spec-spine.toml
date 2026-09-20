@@ -31,6 +31,13 @@ standalone_npm_packages = ["dashboard"]
 extra_hashed_inputs = [
   "hiqlite-wal/src/**/*.rs",
   "hiqlite/src/config.rs",
+  # The rest of the configuration contract, claimed by 009. config_toml.rs is
+  # already in the hiqlite package walk for coverage, but package membership
+  # does not feed the freshness hash, and the two reference files are in
+  # neither, so all three are listed here.
+  "hiqlite/src/config_toml.rs",
+  "hiqlite.toml",
+  "hiqlite.env",
   "hiqlite/src/query/**/*.rs",
   "hiqlite/src/client/**/*.rs",
   "hiqlite/src/network/**/*.rs",
@@ -92,6 +99,11 @@ governed_scope = [
   "justfile",
   "spec-spine.toml",
   "AGENTS.md",
+  # The two configuration reference files 009 claims. They are root files that
+  # no package walk discovers, so without these they would be owned but absent
+  # from the denominator.
+  "hiqlite.toml",
+  "hiqlite.env",
   "standards/spec/**/*.md",
   # Authored dashboard source and its build configuration. Declaring the npm
   # package above puts its .ts and .js files in the coverage denominator, but

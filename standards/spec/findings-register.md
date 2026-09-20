@@ -243,6 +243,16 @@ configuration contract, and half of it changes without an owning spec. Evidence
 and its limits: counted by grep across `hiqlite/src` and `hiqlite-wal/src`; the
 semantics of each variable were not individually verified. Addressed by wave 2.
 
+**Disposition appended 2026-09-20; the observation above stands as recorded on
+2026-09-19.** Partly closed by `009-configuration-contract`, which claims
+`config_toml.rs`, `hiqlite.toml` and `hiqlite.env` and extends `001`'s claim on
+`config.rs`, so the two constructors and the two reference files are now owned
+together and defended by `C-001`. Not closed: the other 33 `HQL_*` reads in
+`backup.rs`, `s3.rs`, `tls.rs`, `init.rs`, `split_brain_check.rs`,
+`server/proxy/config.rs`, `dashboard/mod.rs` and `dashboard/session.rs` remain
+unclaimed, and each belongs to the spec that will own its subject. F-010 stays
+open against that remainder.
+
 ### F-011 `evidence`, confidence `high`
 
 **`HQL_SPLIT_BRAIN_INTERVAL` is documented nowhere.** It appears in neither
@@ -623,6 +633,92 @@ manual control is inadequate, or that a class of similar failures exists in the
 tree. Only `000`, `004` and `005` were executed in this pass, all pass, and
 `008`'s block was read but not executed because it runs cargo tests.
 
+## Found by the configuration adoption (2026-09-20)
+
+Recorded by `009-configuration-contract` as known defects. That spec is
+authoritative; the entries below exist so later work can cite a stable id. None
+is repaired.
+
+### F-031 `defect`, confidence `high`
+
+**`tls_api_danger_tls_no_verify` is documented, unreachable, and fatal to set.**
+`hiqlite.toml:194` documents the key. `config_toml.rs:211-212` reads
+`tls_raft_danger_tls_no_verify` a **second** time into the variable named
+`tls_api_danger_tls_no_verify`; because `t_bool` begins with `map.remove(key)`
+and `:194-195` already removed it, the second read always yields `None` and the
+API side is always `false`. The documented key itself is never consumed, so it
+reaches the unknown-key check (`config_toml.rs:458-461`) and the whole config is
+refused with `Unknown Config data`.
+
+**Observed by execution**, both halves:
+`config_toml::tests::documented_tls_api_no_verify_key_is_rejected_as_unknown`
+and `..::tls_api_no_verify_stays_false_when_the_raft_key_is_set`.
+
+Configuration: the TOML constructor only. The environment route is unaffected,
+because `tls.rs:62-69` formats `HQL_TLS_{variant}_DANGER_TLS_NO_VERIFY` per
+variant. Consequence: **fail-closed**. API certificate verification stays
+enabled, so no security boundary is weakened; a documented escape hatch is
+unusable and using it prevents startup. `009` KD-1.
+
+### F-032 `contradiction`, confidence `high`
+
+**`HQL_HEALTH_CHECK_DELAY_SECS` is documented and read nowhere.**
+`hiqlite.env:106` sets it with a documented default of 30.
+`config_toml.rs:241-242` passes an **empty** `env_var` for
+`health_check_delay_secs`, and every typed helper skips the environment lookup
+when `env_var.is_empty()`. Both constructors hardcode 30 (`config.rs:199`,
+`:365`). The TOML key works and is pinned by
+`config_toml::tests::health_check_delay_secs_is_settable_from_toml_only`; the
+documented variable does nothing. `network/api.rs:65` names it in a log line,
+which makes it look supported. `009` KD-2.
+
+### F-033 `contradiction`, confidence `high`
+
+**`HQL_ENC_KEYS_FROM` is documented and read nowhere.** `hiqlite.env:118`
+documents it with `env` and `file:path/to/file` as its two values. No code reads
+it: checked across `*.rs`, `*.toml` and `*.env`, where only `hiqlite.env` and
+`CHANGELOG.md` mention it. The locked cryptr 0.10.0 reads `ENC_KEYS`,
+`ENC_KEY_ACTIVE` and `ENC_KEYS_SEALED` and no `HQL_`-prefixed variable, read
+from the crate source in the local registry. The `file:` alternative the comment
+offers therefore does not exist on the environment path; the TOML path's
+`secrets_file` / `HQL_SECRETS_FILE` mechanism is a different thing that works.
+`009` KD-3.
+
+### F-034 `contradiction`, confidence `high`
+
+**One setting has two defaults and two documented defaults.**
+`prepared_statement_cache_capacity` is 1000 in the TOML path
+(`config_toml.rs:150-151`, documented as 1000 at `hiqlite.toml:69`) and 1024 in
+`Default` and the environment path (`config.rs:176`, `:340`, documented as 1024
+in the doc comment at `config.rs:58-60`). **Observed by execution** by the test
+`prepared_statement_cache_capacity_default_differs_from_the_env_path` in
+`config_toml::tests`. The setting has no environment variable in either
+path. `009` KD-4.
+
+### F-035 `limit`, confidence `high`
+
+**The environment constructor cannot select the WAL durability mode.**
+`config.rs:346-347` hardcodes `wal_sync: LogSync::ImmediateAsync` and
+`wal_size: 2 * 1024 * 1024`, as does `Default` at `:178-179`. `HQL_LOG_SYNC` and
+`HQL_WAL_SIZE` are read only by the TOML constructor (`config_toml.rs:156`,
+`:164`). A deployment configured through the environment always runs the
+asynchronous level and cannot select the `Immediate` mode `001` names for
+acknowledged writes that must survive a power loss.
+
+**Recorded as a `limit`, not a `defect`, deliberately.** No authored text
+promises that route: `hiqlite.env` does not list either variable, and the
+environment names exist only as overrides inside the TOML loader, so nothing
+disagrees with anything. What was missing is that the limit had never been
+stated where a reader would find it; `009` B-5 states it. Evidence: read at
+source, not executed. `009` KD-5's sibling, recorded at `009` B-5.
+
+### F-036 `defect`, confidence `high`
+
+**A parse-error message names the wrong type.** `config.rs:335-339` parses
+`log_statements`, a `bool`, with
+`expect("Cannot parse HQL_LOG_STATEMENTS as u64")`. Operator-visible and
+trivially wrong. Untested. `009` KD-5.
+
 ## Summary by class
 
 Class is what a finding **is**. State is what has **happened** to it. They are
@@ -632,11 +728,11 @@ record.
 
 | class | ids | count |
 |---|---|---|
-| `defect` | F-001 to F-006, F-009, F-021 to F-024, F-027 to F-029 | 14 |
-| `contradiction` | F-018, F-030 | 2 |
+| `defect` | F-001 to F-006, F-009, F-021 to F-024, F-027 to F-029, F-031, F-036 | 16 |
+| `contradiction` | F-018, F-030, F-032 to F-034 | 5 |
 | `gap` | F-010, F-013 | 2 |
 | `evidence` | F-011, F-012, F-017, F-019 | 4 |
-| `limit` | F-007, F-008, F-015, F-016, F-026 | 5 |
+| `limit` | F-007, F-008, F-015, F-016, F-026, F-035 | 6 |
 | `decision` | F-014, F-020, F-025 | 3 |
 
 ### Summary by state (2026-09-20)
@@ -645,14 +741,14 @@ record.
 |---|---|---|
 | repaired | F-001, F-002, F-030 | 3 |
 | closed at M1, entry retained | F-013 | 1 |
-| open | everything else: F-003 to F-012, F-014 to F-029 | 26 |
+| open | everything else: F-003 to F-012, F-014 to F-029, F-031 to F-036 | 32 |
 
 A finding's state answers whether the thing it records is still in the tree, and
 nothing else. F-030 is repaired because its contradiction is gone; the optional
 process decision it surfaced is W-24's, and a work item's being undecided has
 never been a reason to hold a finding open.
 
-Twenty-six open, of which three carry a dated disposition appended on
+Thirty-two open, of which four carry a dated disposition appended on
 2026-09-20 recording what has moved since they were written: F-015 (examples
 now visible, still unclaimed), F-016 (dashboard now visible, the generated and
 vendored
@@ -662,7 +758,8 @@ not close it.
 
 Open **defects**, which is the subset a repair workstream draws from:
 F-003, F-004, F-005, F-006, F-009, F-021, F-022, F-023, F-024, F-027, F-028,
-F-029. Twelve of the fourteen defects; F-001 and F-002 are the two repaired.
+F-029, F-031, F-036. Fourteen of the sixteen defects; F-001 and F-002 are the
+two repaired.
 
 **Reclassified on 2026-09-19**, after each class test was applied rather than
 assumed: F-007 and F-008 from `defect` to `limit`, because a stated contract with
@@ -672,10 +769,11 @@ migration state rather than faults; and the consequences of F-001, F-002, and
 F-014 rewritten against traced source, with three earlier claims withdrawn in
 place.
 
-Fourteen defects: six from the pilot specs, F-009 from the whole-project pass,
+Sixteen defects: six from the pilot specs, F-009 from the whole-project pass,
 five (F-021 to F-024, F-027) found by wave 1, F-028 found while tracing the
 `008` repair, and F-029 found on 2026-09-20 while re-reading the memory log
-store against the locked trait. F-013 is closed at M1 by wave 1 and is retained
+store against the locked trait, and F-031 and F-036 found by the configuration
+adoption on 2026-09-20. F-013 is closed at M1 by wave 1 and is retained
 as a record rather than deleted. No finding in this register authorizes a
 repair; each repair is a separate governed change with its own spec and
 evidence.

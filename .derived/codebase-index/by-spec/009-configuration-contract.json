@@ -6,23 +6,23 @@
     ],
     "implementingPaths": [
       {
-        "path": "hiqlite/src/client/",
+        "path": "hiqlite.env",
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite/src/external_state_machine.rs",
+        "path": "hiqlite.toml",
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite/src/network/",
+        "path": "hiqlite/src/config.rs",
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite/src/query/",
+        "path": "hiqlite/src/config_toml.rs",
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite/src/server/proxy/stream.rs",
+        "path": "spec-spine.toml",
         "source": "spec-edge"
       }
     ],
@@ -30,66 +30,40 @@
       {
         "locations": [
           {
-            "file": "hiqlite/src/client/"
-          }
-        ],
-        "ownership": true,
-        "sourceField": "establishes",
-        "unit": {
-          "kind": "directory",
-          "path": "hiqlite/src/client/"
-        }
-      },
-      {
-        "locations": [
-          {
-            "file": "hiqlite/src/network/"
-          }
-        ],
-        "ownership": true,
-        "sourceField": "establishes",
-        "unit": {
-          "kind": "directory",
-          "path": "hiqlite/src/network/"
-        }
-      },
-      {
-        "locations": [
-          {
-            "file": "hiqlite/src/query/"
-          }
-        ],
-        "ownership": true,
-        "sourceField": "establishes",
-        "unit": {
-          "kind": "directory",
-          "path": "hiqlite/src/query/"
-        }
-      },
-      {
-        "locations": [
-          {
-            "file": "hiqlite/src/server/proxy/stream.rs"
+            "file": "hiqlite.env"
           }
         ],
         "ownership": true,
         "sourceField": "establishes",
         "unit": {
           "kind": "file",
-          "path": "hiqlite/src/server/proxy/stream.rs"
+          "path": "hiqlite.env"
         }
       },
       {
         "locations": [
           {
-            "file": "hiqlite/src/external_state_machine.rs"
+            "file": "hiqlite.toml"
           }
         ],
         "ownership": true,
-        "sourceField": "co_authority",
+        "sourceField": "establishes",
         "unit": {
           "kind": "file",
-          "path": "hiqlite/src/external_state_machine.rs"
+          "path": "hiqlite.toml"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/config_toml.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/config_toml.rs"
         }
       },
       {
@@ -98,17 +72,30 @@
             "file": "hiqlite/src/config.rs"
           }
         ],
-        "ownership": false,
-        "sourceField": "references",
+        "ownership": true,
+        "sourceField": "extends",
         "unit": {
           "kind": "file",
           "path": "hiqlite/src/config.rs"
         }
+      },
+      {
+        "locations": [
+          {
+            "file": "spec-spine.toml"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "spec-spine.toml"
+        }
       }
     ],
-    "specId": "003-client-consistency-and-retry-outcomes",
+    "specId": "009-configuration-contract",
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "0c6dc6e3fc03aabe0b2e5e98ff9dbf4f2daba4e85f894c83ae3b8a58f6afef32"
+  "shardHash": "dc9d444d6b270e12f768ccae61ce8bd5c12effba24ed1a185e758a505998e6bc"
 }
