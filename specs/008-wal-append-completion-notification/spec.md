@@ -333,9 +333,9 @@ recorded here as such.
 
 ### 4.4 The before-state demonstration
 
-Required for a behavioral repair spec. Both baselines were built by reverting
-behavior while keeping the post-repair API, so the observed failures are
-behavioral and not build breaks.
+Required for a behavioral repair spec. All three baselines were built by
+reverting behavior while keeping the post-repair API, so the observed failures
+are behavioral and not build breaks.
 
 **Baseline A, pre-repair writer behavior** (`complete_append` sending the ack,
 then `persist()?`, then `callback(Ok(()))`; the thread closure discarding
@@ -391,8 +391,10 @@ the defective behavior and cannot survive the repair:
 
 `append_result_precedes_persistence_and_completion` is kept: the ordering it
 pins is unchanged, and only its callback signature was adapted. `001`'s four
-remaining commands are untouched by this repair and are carried forward verbatim
-into this spec's block, which is now `001`'s acceptance (D-4). `001`'s own file,
+further commands (`reader`, `metadata`, and the two `wal` roll-over tests) are
+untouched by this repair as well, so five of its seven are unaffected. All five
+are carried forward verbatim into this spec's block, which is now `001`'s
+acceptance (D-4). `001`'s own file,
 including its `## Verification` section, is byte-identical to what it was before
 this repair.
 
