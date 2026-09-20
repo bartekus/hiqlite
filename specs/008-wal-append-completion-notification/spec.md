@@ -10,6 +10,10 @@ depends_on:
   - "000-hiqlite-ownership-bootstrap"
   - "001-wal-durability-and-completion"
 amends: ["001-wal-durability-and-completion"]
+# 7, D-4: this spec's `## Verification` block IS 001's acceptance from now on, and 001's own
+# file is not edited. Whole-block replacement is the mechanism's unit, so that block carries
+# every obligation 001 declared, not only the commands this repair touched.
+amends_verification: ["001-wal-durability-and-completion"]
 amends_sections:
   - "2-append-events"
   - "7-acceptance-boundary"
@@ -77,7 +81,7 @@ This spec claims no new origin. It `extends`:
   call-site adaptation of a test helper that constructs `Action::Append`
   (`state_machine.rs`); no `002` behavior changes.
 - Three `standards/spec/` documents owned by `005`:
-  `wal-repair-proposal.md` with `nature: superseding`, because six of its
+  `wal-repair-proposal.md` with `nature: superseding`, because seven of its
   claims are corrected in place rather than added to;
   `findings-register.md` and `adoption-plan.md` with `nature: additive`,
   because each gains a record without any existing entry being rewritten.
@@ -169,6 +173,11 @@ writer's result verbatim:
 OpenRaft error boundary and is where the defect lived; it MUST stay a pure
 forward with no substituted value.
 
+This is a requirement on the adapter, not a guarantee of `AppendCompletion`'s
+signature. The `Result` parameter makes the failure expressible; a closure may
+still discard its argument, and baseline B in section 4.2 and 4.4 is exactly
+such a closure. What holds the requirement is the adapter-boundary test.
+
 ### 3.6 Writer termination and its report
 
 The failure policy is unchanged: a persistence failure still propagates out of
@@ -176,12 +185,31 @@ the writer loop and ends the writer thread, after the notification has been
 delivered. This spec introduces no surviving poisoned writer, no automatic
 recovery, no restart policy, and no process abort.
 
-An unexpected termination MUST be reported. The mechanism is a single `ERROR`
-log emitted where the thread closure observes `run`'s `Err`, naming the WAL base
-path and the cause. The thread's `JoinHandle` is deliberately **not** retained:
-retaining or joining it would be lifecycle management, and nothing in the crate
-manages that lifecycle. What was missing was the report, and the log is the
-smallest mechanism that reliably observes every termination of that thread.
+**A termination the writer can describe MUST be reported, and that is exactly
+`run` returning `Err`.** The mechanism is a single `ERROR` log emitted where the
+thread closure observes that `Err`, naming the WAL base path and the cause. The
+thread's `JoinHandle` is deliberately **not** retained: retaining or joining it
+would be lifecycle management, and nothing in the crate manages that lifecycle.
+What was missing was the report, and the log is the smallest mechanism that
+observes that exit.
+
+**The limit of the claim.** This is error reporting, not process supervision,
+and the two are not the same set of events:
+
+- `run` returning `Err` is reported. This is the path the repair is about, and
+  a persistence failure reaches it.
+- A **panic** inside `run` unwinds past the closure without producing an `Err`,
+  so it is reported by the process panic hook and not by this log. The existing
+  `oversized_entry_panics_and_kills_writer` test pins a panicking termination
+  that this report does not cover.
+- An **abort, a signal, or any other process termination** is reported by
+  neither.
+
+This spec deliberately does not widen the runtime to close that gap: catching
+panics or supervising the thread is lifecycle machinery and a separate decision
+(section 6). The requirement above is scoped to what the implementation actually
+observes, so that no reader takes the log's absence as evidence that the writer
+is alive.
 
 ### 3.7 Public API surface
 
@@ -209,9 +237,17 @@ notification is produced. They do not exercise the writer loop.
 `success_notifies_once_per_append_in_every_log_sync_mode` and
 `persistence_failure_notifies_then_terminates_the_writer` drive a real writer
 thread through `Action::Append`. The first covers all three `LogSync` modes on
-the success path; the second covers the acknowledged-then-failed path and
-asserts that a subsequent append is never acknowledged, which is the preserved
-fail-stop policy observed rather than assumed.
+the success path; the second covers the acknowledged-then-failed path.
+
+**How termination is observed.** The second test asserts that the writer's
+`flume::Sender` becomes disconnected. The writer thread owns the only `Receiver`
+for that channel and holds it for as long as `run` is on the stack, so a
+disconnect is that thread's own exit, observed positively. It begins with a
+healthy append, so the disconnect is a change of state rather than a condition
+that was already true. The absence of an acknowledgement for a later append is
+asserted afterwards as the consequence of the policy, not as the proof of
+termination: not observing a reply within a budget is consistent with a writer
+that is merely slow, and on its own establishes nothing.
 
 **Where ordering is established and where cardinality is.** The two are proved
 in different places on purpose. `complete_append` is the single ordering point
@@ -227,8 +263,19 @@ it: awaiting the acknowledgement before the notification does not establish
 that the notification was not already queued.
 
 `writer_termination_is_reported` captures `tracing` `ERROR` output and asserts
-the report names the WAL that died. It establishes that the report is emitted,
-not that any operator consumes it.
+the report names the WAL that died. It establishes that the report is emitted on
+the `run`-returns-`Err` path, not that any operator consumes it and not that any
+other kind of termination is reported (section 3.6).
+
+`injections_are_isolated_per_wal_and_consumed_exactly_once` and
+`a_dropped_guard_disarms_an_unconsumed_injection` are about the test harness
+rather than the writer: they establish that two WALs can hold outstanding
+injections at once, that each consumes exactly its own, that an unarmed WAL
+consumes none, and that an unconsumed injection does not outlive its guard. Both
+are direct calls with no threads and no timing budget, so their result does not
+depend on scheduling or test order. They establish nothing about the writer
+loop; that is what the live-writer tests above are for. D-3 records why the
+mechanism needed repairing.
 
 ### 4.2 What the adapter-boundary test establishes, and why that boundary
 
@@ -247,6 +294,14 @@ names the injected cause.
 This is the test that catches an adapter hardcoding `Ok(())`. With the writer
 reporting correctly, a hardcoded success makes that append return `Ok` although
 the flush failed, and the assertion fails. Demonstrated at section 4.4.
+
+**The type does not make this test redundant.** `AppendCompletion`'s
+`Result<(), io::Error>` parameter makes the failure *expressible*, which the
+previous `FnOnce()` did not. It does not make ignoring the failure
+unrepresentable: a closure may discard its argument, and baseline B in section
+4.4 is exactly such a closure, compiling cleanly and reporting success for a
+failed append. Correct forwarding is therefore a property of the adapter, held
+by this test, and not a guarantee of the signature.
 
 **Why this boundary and not a Raft node.** `LogFlushed::new` is `pub(crate)` in
 the locked openraft (0.9.24, and identically in 0.9.25), so no downstream test
@@ -305,16 +360,26 @@ as `move |_res| callback.log_io_completed(Ok(()))`). This isolates the hardcoded
 `Ok(())` from the writer behavior and confirms the adapter test is what catches
 it.
 
+**Baseline C, the single-slot fault mechanism** (`writer::fault` holding one
+`Mutex<Option<String>>`, with the guard API kept so the failure is behavioral
+and not a build break). This is the defect D-3 records, and the isolation
+regression is what catches it.
+
 Baseline A was run with
 `cargo +1.95.0 test -p hiqlite-wal --lib --features oversized-entry-error` and
 reported `17 passed; 6 failed`. Baseline B was run with
 `cargo +1.95.0 test -p hiqlite-wal --lib log_store_impl` and reported
 `0 passed; 1 failed`, the failure being
 `a persistence failure must reach openraft as an error: ()`, which is the
-hardcoded success arriving where an error was required. After restoring the
-repair, `cargo +1.95.0 test -p hiqlite-wal --lib` reports `22 passed; 0 failed`
-and the same run with `--features oversized-entry-error` reports
-`23 passed; 0 failed`. The repair pull request carries the same record.
+hardcoded success arriving where an error was required. Baseline C was run with
+`cargo +1.95.0 test -p hiqlite-wal --lib writer::tests::injections_are_isolated_per_wal_and_consumed_exactly_once -- --exact`
+and reported `0 passed; 1 failed`, the failure being
+`arming a second WAL must not discard the first WAL's injection: left: 0, right: 1`,
+which is the overwrite itself rather than a downstream symptom of it.
+
+After restoring the repair, `cargo +1.95.0 test -p hiqlite-wal --lib` reports
+`24 passed; 0 failed` and the same run with `--features oversized-entry-error`
+reports `25 passed; 0 failed`. The repair pull request carries the same record.
 
 **Replaced tests.** Two of `001`'s acceptance commands named tests that asserted
 the defective behavior and cannot survive the repair:
@@ -325,7 +390,11 @@ the defective behavior and cannot survive the repair:
   suppression. Replaced by `persistence_failure_notifies_error_before_propagating`.
 
 `append_result_precedes_persistence_and_completion` is kept: the ordering it
-pins is unchanged, and only its callback signature was adapted.
+pins is unchanged, and only its callback signature was adapted. `001`'s four
+remaining commands are untouched by this repair and are carried forward verbatim
+into this spec's block, which is now `001`'s acceptance (D-4). `001`'s own file,
+including its `## Verification` section, is byte-identical to what it was before
+this repair.
 
 `append_adapter_reports_a_rejected_append_as_an_error` is **not** a fail-then-pass
 regression. A rejection reached the caller before the repair too, on the
@@ -348,9 +417,12 @@ is acknowledged and notified as a success even though not every entry arrived.
 This is pre-existing, is outside F-001 and F-002, and is left unrepaired here.
 Registered as F-028.
 
-**KD-3. The report has no consumer.** An unexpected writer termination is logged
-and nothing acts on it. The node's log store is dead until restart, which is the
-preserved policy, but no health check is wired to the report.
+**KD-3. The report has no consumer, and it does not cover every termination.**
+A `run`-returns-`Err` termination is logged and nothing acts on it. The node's
+log store is dead until restart, which is the preserved policy, but no health
+check is wired to the report, and a panicking or aborted writer produces no such
+log at all (section 3.6). Absence of the report is therefore not evidence that
+the writer is alive.
 
 **KD-4. The durability boundary is still unvalidated.** `001` section 8 bullet 3
 stands unchanged: no power-cut harness exists, so `Immediate`'s flush is tested
@@ -361,6 +433,11 @@ for call ordering and error propagation only.
 - **Option (b) of the proposal**, a surviving writer with a defined poisoned
   state, and any automatic recovery, restart policy, or process abort. The owner
   decided to preserve the existing termination.
+- **Runtime supervision of the writer thread.** Catching panics, retaining and
+  joining the `JoinHandle`, or wiring a health check to the report are lifecycle
+  machinery, and none is added here. Section 3.6 states the reporting claim
+  narrowly instead of widening the runtime so that a broader claim could be
+  made.
 - **F-021 through F-024**, the cache-log defects. They are a separate repair and
   are deliberately not bundled here.
 - **F-003 through F-020, F-025 through F-027**, and everything in `002` and
@@ -380,62 +457,119 @@ untested residue a one-line pure forward.
 `JoinHandle`).** The proposal's option (c) suggested surfacing the thread's
 `Err` through its join handle. Error reporting and lifecycle management are
 different concerns: nothing joins this thread, and adding a handle to hold would
-be lifecycle machinery in service of a report. The log is smaller and reliably
-observes every termination.
+be lifecycle machinery in service of a report. The log is smaller and observes the
+termination the writer can describe, which is `run` returning `Err`; section 3.6
+states what it does not cover.
 
-**D-3 (2026-09-19, fault injection is `cfg(test)`-only and keyed by WAL base
-path).** `writer::fault` compiles out entirely outside tests, so the writer
-carries no production branch for it. Keying the armed failure by base path keeps
-concurrently running tests from tripping each other's injection.
+**D-3 (2026-09-19, fault injection is `cfg(test)`-only and isolated per WAL,
+with guarded ownership).** `writer::fault` compiles out entirely outside tests,
+so the writer carries no production branch for it.
 
-**D-4 (2026-09-19, `001`'s acceptance block is edited; the pinned tool cannot
-express acceptance replacement).** Probed against revision
-`aa559f5dcaa59bd9f27b0622b51ae5b57dc2185f`: `spec-spine verify <id>` executes
-exactly the `verify:cli` lines of the named spec. `amends` and `amends_sections`
-are registry-level relationships and do not affect `verify`; there is no
-per-line supersession, no cross-spec acceptance inheritance, and no frontmatter
-key that retires an acceptance command. Prose in this spec declaring two of
-`001`'s tests replaced therefore would not stop `just spine-verify 001` from
-executing commands for tests that no longer exist.
+Injections are held per WAL base path and owned by the guard that armed them. A
+single shared slot was not enough, and the first implementation here had that
+defect: arming a second WAL overwrote an unconsumed injection armed for a first
+one, and the path comparison at consumption could only turn that into a silently
+missed injection, never restore it. That is a real interleaving, not a
+theoretical one, because the tests that arm an injection are `#[tokio::test]`
+functions the harness may run concurrently. The remedy is isolation by WAL
+identity, not a stress loop, a rerun, or `--test-threads=1`: serializing the
+suite would hide the defect rather than remove it, and would leave it live for
+any future test that arms two WALs at once.
 
-The effective path chosen: edit **only** `001`'s executable `## Verification`
-block, replacing the two obsolete commands with their replacements and adding
-comment lines that name this spec. Not one word of `001`'s contract prose, its
-acceptance-boundary description, or its known-defects record is changed; those
-sections are amended by this spec instead, which is the mechanism `000` section
-4 provides. No check is dropped: each replaced command is replaced by one that
-pins the repaired behavior of the same path.
+`ArmedPersistenceFailure` owns the outstanding count for its path and disarms
+what its WAL did not consume when it drops, so an injection cannot survive into
+a later test that reuses the directory.
+`writer::tests::injections_are_isolated_per_wal_and_consumed_exactly_once` arms
+two distinct paths before either is consumed and asserts that each receives its
+own injection exactly once and that an unarmed path receives none;
+`a_dropped_guard_disarms_an_unconsumed_injection` covers the cleanup. Both are
+direct calls with no threads, so neither depends on scheduling or test order.
+Evidence limit: they establish the isolation property of the mechanism, not
+anything about the writer loop, which the live-writer tests cover. The isolation
+is also within one test process. The WAL directories these tests use are fixed
+relative paths under `test_data/`, so two `cargo test` processes running this
+crate at once still collide on disk; that is a pre-existing property of the
+crate's test fixtures, not of the injection store, and the acceptance block runs
+its commands one at a time.
 
-Probed on the same revision: `amends_sections` is recorded verbatim and is
-**not** resolved against the amended document. A bogus anchor compiles and lints
-clean. The three values in this spec's frontmatter are therefore a reader's
-pointer into `001`, not a checked reference, and no gate will catch it if `001`
-is later re-headed.
+**D-4 (2026-09-19, `001`'s acceptance is replaced through `amends_verification`;
+`001`'s file is not edited).** The pinned revision
+`aa559f5dcaa59bd9f27b0622b51ae5b57dc2185f` supports acceptance replacement. A
+live spec that `amends` another may also name it in `amends_verification`, and
+`spec-spine verify <amended-id>` then builds its plan from the **amending**
+spec's `## Verification` section and prints an attribution line saying whose
+block it ran. Confirmed against the installed `spec-spine 0.20.0` on this
+corpus: `spec-spine verify 001` reports
+`acceptance amended by 008-wal-append-completion-notification`.
 
-This is a deliberate, recorded exception to the contract's "the amended
-`spec.md` is not edited" rule, which protects the amended spec's text **as
-contract**. An executable acceptance block that names deleted tests is not a
-contract statement; per the authoring template it is decoration, because it can
-no longer fail when the behavior it names changes. The recommended resolution is
-a tool change in a later pin: either a `verify:cli` line annotation marking a
-command superseded by a named spec, or `amends_sections` naming a verification
-anchor causing `verify <amended-id>` to omit those lines. Until then, this
-exception recurs for every behavioral repair of a spec whose acceptance pinned
-the defect. Recorded so the next repair does not rediscover it.
+The semantics that bind this spec, read from the tool at that revision:
+
+- **The unit is the whole block, not a command.** `001`'s own section is not
+  read at all once this spec holds it. Every obligation `001` declared is
+  therefore carried forward into this spec's block explicitly, including the
+  five commands the repair does not touch. Replacing `001`'s acceptance with
+  only the new append tests would silently drop them.
+- **`draft` is not an obstacle.** Only a `superseded` or `retired` amender is
+  skipped, which returns the acceptance to whatever held it before. Every spec
+  in this corpus is `draft`, and a draft amender holds the acceptance.
+- **The declaration is validated.** An `amends_verification` entry that is not
+  also in `amends` is refused (`V-018`); two live specs naming the same target
+  are refused (`V-019`); a cycle in the replacement chain is refused (`V-020`).
+  This spec declares both edges on `001` and is the only spec naming it.
+- **Resolution reads the corpus, not `.derived/`**, so `verify` still works on a
+  tree whose shards are stale.
+
+**An earlier draft of this decision was wrong and is withdrawn.** It recorded
+that the pinned tool cannot express acceptance replacement and, on that basis,
+edited `001`'s executable block as a self-issued exception to the contract's
+"the amended `spec.md` is not edited" rule. The probe behind it did not find
+`amends_verification`, which has been in the tool since well before the pinned
+revision. No exception was needed and none is claimed: `001`'s `## Verification`
+section is byte-identical to what it was before this repair, and the supported
+mechanism carries the replacement. The recommendation that a later pin add such
+a feature is withdrawn with it.
+
+Separately probed on the same revision, and unchanged: `amends_sections` is
+recorded verbatim and is **not** resolved against the amended document. A bogus
+anchor compiles and lints clean. The three values in this spec's frontmatter are
+a reader's pointer into `001`, not a checked reference, and no gate will catch it
+if `001` is later re-headed.
 
 ## Verification
 
-Run with `just spine-verify 008`. Every line names one test and fails if the
-behavior it names changes.
+Run with `just spine-verify 008`. **This block is `001`'s acceptance as well as
+this spec's** (D-4). `001`'s own file is not edited, and `spec-spine verify 001`
+prints the attribution line naming this spec before it runs a command.
+
+Replacement is whole-block: the mechanism's unit is the `## Verification`
+section, not a command. Every obligation `001` declared is therefore carried
+forward here explicitly. The first group is `001`'s block with its two obsolete
+commands replaced and nothing else changed; the second group is what this repair
+adds. Each command names one test and fails if the behavior it names changes.
+
+Every command below was confirmed to select exactly one test and run it: an
+`--exact` filter that matches nothing exits `0` having run zero tests, which is
+not acceptance evidence, so the reported `1 passed` was read for each line
+rather than the exit code alone.
 
 ```verify:cli
-cargo test -p hiqlite-wal --lib writer::tests::append_rejection_notifies_error_and_never_success -- --exact
-cargo test -p hiqlite-wal --lib writer::tests::persistence_failure_notifies_error_before_propagating -- --exact
-cargo test -p hiqlite-wal --lib writer::tests::rejection_takes_precedence_over_a_failing_persistence_step -- --exact
+# --- 001's acceptance, carried forward ---
 cargo test -p hiqlite-wal --lib writer::tests::append_result_precedes_persistence_and_completion -- --exact
+# was persistence_failure_suppresses_completion_callback, which pinned F-002's suppression
+cargo test -p hiqlite-wal --lib writer::tests::persistence_failure_notifies_error_before_propagating -- --exact
+# was append_failure_is_returned_but_completion_still_fires, which pinned F-001
+cargo test -p hiqlite-wal --lib writer::tests::append_rejection_notifies_error_and_never_success -- --exact
+cargo test -p hiqlite-wal --lib reader::tests::logs_action_reports_read_errors -- --exact
+cargo test -p hiqlite-wal --lib metadata::tests::metadata_overwrite_replaces_existing -- --exact
+cargo test -p hiqlite-wal --lib wal::tests::roll_over_purge_front -- --exact
+cargo test -p hiqlite-wal --lib wal::tests::roll_over_truncate_end -- --exact
+# --- what this repair adds ---
+cargo test -p hiqlite-wal --lib writer::tests::rejection_takes_precedence_over_a_failing_persistence_step -- --exact
 cargo test -p hiqlite-wal --lib writer::tests::success_notifies_once_per_append_in_every_log_sync_mode -- --exact
 cargo test -p hiqlite-wal --lib writer::tests::persistence_failure_notifies_then_terminates_the_writer -- --exact
 cargo test -p hiqlite-wal --lib writer::tests::writer_termination_is_reported -- --exact
+cargo test -p hiqlite-wal --lib writer::tests::injections_are_isolated_per_wal_and_consumed_exactly_once -- --exact
+cargo test -p hiqlite-wal --lib writer::tests::a_dropped_guard_disarms_an_unconsumed_injection -- --exact
 cargo test -p hiqlite-wal --lib log_store_impl::tests::append_adapter_forwards_a_persistence_failure_to_openraft -- --exact
 cargo test -p hiqlite-wal --lib --features oversized-entry-error log_store_impl::tests::append_adapter_reports_a_rejected_append_as_an_error -- --exact
 ```

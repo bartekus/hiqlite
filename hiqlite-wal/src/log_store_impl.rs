@@ -332,7 +332,7 @@ mod tests {
             .await
             .expect("a healthy append must complete successfully");
 
-        fault::arm_persistence_failure(base);
+        let _armed = fault::arm_persistence_failure(base);
         let err = store
             .blocking_append(vec![blank_ent::<TestTypeConfig>(1, 1, 2)])
             .await

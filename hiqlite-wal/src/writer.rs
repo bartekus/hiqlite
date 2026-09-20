@@ -20,8 +20,10 @@ use tracing::{debug, error, warn};
 ///
 /// It carries a result so that the writer can report *which* of the three outcomes in
 /// [`complete_append`] occurred. The OpenRaft adapter forwards the value verbatim to
-/// `LogFlushed::log_io_completed`; a callback that ignored its argument would report success for a
-/// failed append, which is the defect this type exists to make unrepresentable.
+/// `LogFlushed::log_io_completed`. The parameter makes the failure *expressible*, which the
+/// previous `FnOnce()` did not; it does not make ignoring the failure impossible, because a
+/// callback may still discard its argument. That the real adapter does not is a property of the
+/// adapter, held by `log_store_impl::tests::append_adapter_forwards_a_persistence_failure_to_openraft`.
 pub type AppendCompletion = Box<dyn FnOnce(Result<(), io::Error>) + Send>;
 
 pub enum Action {
@@ -147,7 +149,12 @@ pub fn spawn(
         // manages its lifecycle, and joining it would be lifecycle management rather than error
         // reporting. What was missing is the report itself. `run` only returns `Err` on a failure
         // it could not handle, and that ends the thread, so logging here is the smallest place
-        // that reliably observes every unexpected termination.
+        // that observes that exit.
+        //
+        // What it observes is exactly `run` returning `Err`. A panic inside `run` unwinds past
+        // this line and is reported by the panic hook instead, and an abort or a process kill is
+        // reported by neither. This is an error report for the one termination the writer can
+        // describe, not process supervision.
         if let Err(err) = run(lockfile, meta, wal, set, rx, snc, wal_size) {
             error!(
                 "Raft logs WAL writer for `{reported_path}` terminated with an unrecoverable \
@@ -189,28 +196,78 @@ fn flush_blocking(
 /// Deterministic persistence-failure injection for this crate's own tests.
 ///
 /// Compiled out entirely outside `cfg(test)`, so the writer carries no production branch for it.
-/// The armed value is a WAL base path, which keeps concurrently running tests from tripping each
-/// other's injection.
+///
+/// Injections are held per WAL base path and are owned by the guard that armed them. A single
+/// shared slot was not enough: arming a second WAL overwrote an unconsumed injection armed for a
+/// first one, and the path comparison at consumption could only turn that into a silently missed
+/// injection, never restore it. Keying the store by WAL identity lets two writers hold
+/// outstanding injections at the same time, and the guard removes whatever its WAL did not
+/// consume, so nothing survives into a later test that reuses the directory.
 #[cfg(test)]
 pub(crate) mod fault {
+    use std::collections::BTreeMap;
     use std::sync::Mutex;
 
-    static FAIL_PERSIST_FOR: Mutex<Option<String>> = Mutex::new(None);
+    /// Unconsumed injections per WAL base path. `BTreeMap::new` is `const`, so the store needs no
+    /// lazy initialization.
+    static ARMED: Mutex<BTreeMap<String, usize>> = Mutex::new(BTreeMap::new());
 
-    /// Arm exactly one persistence failure for the writer serving `base_path`.
-    pub(crate) fn arm_persistence_failure(base_path: &str) {
-        *FAIL_PERSIST_FOR.lock().unwrap() = Some(base_path.to_string());
+    /// Ownership of the persistence-failure injections armed for one WAL base path.
+    ///
+    /// One guard owns the whole outstanding count for its path, so a test arms its own WAL and
+    /// nothing else. Dropping it disarms whatever is left, which is the cleanup that keeps a test
+    /// that ends early from leaving an injection behind for the next one.
+    #[must_use = "the injection is disarmed when its guard drops"]
+    pub(crate) struct ArmedPersistenceFailure {
+        base_path: String,
     }
 
-    /// Consume an armed failure for `base_path`, if one is armed for it.
-    pub(crate) fn take_persistence_failure(base_path: &str) -> bool {
-        let mut armed = FAIL_PERSIST_FOR.lock().unwrap();
-        if armed.as_deref() == Some(base_path) {
-            *armed = None;
-            true
-        } else {
-            false
+    impl ArmedPersistenceFailure {
+        /// How many of this WAL's injections are still unconsumed.
+        pub(crate) fn outstanding(&self) -> usize {
+            ARMED
+                .lock()
+                .unwrap()
+                .get(&self.base_path)
+                .copied()
+                .unwrap_or(0)
         }
+    }
+
+    impl Drop for ArmedPersistenceFailure {
+        fn drop(&mut self) {
+            ARMED.lock().unwrap().remove(&self.base_path);
+        }
+    }
+
+    /// Arm one persistence failure for the writer serving `base_path`.
+    ///
+    /// The returned guard must be held for as long as the injection is wanted.
+    pub(crate) fn arm_persistence_failure(base_path: &str) -> ArmedPersistenceFailure {
+        *ARMED
+            .lock()
+            .unwrap()
+            .entry(base_path.to_string())
+            .or_insert(0) += 1;
+        ArmedPersistenceFailure {
+            base_path: base_path.to_string(),
+        }
+    }
+
+    /// Consume one injection armed for `base_path`, if any is outstanding for it.
+    ///
+    /// Only this WAL's own injections are visible here: another WAL's outstanding injection is
+    /// never consumed, and never consumed twice.
+    pub(crate) fn take_persistence_failure(base_path: &str) -> bool {
+        let mut armed = ARMED.lock().unwrap();
+        let Some(outstanding) = armed.get_mut(base_path) else {
+            return false;
+        };
+        *outstanding -= 1;
+        if *outstanding == 0 {
+            armed.remove(base_path);
+        }
+        true
     }
 }
 
@@ -640,6 +697,77 @@ mod tests {
         tx
     }
 
+    /// Two WALs hold outstanding injections at the same time, and each consumes exactly its own.
+    ///
+    /// This is the interleaving the previous single-slot mechanism could not represent: both
+    /// paths are armed *before* either is consumed, so arming the second had to discard the
+    /// first's unconsumed injection, and the path comparison at consumption could then only turn
+    /// that into a missed injection. Everything here is a direct call, so the result does not
+    /// depend on thread scheduling, test order, or how many test threads the harness runs.
+    ///
+    /// It establishes the isolation property of the mechanism. It does not establish anything
+    /// about the writer loop; the live-writer tests below do that.
+    #[test]
+    fn injections_are_isolated_per_wal_and_consumed_exactly_once() {
+        let first = "test_data/fault_isolation_first";
+        let second = "test_data/fault_isolation_second";
+        let unarmed = "test_data/fault_isolation_unarmed";
+
+        let armed_first = fault::arm_persistence_failure(first);
+        let armed_second = fault::arm_persistence_failure(second);
+
+        assert_eq!(
+            armed_first.outstanding(),
+            1,
+            "arming a second WAL must not discard the first WAL's injection"
+        );
+        assert_eq!(armed_second.outstanding(), 1);
+
+        assert!(
+            !fault::take_persistence_failure(unarmed),
+            "a WAL nothing armed must never consume another WAL's injection"
+        );
+
+        assert!(
+            fault::take_persistence_failure(first),
+            "the first WAL must receive its own injection"
+        );
+        assert_eq!(
+            armed_first.outstanding(),
+            0,
+            "the first WAL's injection is consumed exactly once"
+        );
+        assert!(
+            !fault::take_persistence_failure(first),
+            "a consumed injection must not be delivered twice"
+        );
+
+        assert_eq!(
+            armed_second.outstanding(),
+            1,
+            "consuming the first WAL's injection must leave the second WAL's armed"
+        );
+        assert!(
+            fault::take_persistence_failure(second),
+            "the second WAL must still receive its own injection"
+        );
+        assert!(!fault::take_persistence_failure(second));
+    }
+
+    /// An injection nobody consumed does not outlive the guard that armed it, so a later test
+    /// reusing the same WAL directory cannot inherit it.
+    #[test]
+    fn a_dropped_guard_disarms_an_unconsumed_injection() {
+        let base = "test_data/fault_guard_cleanup";
+
+        drop(fault::arm_persistence_failure(base));
+
+        assert!(
+            !fault::take_persistence_failure(base),
+            "dropping the guard must disarm what its WAL never consumed"
+        );
+    }
+
     /// The acknowledgement is observable before the persistence step runs, and the completion
     /// notification only after it returns. This ordering is the contract `001` section 2 records
     /// and the repair does not change it.
@@ -805,8 +933,17 @@ mod tests {
         let base = "test_data/persistence_failure_terminates".to_string();
         let tx = start_writer(&base, LogSync::Immediate);
 
-        fault::arm_persistence_failure(&base);
-        let (ack_rx, note_rx) = dispatch_append(&tx, 1, b"entry".to_vec());
+        // A healthy append first, so the disconnect asserted below is an observed change of state
+        // rather than a condition that was already true.
+        let (healthy_ack, _healthy_note) = dispatch_append(&tx, 1, b"healthy".to_vec());
+        healthy_ack.await.unwrap().unwrap();
+        assert!(
+            !tx.is_disconnected(),
+            "the writer is serving before the injected failure"
+        );
+
+        let _armed = fault::arm_persistence_failure(&base);
+        let (ack_rx, note_rx) = dispatch_append(&tx, 2, b"entry".to_vec());
 
         assert!(
             matches!(ack_rx.await, Ok(Ok(()))),
@@ -822,11 +959,22 @@ mod tests {
             "the notification must carry the injected cause, got: {notified}"
         );
 
-        // Failure policy preserved: the writer is gone, so a later append is never acknowledged.
-        let (mut later_ack, _later_note) = dispatch_append(&tx, 2, b"later".to_vec());
+        // Failure policy preserved, observed positively. The writer thread owns the only
+        // `Receiver` for this channel and holds it for as long as `run` is on the stack, so the
+        // sender reporting a disconnect is that thread's own exit, not merely the absence of a
+        // reply within some budget.
         assert!(
-            !eventually(|| later_ack.try_recv().is_ok()),
-            "the writer must still terminate after a persistence failure"
+            eventually(|| tx.is_disconnected()),
+            "the writer must still terminate after a persistence failure: its Action receiver is \
+            dropped only when the thread ends"
+        );
+
+        // And the consequence the policy is about: with the writer gone, a later append is never
+        // acknowledged. This is a corollary of the disconnect above, not the proof of it.
+        let (mut later_ack, _later_note) = dispatch_append(&tx, 3, b"later".to_vec());
+        assert!(
+            later_ack.try_recv().is_err(),
+            "a terminated writer must not acknowledge a later append"
         );
     }
 
@@ -838,7 +986,7 @@ mod tests {
         let base = "test_data/termination_reported".to_string();
         let tx = start_writer(&base, LogSync::Immediate);
 
-        fault::arm_persistence_failure(&base);
+        let _armed = fault::arm_persistence_failure(&base);
         let (ack_rx, _note_rx) = dispatch_append(&tx, 1, b"entry".to_vec());
         assert!(matches!(ack_rx.await, Ok(Ok(()))));
 

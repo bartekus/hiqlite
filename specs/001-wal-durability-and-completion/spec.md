@@ -129,22 +129,10 @@ log decomposition was used only as a checklist. Its membership claims and supers
 
 ## Verification
 
-Two commands below name replacements. `008-wal-append-completion-notification`
-repaired the defects at section 8 bullets 1 and 2, and the two tests that pinned
-those defects could not survive the repair. The pinned `spec-spine` revision
-executes this block literally and has no way to mark a command superseded by
-another spec, so the commands are replaced here rather than left naming deleted
-tests. Nothing else in this document is changed by that repair: sections 2, 7,
-and 8 are amended by `008`, which is the inbound view at
-`spec-spine registry relationships 001-wal-durability-and-completion`. `008`
-section 7, D-4 records the tool limitation and the recommended resolution.
-
 ```verify:cli
 cargo test -p hiqlite-wal --lib writer::tests::append_result_precedes_persistence_and_completion -- --exact
-# was persistence_failure_suppresses_completion_callback; replaced by 008
-cargo test -p hiqlite-wal --lib writer::tests::persistence_failure_notifies_error_before_propagating -- --exact
-# was append_failure_is_returned_but_completion_still_fires; replaced by 008
-cargo test -p hiqlite-wal --lib writer::tests::append_rejection_notifies_error_and_never_success -- --exact
+cargo test -p hiqlite-wal --lib writer::tests::persistence_failure_suppresses_completion_callback -- --exact
+cargo test -p hiqlite-wal --lib writer::tests::append_failure_is_returned_but_completion_still_fires -- --exact
 cargo test -p hiqlite-wal --lib reader::tests::logs_action_reports_read_errors -- --exact
 cargo test -p hiqlite-wal --lib metadata::tests::metadata_overwrite_replaces_existing -- --exact
 cargo test -p hiqlite-wal --lib wal::tests::roll_over_purge_front -- --exact

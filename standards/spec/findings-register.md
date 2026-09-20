@@ -118,7 +118,10 @@ section 8, bullet 2.
 **Repaired (2026-09-19) by `008-wal-append-completion-notification`.** The
 persistence cause is notified to OpenRaft before the error propagates, and the
 writer's termination is reported through an `ERROR` log rather than vanishing
-with a discarded `JoinHandle`. The fail-stop policy is deliberately unchanged:
+with a discarded `JoinHandle`. The report covers exactly one termination, `run`
+returning `Err`; a panic inside `run` is reported by the panic hook and an abort
+by neither, which `008` section 3.6 states rather than widening the runtime to
+cover. The fail-stop policy is deliberately unchanged:
 the writer still terminates and the log store is still dead until restart.
 Regressions: `writer::tests::persistence_failure_notifies_then_terminates_the_writer`
 and `log_store_impl::tests::append_adapter_forwards_a_persistence_failure_to_openraft`,

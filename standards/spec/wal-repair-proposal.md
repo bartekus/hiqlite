@@ -5,9 +5,11 @@ A source-backed proposal for repairing F-001 and F-002.
 **Status, 2026-09-19: implemented.** The repair was authorized and carried out
 under `008-wal-append-completion-notification`, which is the contract. This
 document is kept as the traced analysis the repair was authorized against, with
-five claims corrected in place below; where it and `008` differ, `008` governs.
+seven claims corrected in place below; where it and `008` differ, `008` governs.
 Corrections are marked **Corrected (2026-09-19)** and the original claim is
-stated before the correction, never deleted.
+stated before the correction, never deleted. One of those corrections was itself
+wrong and is withdrawn in place under the acceptance bullet in section 5, on the
+same rule: the record of what was believed is kept, not deleted.
 
 Traced on 2026-09-19 against the locked dependency graph. Where this document
 says "observed", it was read at source; where it says "inferred", a consequence
@@ -227,8 +229,11 @@ in substance and not in form, because it conflates two concerns. Error
 `JoinHandle` is *lifecycle management*, and nothing in the crate manages this
 thread's lifecycle, so a handle would exist only to be read. The repair instead
 logs a single `ERROR` at the point the thread closure observes `run`'s `Err`,
-naming the WAL and the cause. That is smaller, reliably observes every
-termination, and needs no new state. `008` section 3.6 and D-2.
+naming the WAL and the cause. That is smaller, needs no new state, and observes
+the one termination the writer can describe: `run` returning `Err`. It does not
+observe a panic inside `run`, an abort, or any other process termination, and
+`008` section 3.6 states that limit rather than widening the runtime to close
+it. `008` section 3.6 and D-2.
 
 ### 4.4 LogSync configurations
 
@@ -316,14 +321,20 @@ so the repair touches no unclaimed territory.
 
   **Corrected (2026-09-19).** Two of `001`'s commands are affected, not one:
   `persistence_failure_suppresses_completion_callback` asserts the suppression
-  that F-002 is, and cannot survive either. More importantly, "the amending spec
-  must carry the replacement acceptance and state that it supersedes that line"
-  does not work on the pinned revision. `spec-spine verify <id>` executes the
-  named spec's `verify:cli` lines literally; there is no per-line supersession
-  and `amends_sections` does not reach `verify`. A statement in `008` would
-  leave `just spine-verify 001` invoking deleted tests. The effective path is to
-  edit `001`'s executable block only, leaving its contract prose untouched, and
-  to record the tool limitation. `008` D-4.
+  that F-002 is, and cannot survive either. The bullet's instinct is right and
+  its mechanism is imprecise: the pinned revision supports acceptance
+  replacement through the `amends_verification` frontmatter key, and the unit it
+  replaces is the **whole `## Verification` block**, not a line. `008` declares
+  it, so `spec-spine verify 001` builds its plan from `008`'s block and prints
+  an attribution line saying so, and `001`'s file is not edited at all. Because
+  replacement is whole-block, `008`'s block carries `001`'s four unaffected
+  commands forward verbatim alongside the two replacements. `008` D-4.
+
+  **An intermediate correction here was wrong and is withdrawn.** It stated that
+  the pinned tool has no per-line supersession and no way to reach `verify`, and
+  concluded that `001`'s executable block had to be edited under a recorded
+  exception. The first half is true and irrelevant (the unit is a block, not a
+  line); the second is false. No exception was taken and none is needed.
 
 - **Ownership edges. Corrected (2026-09-19):** the third bullet above concludes
   that `extends` "is not needed". It is needed. `000` section 4 requires a spec touching
