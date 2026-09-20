@@ -316,6 +316,55 @@ obligation and set `in-progress` on that reading. That clause is superseded
 here. D-2's substantive decision, that hook policy is stated while no hook is
 installed, stands unchanged, and no hook is installed by this change.
 
+**D-5 (2026-09-20, the per-document transition reaches `AGENTS.md`, and stops
+there).** The owner adopted the transition the constitution had recorded as a
+proposal. For this spec it means one thing: the establishing-draft route for
+`AGENTS.md`, the single document this spec `establishes`, closes when an owner
+sets `status: approved` on this spec. That route is the licence to correct the
+document in place under this spec's ownership while this spec is `draft`.
+`AGENTS.md` is a standing document and goes on being edited in place afterwards;
+what changes is that each edit then runs on an approved later spec's claim
+rather than on this spec's ownership. The transition does **not** reach the
+units this spec holds
+`extends` claims on, the `justfile` and `.github/workflows/spec-spine.yaml`.
+Those stay on the ordinary flow, defended as they are today by the coupling gate
+and review, because they are build and CI inputs whose edits have nothing to do
+with constitutional authority.
+
+After that transition, `AGENTS.md` is changed by a later spec claiming the
+affected text as a `section` unit of it: `establishes` where no spec owns that
+section yet, `refines` with a named `aspect` or `co_authority` where one does. A
+section unit is narrower than the `file` unit this spec holds, so the claim is
+not a second origin and not an exception to one-origin-per-unit; `extends` stays
+the edge for adding surface to a unit this spec already owns, and no duplicate
+origin is ever declared to make the gate pass. That claim makes the later spec
+an owning spec of the path, so its own authoring edit satisfies
+`spec-spine couple` and this spec needs no routine edit for coupling's sake. The
+claiming spec must
+be `approved` to carry the authority: the gate accepts a `draft` claimant, which
+makes that a review obligation rather than a mechanical one, and section 4's
+account of what each mechanism enforces already says the gate proves
+participation and not authority.
+
+This decision changes no `unamendable` anchor, ratifies nothing, and leaves this
+spec's `status` untouched. The rule itself is stated in the constitution's
+Amendment section and summarized in `standards/spec/contract.md`; `AGENTS.md`
+carries the operating pointer.
+
+**D-6 (2026-09-20, the corpus table lists the corpus, not the pilot).**
+`AGENTS.md` carried a five-row table headed "The corpus" listing `000` through
+`004`. That was the whole corpus when it was written and has not been since
+`005` merged; a reader following the table would have concluded that `005`
+through `008` do not exist. The table now lists all nine specs and labels
+`000` through `004` as the initial pilot, which is the distinction constitution
+VI actually needs: pilot membership is a historical fact about origin, while
+corpus membership is current and changes whenever a spec merges.
+
+The pointer to `spec-spine registry list` is kept and strengthened, because a
+hand-maintained table is a copy and will go stale again. This spec owns
+`AGENTS.md` and therefore records the change; the reconciliation it belongs to
+is `005` D-6, which moves the assessment records in the same change.
+
 ## Verification
 
 ```verify:cli

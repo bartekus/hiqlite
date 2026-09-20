@@ -81,11 +81,15 @@ prompt-time defense. *(Bootstrap anchor: `refusal-rule`.)*
 A spec that claims authority over pre-existing code declares
 `origin.retroactive: true` and then describes the behavior that is actually
 there, including the behavior it would not have chosen. hiqlite existed, and
-worked, before any of this corpus was written, so every spec in it today,
-`000` through `004`, is retroactive.
+worked, before any of this corpus was written, so every spec of the initial
+pilot, `000` through `004`, declares a retroactive origin.
 
-That is a fact about the corpus as it stands, not a requirement on what may be
-written next. `origin.retroactive` records when authority began. A future spec
+That is a historical fact about the pilot, not a property of the corpus and not
+a requirement on what may be written next. `origin` is read per spec, from that
+spec's own frontmatter, and specs written since the pilot have declared theirs
+truthfully: `005-adoption-assessment-and-plan` declares `retroactive: false`,
+because the assessment and plan it owns did not exist before the text that
+states them. `origin.retroactive` records when authority began. A future spec
 whose subject does not yet exist states that truthfully, declares the territory
 it will own (`planned: true` on a unit that is not yet written), and does not
 claim a retroactive origin it does not have. Misdeclaring origin to match the
@@ -164,7 +168,9 @@ of its evidence in the same place as the claim.
 Seven states are distinct and this corpus never collapses them:
 
 - **`status: draft`** is a text a human has not ratified. A draft's claims bind
-  nobody. Every spec in this corpus is currently draft.
+  nobody. `status` is per-spec frontmatter and is read there; this document
+  asserts no corpus-wide value for it, because ratification is per spec and
+  partial ratification is the normal case.
 - **`implementation: complete`** says the described implementation and its
   executable acceptance are present in the tree. It says nothing about approval.
 - **Ratification** is the human flip of `status` to `approved`. It is an act of
@@ -226,36 +232,94 @@ the `unamendable` list of `specs/000-hiqlite-ownership-bootstrap`. The bootstrap
 spec's freeze surface is the hard boundary; everything else here is revisable
 through the normal governed flow.
 
-**Before ratification, that rule has no subject.** No spec in this corpus is
-`approved`, ratification is an owner act, and an agent never performs one
-(section X), so requiring an approved amending spec would freeze this document
-against its own corrections until the day it is ratified. It does not. While no spec
-in this corpus is approved, this document remains authored text that
-`specs/000-hiqlite-ownership-bootstrap` establishes and owns, and it is edited
-in place under that ownership: the coupling gate still requires an owning spec to
-move in the same range, and the tier order and the `unamendable` anchors still
-bind. This is a statement about the present, in which no spec is approved, not a
-claim that the corpus has a ratification state of its own.
+**Which route applies depends on one spec's `status`, and on nothing else.**
+Ratification is an owner act and an agent never performs one (section X). This
+section is written to read correctly whatever each spec's current `status` is,
+rather than to describe a moment.
+
+**While the establishing spec is `draft`, the establishing-draft route is
+open.** Requiring an approved amending spec then would freeze this document
+against its own corrections until the day it is ratified, which is not the
+intent. While
+`specs/000-hiqlite-ownership-bootstrap` is `draft`, this document is authored
+text that spec establishes and owns, and it is corrected in place under that
+ownership: the coupling gate still requires an owning spec to move in the same
+range, and the tier order and the `unamendable` anchors still bind.
 
 **Ratification is per spec.** `status` is per-spec frontmatter and approving a
 spec settles that spec. There is no aggregate state in which "the corpus" becomes
 ratified, and no document in this repository may invoke one. Partial ratification
-is the normal case, and approving `001` through `003` changes nothing about how
-this file is amended.
+is the normal case: approving a spec that does not establish this file, such as
+`001`, `002` or `003`, changes nothing about how this file is amended.
 
-**Proposed policy, not yet settled: the transition is per document.** The
-in-place route for a document under `standards/spec/` would close at the moment
-the owner sets `status: approved` on the spec that **establishes that document**:
+**Adopted policy, owner decision of 2026-09-20: the transition is per
+document.** What closes, per document, is the **establishing-draft route**: the
+licence the paragraph above grants to correct a document in place under the
+ownership of the still-`draft` spec that establishes it. It closes at the moment
+the owner sets `status: approved` on that establishing spec:
 `specs/000-hiqlite-ownership-bootstrap` for this file, for
 `standards/spec/contract.md`, and for `standards/spec/templates/`;
-`specs/004-governance-harness` for `AGENTS.md`.
+`specs/004-governance-harness` for `AGENTS.md`. Earlier revisions recorded this
+as a proposal awaiting a decision. The decision is made, and it is recorded
+here, in `000` section 1, and in `004` D-5.
 
-That is one defensible reading of ownership, and it is written here so the
-question is answerable rather than open. It is **a proposal awaiting an owner
-decision**, not a ratified rule: an owner who wants to approve `000` early while
-continuing to correct this document in place may choose otherwise, and the rule
-is then whatever they record. Nothing in this section ratifies anything, extends
-the proposal beyond the documents named, or widens what a session may change.
+**Editing in place does not stop; the authority for it changes.** A standing
+document states what is true now, so it is edited in place before and after the
+transition alike, and this file is no more frozen after `000` is approved than
+before. What the transition changes is whose authority each edit runs on:
+beforehand the establishing spec's own ownership while that spec is `draft`,
+afterwards an approved later spec's claim on the affected text. No edit to this
+file is routed through `000` once `000` is approved.
+
+**The policy covers three governance documents and one templates subtree, and
+nothing else.** Those are `standards/spec/constitution.md`,
+`standards/spec/contract.md`, and `AGENTS.md`, plus every file under
+`standards/spec/templates/`: today `spec-template.md` and
+`constitution-template.md`, and any template added later, because the unit `000`
+establishes there is the subtree and not a file list. The policy is not a
+general rule about every unit an approved spec owns. `000` also
+establishes `ARCHITECTURE.md`, the `justfile`,
+`.github/workflows/spec-spine.yaml`, `spec-spine.toml`, and `.gitignore`, and
+`004` holds `extends` claims on the `justfile` and that workflow. Approving
+either spec closes nothing for those units. They are code, configuration, and
+build inputs; they change for reasons that have nothing to do with
+constitutional authority, and routing each such edit through an approved
+amending spec would turn ordinary maintenance into a ratification queue. They
+keep the ordinary flow and the defense they have today, which is the coupling
+gate plus review.
+
+### After the transition: a claim, not an exception
+
+Once `000` is `approved`, this document is still changed, and changing it
+requires no edit to `000` itself. The route is the ordinary ownership
+vocabulary, applied by a **later spec**:
+
+1. The later spec claims the affected text as a `section` unit of this file,
+   through `establishes`, `refines` with a named `aspect`, or `co_authority`,
+   exactly as described below.
+2. That claim makes the later spec **an owning spec of this path**. Its own
+   authoring edit, in the same range as the edit to this file, is what the
+   coupling gate requires. `000` does not move, and needs no routine edit merely
+   to satisfy coupling.
+3. The later spec must be `approved` by the owner to carry the authority the
+   first paragraph of this section requires. Approving it is the constitutional
+   act; the coupling gate is not.
+
+**The gate and the authority are two different controls, and only one of them is
+mechanical.** This was measured against the pinned revision rather than assumed.
+A spec claiming a `section` unit of this file and moving in the same range
+satisfies `spec-spine couple` **whatever its `status` is**, including `draft`;
+editing this file with no owning spec moving is refused with
+`C-001 'standards/spec/constitution.md' changed without an authoring edit to any
+owning spec`. So the gate proves participation, never authority. The requirement
+that the claiming spec be `approved` is a human review obligation under section
+X and the bootstrap's refusal rule, and no tool enforces it. A `draft` claiming
+spec that edits this file after `000` is approved is a governed-flow violation
+that passes CI, and reviewers are the control that catches it.
+
+Nothing in this section ratifies anything, extends the policy past the three
+documents and the templates subtree named above, or widens what a session may
+change on its own authority.
 
 The claim uses the ordinary ownership vocabulary over a **section unit of this
 file**, not the `amends` edge:
@@ -273,6 +337,37 @@ resolve and is a validation error, not a governed constitutional change.
 The anchor is the heading slug the indexer computes, so `## VII. OpenRaft owns
 consensus; hiqlite owns its side of the trait boundary` is
 `vii-openraft-owns-consensus-hiqlite-owns-its-side-of-the-trait-boundary`.
+
+**Which of the three edges, in the three cases that actually arise.**
+
+- **A principle this file does not yet carry.** The later spec `establishes` a
+  `{ kind: section, file: "standards/spec/constitution.md", anchor:
+  "xiii-new-principle" }` unit. That section unit has no owner, so the claim is
+  a first origin and not a second one: `000` holds the `file` unit, which is a
+  different, wider unit.
+- **A principle this file already states.** The section already has an origin,
+  which is `000` for everything written during the pilot. The later spec does
+  **not** re-declare `establishes` on it. It `refines` the section unit with a
+  named `aspect` where it tightens the principle, or takes `co_authority` on
+  that unit where the principle becomes genuinely shared from then on.
+- **Template text.** `000` establishes `standards/spec/templates/` as a subtree
+  unit. A later spec that changes a template claims the file it touches, as
+  `{ kind: file, path: "standards/spec/templates/spec-template.md" }`, through
+  `refines` with a named `aspect` or `co_authority`. A `section` unit is
+  available only where a template carries a heading the indexer can slug;
+  guidance that lives in a comment block does not, so the file unit is the
+  addressable one there.
+
+**How this meets the one-origin rule.** "One origin per unit" (`000` section 4)
+is unchanged, and none of the three cases is an exception to it. They meet on
+unit identity: a `section` unit of this file is narrower than, and separate
+from, the `file` unit `000` holds, so claiming an unowned section is a first
+claim rather than a duplicate. `extends` remains the ordinary edge for adding
+surface to a unit a predecessor already owns, and it is what the units outside
+this policy keep using. What is never acceptable is declaring a duplicate origin
+for a unit that already has one in order to make the coupling gate pass: that is
+the move section V refuses, and it would destroy the ledger's ability to answer
+"who established this" separately from "who owns this now".
 
 Unlike an amended `spec.md`, which is a record of what the corpus held when it
 was ratified and is therefore never edited to mention its successors, this

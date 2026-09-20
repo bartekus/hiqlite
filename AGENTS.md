@@ -46,22 +46,31 @@ Authority, highest wins:
 
 This is an authority ordering, not a statement about Git history or merge order.
 
-The corpus:
+The corpus. `000` through `004` are the **initial pilot**; the rest were added
+afterwards and are not retroactive by default. `spec-spine registry list` is the
+authority for what exists.
 
 | id | what it governs |
 |---|---|
-| `000-hiqlite-ownership-bootstrap` | what a spec is here, the ownership boundaries, the adoption scope, the workflow |
-| `001-wal-durability-and-completion` | WAL append acknowledgement, persistence, completion |
-| `002-snapshot-publication-and-recovery` | snapshot publication, restore, recovery integration |
-| `003-client-consistency-and-retry-outcomes` | client consistency and retry outcomes |
-| `004-governance-harness` | this protocol, the commands, hook policy, CI |
+| `000-hiqlite-ownership-bootstrap` | pilot: what a spec is here, the ownership boundaries, the adoption scope, the workflow |
+| `001-wal-durability-and-completion` | pilot: WAL append acknowledgement, persistence, completion |
+| `002-snapshot-publication-and-recovery` | pilot: snapshot publication, restore, recovery integration |
+| `003-client-consistency-and-retry-outcomes` | pilot: client consistency and retry outcomes |
+| `004-governance-harness` | pilot: this protocol, the commands, hook policy, CI |
+| `005-adoption-assessment-and-plan` | the whole-project assessment, the adoption plan, the findings register (`origin.retroactive: false`) |
+| `006-cache-state-machine` | the cache state machine, KV, dlock, TTL, notify |
+| `007-cache-log-store` | the OpenRaft log-store adapter and its memory variant |
+| `008-wal-append-completion-notification` | the WAL append completion repair; `amends` `001` and holds its acceptance |
 
-**Every spec is `draft`.** None has been ratified. `implementation: complete`
-means a spec's claimed units exist and its acceptance block passes; it says
-nothing about approval. Ratification is a human flip of `status` to `approved`,
-performed by the repository owner. An agent may propose, implement, validate,
-and merge under explicit authorization. **An agent never ratifies.** Merge,
-publication, release, and upstream acceptance are four further, separate things.
+**Read `status` per spec, from that spec's own frontmatter.** This file asserts
+no corpus-wide lifecycle value, because ratification is per spec and partial
+ratification is the normal case; `spec-spine registry list` prints the current
+state of each. `implementation: complete` means a spec's claimed units exist and
+its acceptance block passes; it says nothing about approval. Ratification is a
+human flip of `status` to `approved`, performed by the repository owner. An
+agent may propose, implement, validate, and merge under explicit authorization.
+**An agent never ratifies.** Merge, publication, release, and upstream
+acceptance are four further, separate things.
 
 ## Ownership boundaries
 
@@ -210,10 +219,13 @@ Start from `standards/spec/templates/spec-template.md`. New specs are born
 `draft`; approval is a human act, and nothing imported from another repository
 carries its `approved` status across.
 
-Every spec in the corpus today is retroactive: the code existed first. A spec
-that adopts pre-existing code declares `origin.retroactive: true` and describes
-the behavior that is actually there. That is the current shape of the corpus,
-not a rule for what comes next: a spec whose subject does not yet exist says so,
+Every spec of the initial pilot, `000` through `004`, is retroactive: the code
+existed first. A spec that adopts pre-existing code declares
+`origin.retroactive: true` and describes the behavior that is actually there.
+Read `origin` per spec rather than assuming it: `005` declares
+`retroactive: false`, because its subject did not exist before its text. The
+pilot's shape is not a rule for what comes next: a spec whose subject does not
+yet exist says so,
 declares the territory it will own with `planned: true` on the units it has not
 written, and does not claim a retroactive origin it does not have (constitution
 VI).
@@ -235,6 +247,32 @@ VI).
 - **To change the constitution**, claim the affected text as a `section` unit of
   `standards/spec/constitution.md`. Do **not** use `amends`: that edge resolves
   to spec ids, and the constitution is not a spec.
+- **The per-document transition is adopted** (owner decision, 2026-09-20). What
+  closes when the establishing spec is `approved` is the **establishing-draft
+  route**, the licence to correct a document in place under that still-`draft`
+  spec's ownership: `000` for the constitution, the contract, and the templates
+  subtree; `004` for this file. Its scope is those three documents plus every
+  file under `standards/spec/templates/`, not the other units those specs own
+  (`ARCHITECTURE.md`, the `justfile`, the workflow, `spec-spine.toml`,
+  `.gitignore`), which keep the ordinary flow.
+- **In-place editing does not stop; the authority changes.** These documents
+  state what is true now, so they keep being edited in place. Afterwards the
+  edit runs on a later spec's claim instead of the establishing draft's
+  ownership, so **do not edit the approved establishing spec to satisfy
+  coupling.** The later spec claims the affected text as a `section` unit
+  (`establishes` where no spec owns that section, `refines` with a named
+  `aspect` or `co_authority` where one does), which makes it an owning spec of
+  the path, and its own authoring edit in the same range is what the gate
+  requires. A `section` unit needs a sluggable heading, so template guidance
+  written in a comment block is claimed at the file unit instead, through the
+  same two non-establishing edges. A section unit is narrower than the file
+  unit `000` holds, so this is not a second origin: never duplicate an existing
+  origin to make the gate pass. The later spec must be `approved` to carry the
+  authority: the gate accepts a `draft` claimant, so that requirement is yours
+  and the reviewer's, not the tool's.
+- **`amends` never edits the amended `spec.md`.** Declare the edge once in the
+  amending spec's frontmatter; the amended document keeps its text as it stood.
+  Read the inbound view with `spec-spine registry relationships <amended-id>`.
 
 ## Hooks
 

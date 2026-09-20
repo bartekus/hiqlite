@@ -69,11 +69,13 @@ implementation: pending        # pending | in-progress | complete | n-a | deferr
 #
 # --- bootstrap marker (NOT an edge) ---
 # `origin.retroactive: true` records authority held since before the graph
-# existed, so the claim does not pose as a fresh `establishes`. Every spec in
-# the corpus today is retroactive, because hiqlite existed before the graph.
-# A spec whose subject does not yet exist declares its origin truthfully
-# instead, and marks the units it has not written `planned: true`; do not copy
-# a retroactive marker this spec has not earned (constitution VI).
+# existed, so the claim does not pose as a fresh `establishes`. Every spec of
+# the initial pilot, `000` through `004`, declared it, because hiqlite existed
+# before the graph; that is a fact about the pilot, not a default for the spec
+# you are writing. A spec whose subject does not yet exist declares its origin
+# truthfully instead (`005` declares `retroactive: false`), and marks the units
+# it has not written `planned: true`; do not copy a retroactive marker this
+# spec has not earned (constitution VI).
 origin:
   retroactive: true
   paths: ["hiqlite/src/"]

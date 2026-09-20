@@ -22,6 +22,13 @@ claims no territory beyond itself.
 Measured on 2026-09-19 against `spec-spine` revision
 `aa559f5dcaa59bd9f27b0622b51ae5b57dc2185f` at integration head `2d58a32`.
 
+**Reconciled on 2026-09-20** at integration head `58ee7fa`, against the same
+pinned revision, after waves and repairs that this document had recorded as
+proposed were delivered. Measurements from 2026-09-19 are kept where they are
+the baseline a decision was made against, and every restatement is dated. The
+current assignment table is section 8; read that, not the wave list, for what is
+actually outstanding.
+
 ---
 
 ## 1. Three milestones, never collapsed
@@ -62,16 +69,31 @@ without an acceptance block that can fail is not.
 
 ### 2.1 The denominator, reconciled
 
-**Rung 0 is done.** The inventory configuration was corrected on 2026-09-19 after
-probing the pinned tool in an isolated checkout; `000` section 12.1 records what
-each key actually does. Numbers below are after that change.
+**Rung 0's first half is done; its second half is blocked.** The two parts are
+separate and were collapsed by an earlier revision of this line.
 
-| | before | after |
-|---|---|---|
-| denominator | 134 | **226** |
-| specifically claimed | 60 | **60** |
-| reported share | 44.8% | **26.5%** |
-| packages discovered | 3 | **10** |
+- **Inventory expansion: done, 2026-09-19.** The configuration was corrected
+  after probing the pinned tool in an isolated checkout, so the examples and the
+  dashboard are declared and discovered; `000` section 12.1 records what each
+  key actually does. Numbers below are after that change.
+- **Exclusion semantics: unresolved.** Removing generated and vendored output
+  from the denominator without also exempting it from the coupling gate is not
+  achievable with the keys this document names, on the pinned revision. Section
+  5's "Rung 0 is blocked on the pinned tool" records the probe and the blocker.
+  Nothing in this section closes it.
+
+| | before | after | now (2026-09-20) |
+|---|---|---|---|
+| denominator | 134 | **226** | 226 |
+| specifically claimed | 60 | **60** | **68** |
+| reported share | 44.8% | **26.5%** | **30.1%** |
+| packages discovered | 3 | **10** | 10 |
+
+The third column is a later measurement, not part of the configuration change
+the first two columns describe. It moved for a different reason: wave 1 claimed
+the cache state machine and the cache log store, so the numerator rose by eight
+while the denominator stayed put. The two causes are kept in separate columns
+because conflating them is exactly the error this table exists to prevent.
 
 **The share fell because the denominator grew, not because anything was
 unclaimed that was claimed before.** The numerator is unchanged at 60. This is
@@ -92,7 +114,11 @@ also in `index.extra_hashed_inputs`, which is a **separate** mechanism that
 affects freshness and no denominator; without it a byte change in newly governed
 source would leave the committed index reporting `fresh`.
 
-The denominator, reconciled against `git ls-files` (339 tracked):
+The denominator, reconciled on 2026-09-19 against `git ls-files`, which
+reported 339 tracked files that day. Tracked counts move with every change and
+are quoted here only as the baseline of this reconciliation; `git ls-files | wc
+-l` reported 355 on 2026-09-20. Neither number is a coverage figure, and the
+denominator itself did not move between the two dates.
 
 | in the 226 | files |
 |---|---|
@@ -154,24 +180,24 @@ intentionally excluded.
 | A2 | `hiqlite/src/store/state_machine/sqlite/` (7) | auth | internal SQLite state machine, snapshots, restore | `002` | `sqlite`, `auto-heal`, `backup` | focused storage tests + `self_heal.rs` | F-003 to F-006; cluster test non-completion (F-017) | keep; repairs separately |
 | A3 | `hiqlite/src/client/` (16), `query/` (3), `network/` (8), `server/proxy/stream.rs` | auth | client consistency, retries, transport | `003` | `sqlite`, `cache`, `listen_notify` | focused lib tests | F-007, F-008; no transport-fault test | keep; extend for the proxy in wave 4 |
 | A4 | `hiqlite/src/external_state_machine.rs` | auth | externally committed engine, receipts | `002`, `003` (co-authority) | `external-state-machine` | 5 focused tests | caller boundary held by review | keep |
-| A5 | `hiqlite/src/config.rs` | auth | configuration surface | `001` (file unit) | 20 of 46 `env::var` reads | none focused | F-010, F-020: contract is wider than the file | wave 2 reclaims as a contract |
-| A6 | `hiqlite/src/store/state_machine/memory/` (6, 2192 lines) | auth | cache state machine, KV, dlock, TTL, notify | **none** | `cache`, `dlock`, `counters`, `listen_notify_local`, `in-memory-snapshots` | in-crate tests only | F-013: named as owned, never claimed | wave 1 |
-| A7 | `hiqlite/src/store/logs/` (2, 238 lines) | auth | OpenRaft log-store adapter, memory variant | **none** | `__cluster` | none focused | F-013 | wave 1 |
-| A8 | `hiqlite/src/init.rs` (907), `start.rs` (334), `app_state.rs`, `split_brain_check.rs` (164) | auth | node lifecycle, join, split-brain observation | **none** | `HQL_DANGER_RAFT_STATE_RESET`, `HQL_SPLIT_BRAIN_INTERVAL` | none focused | F-009, F-011, F-014 | wave 2 |
-| A9 | `hiqlite/src/tls.rs` (231) | auth | transport security material | **none** | `HQL_TLS_*`, incl. `DANGER_TLS_NO_VERIFY` | none focused | unspecified security surface | wave 2 |
-| A10 | `hiqlite/src/backup.rs` (482), `s3.rs` (128) | auth | scheduled backup, restore, object storage | **none** | `backup`, `s3`, `HQL_BACKUP_*` | `backup.rs`, `backup_restore.rs` cluster tests (unclaimed); S3 skipped in CI | F-009, F-019 | wave 3 |
-| A11 | `hiqlite/src/migration.rs` (98) + 6 test `.sql` fixtures | auth | schema migration ordering and validation | **none** | `sqlite` | `migration.rs` cluster test (unclaimed) | fixtures outside denominator | wave 3 |
-| A12 | `hiqlite/src/server/` minus `proxy/stream.rs` (11) | auth | server binary, args, proxy, logging, password | **none** | `server`, `dashboard` | not tested in CI (F-019) | F-009 (`HQL_SECRET_API`) | wave 4 |
-| A13 | `hiqlite/src/dashboard/` (8, 1022 lines) | auth | dashboard HTTP, session, password, query | **none** | `dashboard`, `HQL_PASSWORD_DASHBOARD`, `HQL_INSECURE_COOKIE` | not tested in CI (F-019) | security surface unspecified | wave 4 |
-| A14 | `dashboard/src/` (69) + configs | auth | Svelte dashboard source | **none**, invisible | `vite`, `svelte.config.js`, CSP directives | `tests/smoke.spec.ts` (Playwright), not in CI | F-016 | wave 4, after layout fix |
+| A5 | `hiqlite/src/config.rs` | auth | configuration surface | `001` (file unit) | 20 of 46 `env::var` reads | none focused | F-010, F-020: contract is wider than the file | configuration adoption reclaims it as a contract (W-01) |
+| A6 | `hiqlite/src/store/state_machine/memory/` (6, 2192 lines) | auth | cache state machine, KV, dlock, TTL, notify | **`006`** (directory unit, 2026-09-19) | `cache`, `dlock`, `counters`, `listen_notify_local`, `in-memory-snapshots` | in-crate tests only | M1 reached; F-025 to F-027 recorded, evidence gaps in `006` section 4 | delivered; evidence and repairs outstanding (W-05, W-08) |
+| A7 | `hiqlite/src/store/logs/` (2, 238 lines) | auth | OpenRaft log-store adapter, memory variant | **`007`** (directory unit, 2026-09-19) | `__cluster` | 2 characterization tests | M1 reached; F-021 to F-024 and F-029 recorded | delivered; contract repair outstanding (W-04) |
+| A8 | `hiqlite/src/init.rs` (907), `start.rs` (334), `app_state.rs`, `split_brain_check.rs` (164) | auth | node lifecycle, join, split-brain observation | **none** | `HQL_DANGER_RAFT_STATE_RESET`, `HQL_SPLIT_BRAIN_INTERVAL` | none focused | F-009, F-011, F-014 | W-02 |
+| A9 | `hiqlite/src/tls.rs` (231) | auth | transport security material | **none** | `HQL_TLS_*`, incl. `DANGER_TLS_NO_VERIFY` | none focused | unspecified security surface | W-03 |
+| A10 | `hiqlite/src/backup.rs` (482), `s3.rs` (128) | auth | scheduled backup, restore, object storage | **none** | `backup`, `s3`, `HQL_BACKUP_*` | `backup.rs`, `backup_restore.rs` cluster tests (unclaimed); S3 skipped in CI | F-009, F-019 | W-09 |
+| A11 | `hiqlite/src/migration.rs` (98) + 6 test `.sql` fixtures | auth | schema migration ordering and validation | **none** | `sqlite` | `migration.rs` cluster test (unclaimed) | fixtures outside denominator | W-10 |
+| A12 | `hiqlite/src/server/` minus `proxy/stream.rs` (11) | auth | server binary, args, proxy, logging, password | **none** | `server`, `dashboard` | not tested in CI (F-019) | F-009 (`HQL_SECRET_API`) | W-11 |
+| A13 | `hiqlite/src/dashboard/` (8, 1022 lines) | auth | dashboard HTTP, session, password, query | **none** | `dashboard`, `HQL_PASSWORD_DASHBOARD`, `HQL_INSECURE_COOKIE` | not tested in CI (F-019) | security surface unspecified | W-12 |
+| A14 | `dashboard/src/` (69) + configs | auth | Svelte dashboard source | **none**; visible since 2026-09-19 | `vite`, `svelte.config.js`, CSP directives | `tests/smoke.spec.ts` (Playwright), not in CI | F-016, narrowed | W-12, W-13 |
 | A15 | `dashboard/src/spow/` (5) + `.wasm` | 3p | proof-of-work client | **none** | bundled | none | third-party, not authored here | declare third-party; reference, never claim |
-| A16 | `hiqlite/static/` (54: 12 `.js`, 18 `.gz`, 18 `.br`, 4 `.css`, `.html`, `.json`, `.png`) | gen | built dashboard, embedded by `rust-embed` | **none**, 12 counted as source | `adapter-static`, `precompress: true`, `#[folder = "static"]` | no drift check (F-012) | F-012, F-016 | wave 4: a build contract, then exclude from the source denominator |
-| A17 | `hiqlite-derive/src/` (3) | auth | `FromRow`, `IntoCacheData` derive macros | **none** | `macros` | `derive-complex-types` example | proc-macro contract unstated | wave 5 |
-| A18 | `hiqlite/src/error.rs` (408), `lib.rs`, `macros.rs`, `helpers.rs`, `http_client.rs` | auth | public API surface and error taxonomy | **none** | all features | compile-time only | the error contract callers match on is unspecified | wave 5 |
-| A19 | `hiqlite/tests/cluster/` (16 files, 2295 lines) | auth | integration evidence for A1 to A4 | `002` claims `self_heal.rs` only | `cache_storage_disk=false`; `test-no-s3` | F-017 | wave 6 |
-| A20 | `examples/` (6 crates, 35 files) | auth | executable user documentation | **none**, invisible | own manifests; `just clippy-examples` | compiled in CI, never claimed | wave 6, after layout fix |
-| A21 | `Cargo.toml`, `Dockerfile`, `.cargo/config`, `.github/workflows/code_style.yaml`, `justfile` release recipes | auth | build, release, packaging, CI | `000` owns `justfile` and the spec-spine workflow | MSRV, feature matrix, `panic = "abort"` | CI is the evidence | the other workflow and the image are unclaimed | wave 6 |
-| A22 | `README.md`, `CHANGELOG.md`, `hiqlite.toml`, `hiqlite.env` | auth | user-facing documentation and config reference | **none** | documents `HQL_*` | F-011 | wave 2 for the config reference; docs stay on the bypass floor |
+| A16 | `hiqlite/static/` (54: 12 `.js`, 18 `.gz`, 18 `.br`, 4 `.css`, `.html`, `.json`, `.png`) | gen | built dashboard, embedded by `rust-embed` | **none**, 12 counted as source | `adapter-static`, `precompress: true`, `#[folder = "static"]` | no drift check (F-012) | F-012, F-016 | W-13 for the build contract; the denominator exclusion stays blocked on W-14 |
+| A17 | `hiqlite-derive/src/` (3) | auth | `FromRow`, `IntoCacheData` derive macros | **none** | `macros` | `derive-complex-types` example | proc-macro contract unstated | W-18 |
+| A18 | `hiqlite/src/error.rs` (408), `lib.rs`, `macros.rs`, `helpers.rs`, `http_client.rs` | auth | public API surface and error taxonomy | **none** | all features | compile-time only | the error contract callers match on is unspecified | W-17 |
+| A19 | `hiqlite/tests/cluster/` (16 files, 2295 lines) | auth | integration evidence for A1 to A4 | `002` claims `self_heal.rs` only | `cache_storage_disk=false`; `test-no-s3` | F-017 | W-15 |
+| A20 | `examples/` (6 crates, 35 files) | auth | executable user documentation | **none**; visible since 2026-09-19 | own manifests; `just clippy-examples` | compiled in CI, never claimed | F-015, narrowed | W-16 |
+| A21 | `Cargo.toml`, `Dockerfile`, `.cargo/config`, `.github/workflows/code_style.yaml`, `justfile` release recipes | auth | build, release, packaging, CI | `000` owns `justfile` and the spec-spine workflow | MSRV, feature matrix, `panic = "abort"` | CI is the evidence | the other workflow and the image are unclaimed | W-19 |
+| A22 | `README.md`, `CHANGELOG.md`, `hiqlite.toml`, `hiqlite.env` | auth | user-facing documentation and config reference | **none** | documents `HQL_*` | F-011 | W-01 for the config reference; docs stay on the bypass floor |
 | A23 | `LICENSE`, `.gitignore`, `.dockerignore`, `.npmrc`, lockfiles | excl | repository hygiene | `000` owns `.gitignore` | none | none | permanently excluded, except `.gitignore` |
 | A24 | `.derived/` (13) | gen | compiler output | `000` by the authored/derived boundary | determinism | `check` | none | permanently excluded from claims |
 
@@ -181,6 +207,18 @@ intentionally excluded.
 
 Dependency-ordered. Each wave is one or more draft specs, each retroactive
 unless stated, each with its own acceptance block and review.
+
+**The proposed spec ordinals below are vacated (2026-09-20).** They were written
+when the corpus ended at `005`, and the corpus now runs to `008`: wave 2's
+proposed `008-configuration-contract` collides with the delivered
+`008-wal-append-completion-notification`, and every later wave's numbering
+inherited the same assumption. Ordinals are identity, not schedule (`000`
+section 3), so an ordinal is allocated when the work starts, from the next free
+number at that moment, and never reserved in advance here. Read the wave entries
+below for **scope, dependencies, and review obligations**; read the names as
+descriptions rather than as assignments, and take the work identifiers from
+section 8. Names shown as `NNN-...` mean "a spec of this shape", not that
+number.
 
 ### Wave 1: the cache state machine and its log store. **Executed 2026-09-19**
 
@@ -205,6 +243,13 @@ queue, the ten-second constant, and the wall-clock expiry with its own source
 comment about clock skew. No lease design, no fencing, no membership
 integration.
 
+**Added 2026-09-20.** A fifth defect in `007`'s territory was confirmed at
+source and recorded as F-029: `purge` drains an exclusive range while OpenRaft
+0.9.24 documents `RaftLogStorage::purge` as inclusive, and the characterization
+test wave 1 added pins the exclusive behavior as expected. `007` itself still
+records four known defects, so reconciling a KD-5 into that spec is outstanding
+work (W-04 carries it). No runtime consequence was executed for F-029.
+
 The original wave-1 plan follows, for reference.
 
 ### Wave 1 as originally planned: the storage territory the boundary already promises
@@ -227,11 +272,14 @@ is the natural first expansion.
 ### Wave 2: the configuration contract, node lifecycle, and transport security
 
 **Scope.** A5, A8, A9, A22 (the config reference half).
-**Proposed specs:** `008-configuration-contract`, `009-node-lifecycle-and-split-brain`,
-`010-transport-security-material`.
-**Existing ownership to extend.** `008` `extends` `001`'s `hiqlite/src/config.rs`
-unit rather than re-establishing it, and claims `config_toml.rs`, `hiqlite.toml`,
-and `hiqlite.env` so the contract is owned as a contract (F-010, F-020).
+**Proposed specs:** one for the configuration contract (W-01), one for node
+lifecycle and split-brain (W-02), one for transport security material (W-03).
+Ordinals are allocated when each starts; the numbers this entry originally
+proposed are vacated, and `008` in particular is taken.
+**Existing ownership to extend.** The configuration spec `extends` `001`'s
+`hiqlite/src/config.rs` unit rather than re-establishing it, and claims
+`config_toml.rs`, `hiqlite.toml`, and `hiqlite.env` so the contract is owned as
+a contract (F-010, F-020).
 **Retroactive or forward-looking.** Retroactive, with one forward-looking
 decision carried into wave 2's review: F-009's panic-versus-startup-error
 question. The decision is recorded; the change is a separate repair.
@@ -247,8 +295,8 @@ claims, plus a documentation assertion that every claimed variable appears in
 
 ### Wave 3: durability services
 
-**Scope.** A10, A11. **Proposed specs:** `011-backup-and-object-storage`,
-`012-schema-migrations`.
+**Scope.** A10, A11. **Proposed specs:** one for backup and object storage
+(W-09), one for schema migrations (W-10). Ordinals allocated at start.
 **Existing ownership to extend.** `extends` `002` for the snapshot and restore
 path they share; `depends_on` wave 2 for the `HQL_BACKUP_*` and `HQL_S3_*`
 contract.
@@ -265,14 +313,16 @@ existing fixtures. Backup and restore evidence must state that CI skips S3
 ### Wave 4: the product surfaces, and the generated-asset contract
 
 **Scope.** A12, A13, A14, A15, A16.
-**Proposed specs.** `013-server-binary-and-proxy`, `014-dashboard-service`,
-`015-dashboard-build-contract`.
-**Existing ownership to extend.** `013` `extends` `003` on
+**Proposed specs.** One for the server binary and proxy (W-11), one for the
+dashboard service and UI (W-12), one for the dashboard build contract (W-13).
+Ordinals allocated at start.
+**Existing ownership to extend.** The server spec `extends` `003` on
 `hiqlite/src/server/proxy/stream.rs`, which `003` already claims.
-**Retroactive or forward-looking.** Retroactive for `013` and `014`.
-`015` is **forward-looking**: the drift check it specifies does not exist. It
-declares its units with `planned: true` and `origin.retroactive: false`, and it
-is the first spec in this corpus that does.
+**Retroactive or forward-looking.** Retroactive for W-11 and W-12. W-13 is
+**forward-looking**: the drift check it specifies does not exist. It declares
+its units with `planned: true` and `origin.retroactive: false`. It is no longer
+the first spec in this corpus to declare a non-retroactive origin: `005` did,
+and its D-2 records the probe.
 **Behavioral and evidence review required.** Dashboard session, cookie, and
 password handling is the fork's only authentication surface and is not exercised
 by CI tests (F-019): it needs a real behavioral review, not a claim. The
@@ -283,14 +333,14 @@ the served response.
 **Acceptance boundary.** For `015`, a command that rebuilds the dashboard and
 fails when the committed output differs; it must fail on today's tree if the
 output is stale, which is the point.
-**Known defects retained.** F-012 closes only when `015` reaches M2.
+**Known defects retained.** F-012 closes only when W-13 reaches M2.
 **Owner decisions.** OD-2 (generated assets), and the layout change of section 5
 for `dashboard/` to be claimable at all.
 
 ### Wave 5: the public surface
 
-**Scope.** A17, A18. **Proposed specs.** `016-public-api-and-error-taxonomy`,
-`017-derive-macros`.
+**Scope.** A17, A18. **Proposed specs.** One for the public API and error
+taxonomy (W-17), one for the derive macros (W-18). Ordinals allocated at start.
 **Existing ownership to extend.** None; these are new territory. `constrains`
 is the right edge for the API freeze aspect if the owner wants one.
 **Retroactive or forward-looking.** Retroactive.
@@ -304,17 +354,19 @@ a test that pins the public error variants a caller matches on.
 
 ### Wave 6: the evidence surface and the build
 
-**Scope.** A19, A20, A21. **Proposed specs.** `018-integration-evidence-surface`,
-`019-examples-as-documentation`, `020-build-release-and-ci`.
-**Existing ownership to extend.** `018` `extends` `002`'s claim on
-`self_heal.rs`; `020` `extends` `000`'s `justfile` and workflow units.
+**Scope.** A19, A20, A21. **Proposed specs.** One for the integration evidence
+surface (W-15), one for examples as documentation (W-16), one for build, release
+and CI (W-19). Ordinals allocated at start.
+**Existing ownership to extend.** The evidence spec `extends` `002`'s claim on
+`self_heal.rs`; the build spec `extends` `000`'s `justfile` and workflow
+units.
 **Retroactive or forward-looking.** Retroactive, except any new harness.
 **Behavioral and evidence review required.** F-017's recorded cluster-test
 non-completion has to be resolved or restated honestly before `018` can claim
 the suite. That may need one bounded cluster diagnostic, which is the only
 expensive run this plan anticipates.
-**Acceptance boundary.** `019` can assert that every example builds, which CI
-already does. `018` must not claim the suite passes if it does not.
+**Acceptance boundary.** W-16 can assert that every example builds, which CI
+already does. W-15 must not claim the suite passes if it does not.
 **Known defects retained.** F-017 until the run is resolved.
 **Owner decisions.** OD-1 (examples and dashboard in scope), and the layout
 change of section 5.
@@ -510,7 +562,7 @@ nothing about them approves a spec.
 
 ### OD-1: are `examples/` and `dashboard/` in scope? **Decided: yes, both.**
 
-They are 116 of 333 tracked files and were invisible to the ledger by
+They were 116 files, counted on 2026-09-19, and were invisible to the ledger by
 configuration rather than by decision. Both are in the adoption target: examples
 as governed executable documentation, the dashboard as a specified product
 surface, which also places the fork's only authentication surface under a spec.
@@ -547,6 +599,22 @@ directed that ratification be **deferred**, with readiness reassessed after the
 first substantive adoption wave, and has stated that completing all six waves is
 **not** a prerequisite for reconsidering it.
 
+**Status on 2026-09-20.** The trigger this decision names has occurred: wave 1
+was delivered on 2026-09-19 (`006` and `007`, merged as PR #6), so the
+reassessment it defers to is now due rather than pending. Two further facts
+belong on the record here, and neither is a ratification:
+
+- The owner **decided the per-document transition** on 2026-09-20, which
+  alternative (b) below had left open. It is recorded in the constitution's
+  Amendment section, `000` section 1.1, and `004` D-5. Deciding the policy that
+  governs what ratifying `000` would close is not ratifying `000`.
+- **No spec has been approved.** Every `status` in the corpus is still read from
+  its own frontmatter, and `spec-spine registry list` prints the current values.
+  This document does not assert them.
+
+The alternatives below are kept as written on 2026-09-19, because they are the
+record of what the decision weighed.
+
 An earlier revision of this document contradicted itself on this point, saying
 in one place that `000` should be ratified after waves 1 to 6 and in another
 that wave 1 was enough. The single rule is the one above: **reassess after wave
@@ -566,10 +634,33 @@ owner ratification. The cost of (a) is that the freeze surface is not yet final.
 one; there is no aggregate corpus ratification to wait for.
 
 
-## 7. The first implementation task this plan recommends
+## 7. The first implementation task this plan recommended: delivered
 
-Not started, and not authorized by this document. It is now traced rather than
-sketched, and the full proposal is
+**Delivered 2026-09-19 as `008-wal-append-completion-notification`**, merged as
+PR #7. F-001 and F-002 are repaired and annotated in place in the register. An
+earlier revision of this section said "Not started", which was true when it was
+written and is no longer; the recommendation text below is kept because it is
+the proposal the delivered repair was reviewed against.
+
+**The survival question this section left open was answered.** `008` section 6
+records the owner's decision: option (b), a surviving writer with a defined
+poisoned state, was declined, and the existing termination is preserved. A
+persistence failure notifies and then ends the writer thread, which `008`
+section 3.6 states as the failure policy and pins with
+`persistence_failure_notifies_then_terminates_the_writer`. That is a decision,
+not a deferral, and nothing further is required for it.
+
+What the delivery did **not** settle: whether to add **supervision** on top of
+that termination, which `008` section 6 lists as out of scope and section 3.6
+bounds by naming what the report does not cover (a panic, an abort, a signal);
+and **F-028**, a truncated entry stream acknowledged as a successful append,
+found while tracing this repair and deliberately left unrepaired. They are
+carried in section 8 as W-06 and W-07, and neither is an unfinished part of the
+delivered repair: W-06 is optional work on a settled policy, and W-07 is a
+different defect.
+
+**The recommendation as written on 2026-09-19 follows.** It is traced rather
+than sketched, and the full proposal is
 `standards/spec/wal-repair-proposal.md`.
 
 **Repair the WAL append and completion error contract (F-001 and F-002).**
@@ -606,3 +697,53 @@ loop, not the OpenRaft adapter) are in the proposal. One consequence to note
 here: `001`'s acceptance block names the test that pins the defect, so retiring
 it makes `001`'s block fail, and the amending spec must carry the replacement
 acceptance and say that it supersedes that line.
+
+---
+
+## 8. Current assignment table (2026-09-20)
+
+**This is the queue.** Sections 3 and 7 are the reasoning and the history;
+this table is what is actually outstanding. A work identifier `W-nn` is stable
+and is not a spec ordinal: an ordinal is allocated when the work starts, from
+the next free number at that moment (`000` section 3).
+
+**Implementation state** and **evidence state** are separate columns on purpose,
+and so is **owner decision**: a row can be fully owned with no evidence, or
+fully evidenced and still blocked on a decision. Nothing in this table is
+scheduled, authorized, or approved by this document.
+
+| id | subject | owning spec today | implementation | evidence | owner decision | depends on | closes when |
+|---|---|---|---|---|---|---|---|
+| W-01 | configuration contract: `config.rs`, `config_toml.rs`, `hiqlite.toml`, `hiqlite.env` (A5, A22) | none; would `extends` `001`'s file unit | not started | none focused | none outstanding | none | the units are claimed and every claimed variable has a stated default, precedence, type, validation, feature guard and failure mode, with an assertion per validation rule |
+| W-02 | node lifecycle and split-brain: `init.rs`, `start.rs`, `app_state.rs`, `split_brain_check.rs` (A8) | none | not started | none focused | OD-3 decided: preserve behavior | W-01 | startup, join, reset, shutdown and task-ownership contracts are stated, with source-described behavior separated from executed evidence |
+| W-03 | transport security material: `tls.rs` (A9) | none | not started | none focused | none outstanding | W-01 | material loading, trust validation and each `DANGER_*` override are specified and tested in every claimed configuration |
+| W-04 | cache log store contract repair: F-021 to F-024 and F-029, and reconciling F-029 into `007` as a KD entry | `007` | not started | two characterization tests, which pin the current behavior including the exclusive purge | none outstanding for the trait mismatch itself | none | the contract matches the locked trait, the replaced acceptance is carried through the governed mechanism rather than left asserting the old outcome, and `007` records or closes the fifth defect |
+| W-05 | `006` evidence gaps: counter and Notify semantics, dead-handler behavior, cache-index validation, cross-node convergence, clock-dependent lock limits | `006` | delivered at M1 | narrow; `006` section 4 states the limits | some gaps need W-08 and a lock policy decision first | W-08 | each gap is either evidenced or restated as a declared limit with its consequence |
+| W-06 | **optional** supervision of the WAL writer thread, on top of the termination policy `008` preserved | `001`, amended by `008` | the policy is **decided and in force**, not deferred: a persistence failure notifies, then ends the writer thread (`008` section 3.6, owner decision at `008` section 6) | the `run`-returns-`Err` termination is reported by a single ERROR log and tested by `writer_termination_is_reported`; `008` section 3.6 states what the report does not cover (panic, abort, signal), and `008` KD-3 records that the report has no consumer | **optional**: whether to add supervision at all (retain and join the `JoinHandle`, catch panics, wire a health check). Existing behavior stands unless the owner asks for a change; no decision is outstanding | none | supervision is either specified with evidence, or the corpus records that the reported termination is the whole of the contract and this row closes unchanged |
+| W-07 | F-028: a truncated entry stream acknowledged as a successful append | `001`, amended by `008` | not started | untested | **required, and specific to this defect**: how the writer tells a `recv` error from the `None` that ends a healthy stream; what becomes of the prefix already written; what the acknowledgement and the completion notification report for a partial append, and with what cardinality; whether the writer stays usable afterwards or ends as a persistence failure does | none | sender disconnect before the first entry and after a prefix produce no false success, with the old behavior demonstrated failing rather than merely untested, in every supported `LogSync` mode |
+| W-08 | F-027: unvalidated `cache_idx` and incompatible cache variant sets | `006` | not started | untested | **required**: what a replicated invalid command means | none | incompatible inputs produce the agreed deterministic result and no node silently skips committed work |
+| W-09 | backup and object storage: `backup.rs`, `s3.rs` (A10) | none | not started | cluster tests exist but are unclaimed; S3 is skipped in CI (F-019) | none outstanding | W-01 | cron, naming, retention, validation bypass and restore ordering are specified, with skipped service tests reported as skipped |
+| W-10 | schema migrations: `migration.rs` and its fixtures (A11) | none | not started | one unclaimed cluster test; three `bad_*` fixtures | none outstanding | W-01 | ordering, gaps, malformed names and migration-failure restart behavior are asserted against the existing fixtures |
+| W-11 | server binary and proxy (A12) | none | not started | not exercised by CI (F-019) | none outstanding | W-01 | authentication, forwarding, errors, reconnect and shutdown are tested with `server` enabled |
+| W-12 | dashboard service and UI (A13, A14) | none | not started | not exercised by CI (F-019) | none outstanding | W-01 | session, password, cookie and query contracts, invalid and expired sessions, and the authorization boundary are tested rather than asserted |
+| W-13 | dashboard build contract and drift check (F-012, A16) | none; forward-looking, `planned: true` | not started | none | OD-2 decided: keep the bytes committed | W-12 | a rebuild under recorded toolchain and lockfile inputs compares deterministically and drift fails the check |
+| W-14 | denominator exclusion for the 12 generated `.js` and 4 vendored files (F-016) | `000` owns `spec-spine.toml` | **blocked on the pinned tool** | probed 2026-09-19; results in section 5 | **required**: whether to pursue a pin upgrade | a tool capability that does not exist at the pin | generated and vendored files leave the denominator without losing `C-001` on explicitly claimed paths |
+| W-15 | integration evidence surface: `hiqlite/tests/cluster/` (A19, F-017) | `002` claims `self_heal.rs` only | not started | one claimed test with a recorded non-completion | none outstanding | none | each test is mapped to the guarantee it establishes and the remote-client stall is diagnosed or restated honestly |
+| W-16 | examples as executable documentation (A20, F-015) | none; visible since 2026-09-19 | not started | compiled by CI, never claimed | OD-1 decided: in scope | none | every example builds under documented configurations and representative behavior is exercised where promised |
+| W-17 | public API and error taxonomy (A18) | none | not started | compile-time only | **required**: is the public API frozen for this fork | none | feature availability and error semantics are specified with consumer-facing behavioral assertions |
+| W-18 | derive macros (A17) | none | not started | one example crate | none outstanding | none | supported types, attributes, diagnostics and rejections are covered by compile-pass and compile-fail tests |
+| W-19 | build, release, packaging and CI (A21) | `000` owns the `justfile` and the spec-spine workflow | not started | CI is the only evidence | none outstanding | none | the supported feature and MSRV matrix, packaging contents and an external-consumer install are validated |
+| W-20 | internal SQLite snapshot publication and installation: F-003, F-004, F-006 | `002` | not started | focused storage tests | **required**: atomicity and durability, failed-install rollback versus poison, corrupt-newest handling | none | deterministic failure injection shows incomplete staging is never selectable and a failed install never becomes a restart candidate |
+| W-21 | internal exclusive access: F-005 | `002` | not started | none | **required**: supported systems, lock lifetime, storage identity | none | two real processes cannot own the same storage, a rejected contender does not mutate it, and exit or crash releases ownership |
+| W-22 | startup-error and background-task lifecycle policy: F-009, F-014, F-025 | none; W-01 and W-02 describe the behavior first | not started | none | **required**: what failed background work does | W-01, W-02 | the selected policy is externally observable and characterized under both abort and unwind profiles |
+| W-23 | enforcement rungs 1 to 4 | `000` owns the configuration | not enabled | rung-0 probe recorded | **required**: the distinct enforcement decision | W-14, and M1 across the adopted scope | each enabled refusal is demonstrated against the exact pin and candidate workflow |
+| W-24 | whether acceptance blocks should be executed by an automated control, given that CI deliberately abstains. Surfaced by F-030, which is itself repaired | `004` states the CI trust boundary; `000` section 15 states the rule | no process changed, and none is required to change | `just spine-verify` is a documented manual step and was run by hand for `000`, `004` and `005` in this pass, all passing; nothing runs it automatically | **optional**: whether the manual run stays the accepted control, or an automated one is added on a trusted tree. The manual control stands unless the owner asks otherwise | none | the corpus records the chosen control, and any control added is demonstrated; closing it unchanged is a valid outcome |
+
+**Not in this table, and deliberately.** Publication, release and upstream
+acceptance. This document is an adoption plan; a release candidate is qualified
+against a chosen release scope, which nothing here selects.
+
+**How to keep this table honest.** A row moves only on delivered evidence, and a
+delivered row is rewritten as history rather than deleted, the way section 7
+was. If a completed piece of work still reads as the recommended next task
+anywhere in this document, that is the defect this section exists to prevent.

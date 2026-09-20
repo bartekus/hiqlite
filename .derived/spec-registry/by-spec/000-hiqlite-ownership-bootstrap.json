@@ -52,6 +52,7 @@
     "sectionHeadings": [
       "000: Bound the first hiqlite governance corpus",
       "1. The constitutional hierarchy",
+      "1.1 The per-document transition, adopted",
       "2. Authored truth and derived truth",
       "3. Identity: directory name equals id",
       "4. The typed authority graph",
@@ -90,6 +91,6 @@
       "fork-governance-boundary"
     ]
   },
-  "shardHash": "e965c010c5660ff1e3b7aab9e117fa25dd33b8cba507cd3188d2d1a74b8117d9",
+  "shardHash": "8c061b7d1800eef7966dab64504cbaa2de7084120e33adf720cf29bfa0d52425",
   "specVersion": "1.3.0"
 }

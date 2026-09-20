@@ -351,6 +351,14 @@ compiled by CI, yet no coverage number describes them and no spec can claim them
 until the layout declares them. Next action: wave 6, with the config change
 probed against the pinned revision before adoption.
 
+**Disposition appended 2026-09-20; the observation above stands as recorded on
+2026-09-19.** The visibility half is fixed: `spec-spine.toml` now declares the
+six crates through `layout.standalone_rust_workspaces`, and
+`spec-spine index coverage` lists each example package with its own row. The
+adoption half is not: all seven example `.rs` files are still unclaimed, and no
+spec claims any of them. F-015 stays open with its scope narrowed to the
+unclaimed territory; the configuration blocker it named is gone.
+
 ### F-016 `limit`, confidence `high`
 
 **The dashboard is invisible to the ledger by configuration, while its build
@@ -365,6 +373,19 @@ Consequence: the denominator is inverted for this product surface. It omits
 1,000+ lines of authored Svelte and TypeScript and includes minified build
 output. Any coverage percentage quoted before this is corrected describes a
 denominator that nobody chose deliberately.
+
+**Disposition appended 2026-09-20; the observation above stands as recorded on
+2026-09-19.** Half of the inversion is fixed and half is not. Fixed: the
+dashboard is declared through `layout.standalone_npm_packages`, so its 24 `.ts`
+and `.js` files are in the denominator and its authored `.svelte`, `.css` and
+build-config files reach it through `coverage.governed_scope`. Not fixed: the 12
+generated `.js` files under `hiqlite/static` are still counted as `hiqlite`
+package source and still unclaimed, and the 4 vendored files under
+`dashboard/src/spow/` are still counted too. The adoption plan's rung-0 probe
+established why (the only key that removes them also exempts them from the
+coupling gate), so this half is a tool dependency and not a configuration
+oversight. F-016 stays open on the generated-and-vendored denominator problem
+alone; no dashboard file is claimed yet either.
 
 ### F-017 `evidence`, confidence `high`
 
@@ -396,6 +417,16 @@ verify` as the fuller local sweep two sections after the `spine-verify` table.
 Consequence: a reader or an agent can conflate "run verify" with "run the
 acceptance block", and one of the two is explicitly forbidden in CI while the
 other is what CI already runs. Low severity, trivially fixed by naming.
+
+**Re-evaluated 2026-09-20 against the current `AGENTS.md`, and narrowed.** The
+`AGENTS.md` half of the observation no longer holds: that file now names the
+pre-existing recipes explicitly as `just check`, `just clippy` and `just test`
+(`AGENTS.md:141`) and does not mention `just verify` at all, so the adjacency
+this entry described is gone. The three-way name collision itself is unchanged
+and still in the tree: `justfile:224` defines `verify`, `justfile:319` defines
+`spine-verify`, and `spec-spine verify` is the subcommand CI is forbidden to run
+(`000` section 15, `004` B-2). F-018 stays open against the naming, not against
+`AGENTS.md`.
 
 ### F-019 `evidence`, confidence `high`
 
@@ -510,16 +541,128 @@ for the `008` repair and deliberately left unrepaired there, because it is a
 different defect from F-001 and F-002 and its fix changes what the writer does
 with a partial append. Recorded at `008` KD-2. Untested.
 
+### F-029 `defect`, confidence `high`
+
+**`purge` removes exclusively where the trait requires inclusive removal.**
+`hiqlite/src/store/logs/memory.rs:210` computes
+`purge_until = log_id.index - first_offset` and line 217 calls
+`logs.drain(..purge_until)`, an exclusive range, so the entry at `log_id.index`
+survives the purge that named it. OpenRaft 0.9.24 states the opposite
+requirement on the trait method: "Purge logs upto `log_id`, inclusive"
+(`openraft-0.9.24/src/storage/v2.rs:138`). Both halves were read from source in
+this pass, the trait from the locked crate in the local registry checkout rather
+than from published documentation.
+
+The characterization test wave 1 added,
+`store::logs::memory::tests::purge_removes_entries_below_the_given_index`
+(`memory.rs:269-287`), stores indexes 1 to 5, purges through index 3, and
+asserts the remainder is `[3, 4, 5]`; its doc comment states the exclusive rule
+as the contract. The test therefore pins the mismatch as expected behavior, so a
+repair must replace that expectation rather than add a case beside it.
+
+Configuration: `cache`.
+
+**Consequence: not established.** Nothing was executed for this entry beyond
+reading the two sources. What is confirmed is the source-level mismatch and the
+test that pins it. The retained entry is also entangled with F-024: because
+`last_purged` is never assigned, the reported purge frontier cannot be used to
+notice it. Whether any path reaches this store with a non-empty deque was not
+established here, and F-021's note (both `get_log_state` consumers in OpenRaft
+0.9.24 run on an initialization path where this non-durable store is empty by
+construction) applies to that question too.
+
+**Recorded separately, and ahead of its owning spec.** F-021 through F-024 keep
+their identifiers and their text; this is a fifth defect in the same file, not a
+renumbering. `007-cache-log-store` records four known defects and does not
+record this one, so the register is ahead of `007` here. `007` remains
+authoritative for its own territory: reconciling KD-5 into it is queued in the
+adoption plan's current assignment table and is not done by this change.
+
+### F-030 `contradiction`, confidence `high`
+
+**`005`'s acceptance block asserted a phrase that had been removed from the
+document it names, and failed.** The assertion was `grep -q 'changes no runtime
+behavior' standards/spec/wal-repair-proposal.md`. Commit `8bce5ca` (PR #7)
+rewrote that document's header to record that the repair had been implemented,
+removing the phrase. `008` holds an `extends` edge on the file with nature
+`superseding`, so the edit was authorized and `spec-spine couple` passed; the
+owning spec's assertion about the file is what nobody updated.
+
+**Observed by execution, on 2026-09-20**, in two places: in the working tree,
+and in a clean worktree at the unmodified integration head `58ee7fa`, where
+`just spine-verify 005` fails at command 4 with exit 1. The failure had been on
+the integration branch since PR #7 merged.
+
+**Why no automated control caught it.** Verification here is manual by design,
+not missing. `just spine-verify <spec-id>` is a documented command and a named
+step in `AGENTS.md`'s gate, and running it is how this entry was observed at
+all. What no control does is run it **automatically**: pull-request CI
+deliberately does not, because a proposed tree is untrusted input (`000` section
+15, `004` B-2); `spec-spine check` compares committed shards and does not
+execute acceptance blocks; `spec-spine couple` checks that a claimed path and an
+owning spec moved together and does not read what either says. So between two
+hand runs, a stale assertion stays undetected, which is what happened here
+between PR #7 merging and 2026-09-20.
+
+**Repaired (2026-09-20) by `005` D-7.** The stale assertion is replaced with
+one that holds against the document's current text, the original line is kept
+beside it as a comment, and `just spine-verify 005` passes. The contradiction
+this entry records, an assertion incompatible with the document it names, no
+longer exists in the tree.
+
+**The process question it surfaced is tracked separately, and is optional.**
+Whether the accepted control stays the existing manual run, or an automated
+execution is added on a trusted tree, is an owner question that this entry does
+not prejudge: CI's abstention is a deliberate trust boundary, so "add it to CI"
+is not an obvious fix. It is carried as W-24 in the adoption plan, which is
+where work and decisions live. It is not a finding, and it does not hold this
+entry open.
+
+**Not claimed.** That any other acceptance block is currently stale, that the
+manual control is inadequate, or that a class of similar failures exists in the
+tree. Only `000`, `004` and `005` were executed in this pass, all pass, and
+`008`'s block was read but not executed because it runs cargo tests.
+
 ## Summary by class
+
+Class is what a finding **is**. State is what has **happened** to it. They are
+separate fields and neither is read off the other: a `defect` may be open or
+repaired, and a `gap` may be closed at M1 while its entry is retained as a
+record.
 
 | class | ids | count |
 |---|---|---|
-| `defect` | F-001 to F-006, F-009, F-021 to F-024, F-027, F-028 | 13 |
-| `contradiction` | F-018 | 1 |
+| `defect` | F-001 to F-006, F-009, F-021 to F-024, F-027 to F-029 | 14 |
+| `contradiction` | F-018, F-030 | 2 |
 | `gap` | F-010, F-013 | 2 |
 | `evidence` | F-011, F-012, F-017, F-019 | 4 |
 | `limit` | F-007, F-008, F-015, F-016, F-026 | 5 |
 | `decision` | F-014, F-020, F-025 | 3 |
+
+### Summary by state (2026-09-20)
+
+| state | ids | count |
+|---|---|---|
+| repaired | F-001, F-002, F-030 | 3 |
+| closed at M1, entry retained | F-013 | 1 |
+| open | everything else: F-003 to F-012, F-014 to F-029 | 26 |
+
+A finding's state answers whether the thing it records is still in the tree, and
+nothing else. F-030 is repaired because its contradiction is gone; the optional
+process decision it surfaced is W-24's, and a work item's being undecided has
+never been a reason to hold a finding open.
+
+Twenty-six open, of which three carry a dated disposition appended on
+2026-09-20 recording what has moved since they were written: F-015 (examples
+now visible, still unclaimed), F-016 (dashboard now visible, the generated and
+vendored
+denominator problem unresolved), F-018 (the `AGENTS.md` half resolved, the
+three-way naming collision unchanged). A disposition narrows an entry; it does
+not close it.
+
+Open **defects**, which is the subset a repair workstream draws from:
+F-003, F-004, F-005, F-006, F-009, F-021, F-022, F-023, F-024, F-027, F-028,
+F-029. Twelve of the fourteen defects; F-001 and F-002 are the two repaired.
 
 **Reclassified on 2026-09-19**, after each class test was applied rather than
 assumed: F-007 and F-008 from `defect` to `limit`, because a stated contract with
@@ -529,15 +672,22 @@ migration state rather than faults; and the consequences of F-001, F-002, and
 F-014 rewritten against traced source, with three earlier claims withdrawn in
 place.
 
-Thirteen defects: six from the pilot specs, F-009 from the whole-project pass,
-five (F-021 to F-024, F-027) found by wave 1, and F-028 found while tracing the
-`008` repair. F-013 is closed at M1 by wave 1 and
-is retained as a record rather than deleted. No finding in this register authorizes a repair; each repair is
-a separate governed change with its own spec and evidence.
+Fourteen defects: six from the pilot specs, F-009 from the whole-project pass,
+five (F-021 to F-024, F-027) found by wave 1, F-028 found while tracing the
+`008` repair, and F-029 found on 2026-09-20 while re-reading the memory log
+store against the locked trait. F-013 is closed at M1 by wave 1 and is retained
+as a record rather than deleted. No finding in this register authorizes a
+repair; each repair is a separate governed change with its own spec and
+evidence.
 
 **Repaired so far.** F-001 and F-002, by
-`008-wal-append-completion-notification` on 2026-09-19. A repaired entry is
-annotated in place and keeps its identifier and its original text, so the
-baseline a repair was reviewed against stays readable. The remaining ten
-defects are open, and F-021 through F-024 are a separate cache-log repair that
-was deliberately not bundled into `008`.
+`008-wal-append-completion-notification` on 2026-09-19, and F-030, by `005` D-7
+on 2026-09-20. A repaired entry is annotated in place and keeps its identifier,
+its class, and its original text, so the baseline a repair was reviewed against
+stays readable.
+
+**Twelve defects are open**: F-003 to F-006, F-009, F-021 to F-024, F-027,
+F-028, F-029. An earlier revision said ten, which did not match its own class
+table; the arithmetic is fourteen recorded minus the two repaired. F-021 through
+F-024 and F-029 are a separate cache-log repair that was deliberately not
+bundled into `008`.

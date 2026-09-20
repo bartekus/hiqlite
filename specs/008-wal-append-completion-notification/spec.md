@@ -458,8 +458,9 @@ for call ordering and error propagation only.
   are deliberately not bundled here.
 - **F-003 through F-020, F-025 through F-027**, and everything in `002` and
   `003`.
-- **Ratification and merge.** This spec is `draft`, like every spec in the
-  corpus.
+- **Ratification and merge.** Neither is in this spec's gift. `status` is read
+  per spec from its own frontmatter, ratification is an owner act, and an agent
+  never performs one (constitution X).
 
 ## 7. Resolved decisions
 
@@ -526,8 +527,10 @@ The semantics that bind this spec, read from the tool at that revision:
   five commands the repair does not touch. Replacing `001`'s acceptance with
   only the new append tests would silently drop them.
 - **`draft` is not an obstacle.** Only a `superseded` or `retired` amender is
-  skipped, which returns the acceptance to whatever held it before. Every spec
-  in this corpus is `draft`, and a draft amender holds the acceptance.
+  skipped, which returns the acceptance to whatever held it before. When this
+  was measured, on 2026-09-19, both this spec and `001` were `draft`, and the
+  draft amender held the acceptance. The rule is about `superseded` and
+  `retired` alone, so approving either spec later does not disturb it.
 - **The declaration is validated.** An `amends_verification` entry that is not
   also in `amends` is refused (`V-018`); two live specs naming the same target
   are refused (`V-019`); a cycle in the replacement chain is refused (`V-020`).
