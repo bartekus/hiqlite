@@ -309,6 +309,20 @@ known-defects section is a separate governed change.
 No spec is ratified by this decision, no enforcement setting changes, no runtime
 behavior changes, and no Rust or cluster test was run for it.
 
+**D-8 (2026-09-20, the record is updated for the configuration adoption).**
+W-01 was delivered as `009-configuration-contract`, so B-1.1 requires this
+document's plan to say so rather than keep recommending it. The assignment table
+row is rewritten as delivered with its remaining evidence gap named, A5 and A22
+are re-cut around the units `009` now claims, and the register gains F-031
+through F-036 for what the adoption found. F-010 gains a dated disposition: the
+configuration half of it is closed and the other 33 environment reads are not.
+
+`009` records its own defects as `KD-n` and stays authoritative for them; the
+register carries the stable ids. Nothing here repairs any of them, and no
+enforcement setting changed: the `spec-spine.toml` edit `009` required is a
+freshness and denominator declaration, which constitution XII keeps separate
+from enforcement.
+
 **D-7 (2026-09-20, a stale acceptance assertion is replaced, and the class of
 defect is recorded).** Running this spec's acceptance block found it failing at
 command 4, and it fails identically at the unmodified integration head

@@ -873,4 +873,103 @@ mod tests {
             "unexpected error: {err}"
         );
     }
+
+    // Characterization of the TOML configuration contract as it stands. These assert current
+    // behavior, including behavior spec 009 records as a known defect; none of them is a
+    // regression test for a repair. `from_toml_table` does not call `NodeConfig::is_valid`,
+    // which runs at `start.rs:28` instead, so a minimal table parses without node checks.
+    //
+    // Limit: `from_toml_table` calls `dotenvy::dotenv()` and every `t_*` helper prefers an
+    // environment variable over the TOML key, so these assertions hold only where the
+    // corresponding `HQL_*` variables are unset. The keys exercised below either have no env
+    // variable at all (`tls_*_danger_tls_no_verify`, `prepared_statement_cache_capacity`) or
+    // are asserted through an error path that runs before any override.
+    fn cfg_table(extra: &str) -> toml::Table {
+        format!("secret_raft = \"raft-secret-0123456789\"\nsecret_api = \"api-secret-0123456789\"\n{extra}")
+            .parse::<toml::Table>()
+            .unwrap()
+    }
+
+    async fn parse_cfg(extra: &str) -> Result<NodeConfig, Error> {
+        NodeConfig::from_toml_table(
+            cfg_table(extra),
+            "hiqlite",
+            None,
+            #[cfg(any(feature = "s3", feature = "dashboard"))]
+            Some(cryptr::EncKeys::generate().unwrap()),
+        )
+        .await
+    }
+
+    /// `hiqlite.toml` documents `tls_api_danger_tls_no_verify`, and the parser never consumes
+    /// it, so it survives to the unknown-key check and the whole config is rejected. Spec 009
+    /// KD-1.
+    #[tokio::test]
+    async fn documented_tls_api_no_verify_key_is_rejected_as_unknown() {
+        let err = parse_cfg("tls_api_danger_tls_no_verify = true\n")
+            .await
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("Unknown Config data"),
+            "unexpected error: {err}"
+        );
+    }
+
+    /// The API TLS block reads `tls_raft_danger_tls_no_verify` a second time. `t_bool` removes
+    /// the key on the first read, so the second always sees `None` and the API side is always
+    /// `false`. Fail-closed: verification stays on. Spec 009 KD-1.
+    #[tokio::test]
+    async fn tls_api_no_verify_stays_false_when_the_raft_key_is_set() {
+        let cfg = parse_cfg(
+            "tls_raft_key = \"raft.key\"\n\
+             tls_raft_cert = \"raft.pem\"\n\
+             tls_api_key = \"api.key\"\n\
+             tls_api_cert = \"api.pem\"\n\
+             tls_raft_danger_tls_no_verify = true\n",
+        )
+        .await
+        .unwrap();
+
+        assert!(
+            cfg.tls_raft
+                .as_ref()
+                .expect("tls_raft configured")
+                .danger_tls_no_verify(),
+            "the raft side honors the key it reads"
+        );
+        assert!(
+            !cfg.tls_api
+                .as_ref()
+                .expect("tls_api configured")
+                .danger_tls_no_verify(),
+            "the api side cannot be enabled from TOML at all"
+        );
+    }
+
+    /// The two constructors disagree on this default: 1000 here, 1024 in `NodeConfig::default`
+    /// and in `from_env`. `hiqlite.toml` documents 1000 and the `config.rs` doc comment says
+    /// 1024. Spec 009 KD-4.
+    #[tokio::test]
+    async fn prepared_statement_cache_capacity_default_differs_from_the_env_path() {
+        let cfg = parse_cfg("").await.unwrap();
+        assert_eq!(cfg.prepared_statement_cache_capacity, 1000);
+        assert_eq!(
+            NodeConfig::default().prepared_statement_cache_capacity,
+            1024,
+            "the env and Default paths use a different number"
+        );
+    }
+
+    /// `health_check_delay_secs` is settable from TOML and has no environment variable: the
+    /// parser passes an empty `env_var`, so the documented `HQL_HEALTH_CHECK_DELAY_SECS` in
+    /// `hiqlite.env` reaches nothing. Spec 009 KD-2 records the documentation half; this pins
+    /// the half that works.
+    #[tokio::test]
+    async fn health_check_delay_secs_is_settable_from_toml_only() {
+        let cfg = parse_cfg("health_check_delay_secs = 7\n").await.unwrap();
+        assert_eq!(cfg.health_check_delay_secs, 7);
+
+        let default_cfg = parse_cfg("").await.unwrap();
+        assert_eq!(default_cfg.health_check_delay_secs, 30);
+    }
 }

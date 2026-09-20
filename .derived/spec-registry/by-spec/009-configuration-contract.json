@@ -1,0 +1,78 @@
+{
+  "record": {
+    "created": "2026-09-20",
+    "dependsOn": [
+      "000-hiqlite-ownership-bootstrap",
+      "001-wal-durability-and-completion"
+    ],
+    "establishes": [
+      {
+        "kind": "file",
+        "path": "hiqlite/src/config_toml.rs"
+      },
+      {
+        "kind": "file",
+        "path": "hiqlite.toml"
+      },
+      {
+        "kind": "file",
+        "path": "hiqlite.env"
+      }
+    ],
+    "extends": [
+      {
+        "nature": "additive",
+        "spec": "001-wal-durability-and-completion",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/config.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "000-hiqlite-ownership-bootstrap",
+        "unit": {
+          "kind": "file",
+          "path": "spec-spine.toml"
+        }
+      }
+    ],
+    "id": "009-configuration-contract",
+    "implementation": "complete",
+    "kind": "adoption",
+    "origin": {
+      "paths": [
+        "hiqlite/src/config_toml.rs",
+        "hiqlite.toml",
+        "hiqlite.env"
+      ],
+      "retroactive": true
+    },
+    "owner": "hiqlite maintainers",
+    "risk": "high",
+    "sectionHeadings": [
+      "009: Adopt the node configuration contract",
+      "1. Purpose",
+      "2. Territory",
+      "3. Behavior",
+      "B-1. Two constructors, one struct, different failure modes",
+      "B-2. Precedence is environment, then TOML, then default",
+      "B-3. Unknown keys are rejected, with a feature-shaped exception",
+      "B-4. The reference files are the discovery surface, and they are incomplete",
+      "B-5. The environment constructor cannot select the WAL durability mode",
+      "B-6. Encryption keys come from a dependency",
+      "4. Evidence and its limits",
+      "5. Known defects",
+      "6. The inventory declarations this spec requires",
+      "7. Out of scope",
+      "8. Resolved decisions",
+      "Verification"
+    ],
+    "specPath": "specs/009-configuration-contract/spec.md",
+    "status": "draft",
+    "summary": "Adopts hiqlite's node configuration as a contract rather than as a file. Claims the TOML loader, the two shipped reference files, and extends 001's claim on config.rs, so the two constructors and the documentation that describes them are owned together. Records the precedence rule, the per-variable inventory, and five defects found while reading the source. Repairs nothing and changes no runtime behavior.\n",
+    "title": "Adopt the node configuration contract"
+  },
+  "shardHash": "c5a333f1f0a288ea625e736e8a915d560d9195718b751d835cd20f7c6eee4c36",
+  "specVersion": "1.3.0"
+}

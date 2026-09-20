@@ -24,8 +24,12 @@ Measured on 2026-09-19 against `spec-spine` revision
 
 **Reconciled on 2026-09-20** at integration head `58ee7fa`, against the same
 pinned revision, after waves and repairs that this document had recorded as
-proposed were delivered. Measurements from 2026-09-19 are kept where they are
-the baseline a decision was made against, and every restatement is dated. The
+proposed were delivered. Updated again the same day when W-01 was delivered as
+`009-configuration-contract`; coverage moved to 71/228 (31.1%), the denominator
+growing by the two configuration reference files that entered
+`coverage.governed_scope` with them. Measurements from 2026-09-19 are kept
+where they are the baseline a decision was made against, and every restatement
+is dated. The
 current assignment table is section 8; read that, not the wave list, for what is
 actually outstanding.
 
@@ -180,7 +184,7 @@ intentionally excluded.
 | A2 | `hiqlite/src/store/state_machine/sqlite/` (7) | auth | internal SQLite state machine, snapshots, restore | `002` | `sqlite`, `auto-heal`, `backup` | focused storage tests + `self_heal.rs` | F-003 to F-006; cluster test non-completion (F-017) | keep; repairs separately |
 | A3 | `hiqlite/src/client/` (16), `query/` (3), `network/` (8), `server/proxy/stream.rs` | auth | client consistency, retries, transport | `003` | `sqlite`, `cache`, `listen_notify` | focused lib tests | F-007, F-008; no transport-fault test | keep; extend for the proxy in wave 4 |
 | A4 | `hiqlite/src/external_state_machine.rs` | auth | externally committed engine, receipts | `002`, `003` (co-authority) | `external-state-machine` | 5 focused tests | caller boundary held by review | keep |
-| A5 | `hiqlite/src/config.rs` | auth | configuration surface | `001` (file unit) | 20 of 46 `env::var` reads | none focused | F-010, F-020: contract is wider than the file | configuration adoption reclaims it as a contract (W-01) |
+| A5 | `hiqlite/src/config.rs`, `config_toml.rs`, `hiqlite.toml`, `hiqlite.env` | auth | configuration surface | `001` (file unit) + **`009`** (the other three, plus `extends` on `config.rs`), 2026-09-20 | 20 of 46 `env::var` reads in `config.rs`; the TOML loader carries the rest of the contract | 4 characterization tests (`009`) | F-010 narrowed; F-031 to F-036 recorded | delivered (W-01); repairs are separate |
 | A6 | `hiqlite/src/store/state_machine/memory/` (6, 2192 lines) | auth | cache state machine, KV, dlock, TTL, notify | **`006`** (directory unit, 2026-09-19) | `cache`, `dlock`, `counters`, `listen_notify_local`, `in-memory-snapshots` | in-crate tests only | M1 reached; F-025 to F-027 recorded, evidence gaps in `006` section 4 | delivered; evidence and repairs outstanding (W-05, W-08) |
 | A7 | `hiqlite/src/store/logs/` (2, 238 lines) | auth | OpenRaft log-store adapter, memory variant | **`007`** (directory unit, 2026-09-19) | `__cluster` | 2 characterization tests | M1 reached; F-021 to F-024 and F-029 recorded | delivered; contract repair outstanding (W-04) |
 | A8 | `hiqlite/src/init.rs` (907), `start.rs` (334), `app_state.rs`, `split_brain_check.rs` (164) | auth | node lifecycle, join, split-brain observation | **none** | `HQL_DANGER_RAFT_STATE_RESET`, `HQL_SPLIT_BRAIN_INTERVAL` | none focused | F-009, F-011, F-014 | W-02 |
@@ -197,7 +201,7 @@ intentionally excluded.
 | A19 | `hiqlite/tests/cluster/` (16 files, 2295 lines) | auth | integration evidence for A1 to A4 | `002` claims `self_heal.rs` only | `cache_storage_disk=false`; `test-no-s3` | F-017 | W-15 |
 | A20 | `examples/` (6 crates, 35 files) | auth | executable user documentation | **none**; visible since 2026-09-19 | own manifests; `just clippy-examples` | compiled in CI, never claimed | F-015, narrowed | W-16 |
 | A21 | `Cargo.toml`, `Dockerfile`, `.cargo/config`, `.github/workflows/code_style.yaml`, `justfile` release recipes | auth | build, release, packaging, CI | `000` owns `justfile` and the spec-spine workflow | MSRV, feature matrix, `panic = "abort"` | CI is the evidence | the other workflow and the image are unclaimed | W-19 |
-| A22 | `README.md`, `CHANGELOG.md`, `hiqlite.toml`, `hiqlite.env` | auth | user-facing documentation and config reference | **none** | documents `HQL_*` | F-011 | W-01 for the config reference; docs stay on the bypass floor |
+| A22 | `README.md`, `CHANGELOG.md` (`hiqlite.toml` and `hiqlite.env` moved to A5) | auth | user-facing documentation | **none** | narrative docs | F-011 | the config reference half is delivered under W-01; `README.md` and `CHANGELOG.md` stay on the bypass floor |
 | A23 | `LICENSE`, `.gitignore`, `.dockerignore`, `.npmrc`, lockfiles | excl | repository hygiene | `000` owns `.gitignore` | none | none | permanently excluded, except `.gitignore` |
 | A24 | `.derived/` (13) | gen | compiler output | `000` by the authored/derived boundary | determinism | `check` | none | permanently excluded from claims |
 
@@ -714,7 +718,7 @@ scheduled, authorized, or approved by this document.
 
 | id | subject | owning spec today | implementation | evidence | owner decision | depends on | closes when |
 |---|---|---|---|---|---|---|---|
-| W-01 | configuration contract: `config.rs`, `config_toml.rs`, `hiqlite.toml`, `hiqlite.env` (A5, A22) | none; would `extends` `001`'s file unit | not started | none focused | none outstanding | none | the units are claimed and every claimed variable has a stated default, precedence, type, validation, feature guard and failure mode, with an assertion per validation rule |
+| W-01 | configuration contract: `config.rs`, `config_toml.rs`, `hiqlite.toml`, `hiqlite.env` (A5, A22) | **`009-configuration-contract`**, 2026-09-20 | **delivered at M1**: `009` establishes `config_toml.rs`, `hiqlite.toml` and `hiqlite.env` and `extends` `001` on `config.rs`; `spec-spine.toml` gained the freshness and denominator declarations | M2 partly: four characterization tests pin the contract, and `009` section 4 states what they do not reach, notably every environment-route claim, which is source-read only | none outstanding | none | closed at M1. The remaining evidence gap is the environment route, which cannot be tested without process-wide mutation (`009` D-3), and the per-variable validation assertions for the variables other specs will claim |
 | W-02 | node lifecycle and split-brain: `init.rs`, `start.rs`, `app_state.rs`, `split_brain_check.rs` (A8) | none | not started | none focused | OD-3 decided: preserve behavior | W-01 | startup, join, reset, shutdown and task-ownership contracts are stated, with source-described behavior separated from executed evidence |
 | W-03 | transport security material: `tls.rs` (A9) | none | not started | none focused | none outstanding | W-01 | material loading, trust validation and each `DANGER_*` override are specified and tested in every claimed configuration |
 | W-04 | cache log store contract repair: F-021 to F-024 and F-029, and reconciling F-029 into `007` as a KD entry | `007` | not started | two characterization tests, which pin the current behavior including the exclusive purge | none outstanding for the trait mismatch itself | none | the contract matches the locked trait, the replaced acceptance is carried through the governed mechanism rather than left asserting the old outcome, and `007` records or closes the fifth defect |
