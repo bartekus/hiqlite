@@ -1,9 +1,15 @@
 # WAL append and completion error contract: repair proposal
 
-A source-backed proposal for repairing F-001 and F-002. **Nothing here is
-implemented**, and this document changes no runtime behavior. It exists so the
-repair can be authorized against a traced contract rather than a guess, and so
-the one remaining design decision is visible before anyone writes code.
+A source-backed proposal for repairing F-001 and F-002.
+
+**Status, 2026-09-19: implemented.** The repair was authorized and carried out
+under `008-wal-append-completion-notification`, which is the contract. This
+document is kept as the traced analysis the repair was authorized against, with
+seven claims corrected in place below; where it and `008` differ, `008` governs.
+Corrections are marked **Corrected (2026-09-19)** and the original claim is
+stated before the correction, never deleted. One of those corrections was itself
+wrong and is withdrawn in place under the acceptance bullet in section 5, on the
+same rule: the record of what was believed is kept, not deleted.
 
 Traced on 2026-09-19 against the locked dependency graph. Where this document
 says "observed", it was read at source; where it says "inferred", a consequence
@@ -50,9 +56,15 @@ Four properties follow, and all four matter to the repair:
 1. **The error channel already exists.** `log_io_completed` takes
    `Result<(), io::Error>` and forwards `Err(e)` to `RaftCore` at (3). hiqlite is
    not missing an OpenRaft capability; it is discarding one.
-2. **Cardinality is exactly one, enforced by the type.** `log_io_completed`
+2. **Cardinality is at most one, enforced by the type.** `log_io_completed`
    takes `self` by value over a oneshot sender, so it cannot be called twice.
    Calling it zero times is possible and is what F-002 does.
+
+   **Corrected (2026-09-19).** This item originally read "exactly one, enforced
+   by the type". The type enforces only the upper bound. Exactly-once on the
+   specified paths is an implementation obligation that needs code and tests,
+   which is why `008` section 3.3 states it as a requirement scoped to three
+   named paths and section 4 carries the evidence for each.
 3. **Dropping the callback is a third signal.** If `LogFlushed` is dropped
    without being called, its `tx` drops and (2) fires: `RaftCore` gets a
    `StorageIOError` built from a channel-receive error, with no underlying cause.
@@ -112,12 +124,20 @@ Observed: `ack.send(append_result)` forwards the `Err`, then `persist()` runs an
 `writer.rs:483-496` pins this.
 
 Inferred: the adapter maps the ack error and returns `Err` from `append()`, so
-`RaftCore` takes the `?` at (1) and drops `rx`. The success callback then finds
-no receiver, and `log_io_completed` logs "failed to send log io completion event"
-(`callback.rs:41-44`). **`RaftCore`'s view of the log is not corrupted in this
-version.** The defect is a callback contract that cannot express failure plus a
-misleading log line, not a divergent log state. An earlier finding claimed the
-latter; that claim is withdrawn.
+`RaftCore` takes the `?` at (1) and drops `rx`. **`RaftCore`'s view of the log
+is not corrupted in this version.** The defect is a callback contract that
+cannot express failure, not a divergent log state. An earlier finding claimed
+the latter; that claim is withdrawn.
+
+**Corrected (2026-09-19).** This paragraph originally continued: "The success
+callback then finds no receiver, and `log_io_completed` logs 'failed to send log
+io completion event'". That is one of two scheduling-dependent outcomes, not a
+guarantee. Sending the error acknowledgement does not establish that `RaftCore`
+has already resumed from `rx.await` and dropped the receiver: the writer thread
+invokes the callback independently of that task. Either the send succeeds
+against a receiver `RaftCore` never reads, or the receiver is already gone and
+openraft logs the failed send. `RaftCore`'s outcome is the `Err` from
+`append()` either way. `008` section 4.3 states both outcomes.
 
 ### F-002, persistence failure after acknowledgement
 
@@ -173,6 +193,17 @@ success, invoke it with `Ok(())` exactly once.
 notifies and drops, or that returns early before notifying. The repair therefore
 notifies before propagating any error out of `complete_append`.
 
+**Corrected (2026-09-19).** "Per append" is too wide a promise to make without
+tracing every way an append can end. The repair scopes the obligation to three
+specific paths, all of them appends the writer loop dispatched to
+`complete_append`: accepted-and-persisted, rejected, and
+accepted-then-persistence-failed (`008` section 3.1 and 3.3). Cancellations and
+pre-dispatch failures are deliberately **not** covered, and two of them are
+recorded as known defects rather than silently implied to be handled: a failed
+`send_async(Action::Append)` drops the boxed callback uninvoked, and a truncated
+entry stream is indistinguishable from a normal end of stream and is notified as
+a success (`008` KD-1 and KD-2).
+
 What the writer does **after** a persistence failure is the open decision. Three
 options, with the trade-off stated rather than chosen:
 
@@ -191,6 +222,18 @@ options, with the trade-off stated rather than chosen:
 restore correct notification without changing the failure policy, which is what
 the defect is actually about; (b) changes what the node does after a durability
 failure and deserves its own decision and its own evidence.
+
+**Corrected (2026-09-19).** The owner took (a) and rejected (b). (c) was taken
+in substance and not in form, because it conflates two concerns. Error
+*reporting* is the defect: the termination was silent. Retaining and joining a
+`JoinHandle` is *lifecycle management*, and nothing in the crate manages this
+thread's lifecycle, so a handle would exist only to be read. The repair instead
+logs a single `ERROR` at the point the thread closure observes `run`'s `Err`,
+naming the WAL and the cause. That is smaller, needs no new state, and observes
+the one termination the writer can describe: `run` returning `Err`. It does not
+observe a panic inside `run`, an abort, or any other process termination, and
+`008` section 3.6 states that limit rather than widening the runtime to close
+it. `008` section 3.6 and D-2.
 
 ### 4.4 LogSync configurations
 
@@ -225,6 +268,18 @@ callback out; driving it through `RaftLogStorage::append` would add a Raft type
 config and prove nothing extra about the notification. Whether `RaftCore` then
 behaves well on an error notification is OpenRaft's contract, not hiqlite's, and
 must not be claimed as hiqlite evidence (constitution VII).
+
+**Corrected (2026-09-19).** The first two sentences are wrong and the repair did
+not follow them. `hiqlite-wal/src/log_store_impl.rs` is the file that holds the
+defect this document itself calls the root cause, so it is inside the repair
+boundary, and a writer-only test never executes `log_io_completed`: it cannot
+distinguish a correct adapter from one that still substitutes `Ok(())`. The
+repair therefore adds an adapter-level test driving the real
+`RaftLogStorage::append` through `openraft::storage::RaftLogStorageExt::blocking_append`,
+which constructs a real `LogFlushed` and awaits the real completion channel.
+`LogFlushed::new` is `pub(crate)`, so that wrapper is the only route to the real
+type short of running a `Raft` node. The last sentence stands: what `RaftCore`
+does with the notification is still not claimed.
 
 **Demonstration required.** Tests 1 and 2 must be shown failing against the
 current implementation and passing after the repair, and the spec records where
@@ -263,6 +318,31 @@ so the repair touches no unclaimed territory.
   replacement acceptance and state that it supersedes that line. This is a real
   coupling between the two specs' verification blocks and is the main reason the
   repair cannot be done as an unattributed code change.
+
+  **Corrected (2026-09-19).** Two of `001`'s commands are affected, not one:
+  `persistence_failure_suppresses_completion_callback` asserts the suppression
+  that F-002 is, and cannot survive either. The bullet's instinct is right and
+  its mechanism is imprecise: the pinned revision supports acceptance
+  replacement through the `amends_verification` frontmatter key, and the unit it
+  replaces is the **whole `## Verification` block**, not a line. `008` declares
+  it, so `spec-spine verify 001` builds its plan from `008`'s block and prints
+  an attribution line saying so, and `001`'s file is not edited at all. Because
+  replacement is whole-block, `008`'s block carries `001`'s four unaffected
+  commands forward verbatim alongside the two replacements. `008` D-4.
+
+  **An intermediate correction here was wrong and is withdrawn.** It stated that
+  the pinned tool has no per-line supersession and no way to reach `verify`, and
+  concluded that `001`'s executable block had to be edited under a recorded
+  exception. The first half is true and irrelevant (the unit is a block, not a
+  line); the second is false. No exception was taken and none is needed.
+
+- **Ownership edges. Corrected (2026-09-19):** the third bullet above concludes
+  that `extends` "is not needed". It is needed. `000` section 4 requires a spec touching
+  a unit another spec owns to declare a unit-level claim, and a passing coupling
+  result is not compliance with that rule. `008` declares `extends` on
+  `hiqlite-wal/src/` (owned by `001`) and on
+  `hiqlite/src/store/state_machine/sqlite/` (owned by `002`, for the mechanical
+  call-site adaptation the API change forces), in addition to the `amends` edge.
 
 ## 6. What is deliberately not decided here
 

@@ -5,7 +5,7 @@
 pub use crate::writer::LogSync;
 pub use log_store::{LogStore, LogStoreReader};
 pub use shutdown::ShutdownHandle;
-pub use writer::Action;
+pub use writer::{Action, AppendCompletion};
 
 pub mod error;
 mod lockfile;

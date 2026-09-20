@@ -36,6 +36,22 @@ pub enum Error {
     WalSizeExceeded(Cow<'static, str>),
 }
 
+impl Error {
+    /// The `io::Error` form of this error, for OpenRaft's log I/O completion callback.
+    ///
+    /// `LogFlushed::log_io_completed` carries a `Result<(), io::Error>`, while the append
+    /// acknowledgement channel carries the typed `Error`. `Error` is not `Clone`, so a failure
+    /// that has to reach both places is reproduced here rather than moved. An `Error::IO` keeps
+    /// its `io::ErrorKind`; every other variant becomes `ErrorKind::Other` carrying the same
+    /// `Display` text, so the cause survives in both directions.
+    pub fn as_io_error(&self) -> io::Error {
+        match self {
+            Error::IO(err) => io::Error::new(err.kind(), err.to_string()),
+            other => io::Error::other(other.to_string()),
+        }
+    }
+}
+
 impl From<task::JoinError> for Error {
     fn from(err: task::JoinError) -> Self {
         Self::Generic(err.to_string().into())

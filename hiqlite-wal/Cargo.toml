@@ -37,5 +37,12 @@ thread-priority.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 
+[dev-dependencies]
+# `macros` for `#[tokio::test]`; the rest of the feature set comes from the workspace entry.
+tokio = { workspace = true, features = ["macros"] }
+# The writer reports an unexpected termination through `tracing`. Capturing that report is the
+# only way a test can observe it, so the subscriber is a test-only dependency.
+tracing-subscriber.workspace = true
+
 [target.'cfg(target_os = "linux")'.dependencies]
 libc = "0.2"

@@ -211,7 +211,11 @@ where
         let (tx, rx) = flume::bounded(1);
         let (ack, ack_rx) = oneshot::channel();
 
-        let callback = Box::new(move || callback.log_io_completed(Ok(())));
+        // Forward the writer's result verbatim. This closure is the OpenRaft error boundary: it
+        // previously hardcoded `Ok(())`, so no failure the writer knew about could reach
+        // `RaftCore`. It must stay a pure forward.
+        let callback: writer::AppendCompletion =
+            Box::new(move |res| callback.log_io_completed(res));
         self.writer
             .send_async(writer::Action::Append { rx, callback, ack })
             .await
@@ -278,5 +282,88 @@ where
         rx.await.unwrap().map_err(|err| StorageError::IO {
             source: StorageIOError::write_logs(&err),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::writer::fault;
+    use crate::{LogStore, LogSync};
+    use openraft::storage::RaftLogStorageExt;
+    use openraft::testing::blank_ent;
+
+    openraft::declare_raft_types!(
+        pub TestTypeConfig:
+            D = String,
+            R = String,
+            Node = openraft::BasicNode,
+            SnapshotData = tokio::fs::File,
+    );
+
+    async fn start(base: &str) -> LogStore<TestTypeConfig> {
+        let _ = std::fs::remove_dir_all(base);
+        LogStore::<TestTypeConfig>::start(base.to_string(), LogSync::Immediate, 64 * 1024)
+            .await
+            .unwrap()
+    }
+
+    /// The adapter boundary, exercised through the real trait method and the real completion
+    /// channel.
+    ///
+    /// `LogFlushed` has no public constructor in the pinned openraft, so the callback cannot be
+    /// built by a test directly. `RaftLogStorageExt::blocking_append` is openraft's own public
+    /// wrapper: it constructs a real `LogFlushed`, calls `RaftLogStorage::append`, and awaits the
+    /// completion oneshot, mapping both a dropped sender and a notified `Err` into a
+    /// `StorageError`. That makes it the smallest boundary at which hiqlite's adapter can be
+    /// observed end to end without standing up a Raft node.
+    ///
+    /// This is the test that catches an adapter hardcoding `Ok(())`: with the writer reporting
+    /// the injected failure correctly, a hardcoded success would make this append return `Ok`
+    /// even though the flush failed.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn append_adapter_forwards_a_persistence_failure_to_openraft() {
+        let base = "test_data/adapter_persistence_failure";
+        let mut store = start(base).await;
+
+        // The healthy path first: the same channel must report success when nothing fails.
+        store
+            .blocking_append(vec![blank_ent::<TestTypeConfig>(1, 1, 1)])
+            .await
+            .expect("a healthy append must complete successfully");
+
+        let _armed = fault::arm_persistence_failure(base);
+        let err = store
+            .blocking_append(vec![blank_ent::<TestTypeConfig>(1, 1, 2)])
+            .await
+            .expect_err("a persistence failure must reach openraft as an error");
+
+        let reported = format!("{err}");
+        assert!(
+            reported.contains("injected persistence failure"),
+            "openraft must receive the underlying cause, not a closed-channel error; got: \
+            {reported}"
+        );
+    }
+
+    /// An append the writer rejects must not reach openraft as a successful storage call. The
+    /// rejection surfaces on the acknowledgement path, which is what `append` returns.
+    #[cfg(feature = "oversized-entry-error")]
+    #[tokio::test(flavor = "multi_thread")]
+    async fn append_adapter_reports_a_rejected_append_as_an_error() {
+        let base = "test_data/adapter_append_rejection";
+        let mut store = start(base).await;
+
+        let mut oversized = blank_ent::<TestTypeConfig>(1, 1, 1);
+        oversized.payload = openraft::EntryPayload::Normal("x".repeat(128 * 1024));
+
+        let err = store
+            .blocking_append(vec![oversized])
+            .await
+            .expect_err("a rejected append must never report success");
+        assert!(
+            format!("{err}").contains("WalSizeExceeded"),
+            "the rejection cause must survive: {err}"
+        );
     }
 }
