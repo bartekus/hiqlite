@@ -59,16 +59,42 @@ with a named `aspect`, `co_authority` on one genuinely shared) and by
 contradicting no `specs/000` `unamendable` anchor. The constitution is a
 standing statement, so unlike an amended `spec.md` it is edited in place.
 
-Before ratification no spec is `approved`, so that rule has no subject yet. Until
-then the constitution is authored text owned by `specs/000` and is edited in
-place under that ownership, with the coupling gate still requiring an owning
-spec to move in the same range (constitution, Amendment).
+While `specs/000` is `draft`, that rule has no subject and the constitution is
+authored text owned by `specs/000`, edited in place under that ownership, with
+the coupling gate still requiring an owning spec to move in the same range
+(constitution, Amendment).
 
 Ratification is **per spec**, and there is no aggregate corpus-level ratified
-state. The constitution **proposes**, pending an owner decision, that the
-in-place route close per document when the spec establishing it is approved
-(`specs/000` for the constitution, the contract, and the templates; `004` for
-`AGENTS.md`). Treat that as a proposal, not a settled rule.
+state.
+
+**Adopted, owner decision of 2026-09-20: the transition is per document.** What
+closes per document is the **establishing-draft route**, the licence to correct
+a document in place under the ownership of the still-`draft` spec that
+establishes it. It closes when that spec is approved: `specs/000` for the
+constitution, the contract, and the templates subtree; `004` for `AGENTS.md`.
+This is a settled rule, not a proposal. Its scope is those three documents plus
+every file under `standards/spec/templates/`, and not the other units those
+specs own (`ARCHITECTURE.md`, the `justfile`,
+`.github/workflows/spec-spine.yaml`, `spec-spine.toml`, `.gitignore`), which
+keep the ordinary flow.
+
+**In-place editing itself does not stop.** A standing document states what is
+true now and is edited in place before and after the transition alike; what
+changes is whose authority the edit runs on. Afterwards the affected document
+is changed by a **later** spec that claims the affected text as a `section`
+unit of it (`establishes` where that section has no owner, `refines` with a
+named `aspect` or `co_authority` where it has one) and moves in the same range.
+A `section` unit needs a heading the indexer can slug, so template guidance
+that lives in a comment block is claimed at the file unit instead, through the
+same two non-establishing edges. That claim makes the later spec an owning spec
+of the path, which is what the coupling gate requires, so the approved
+establishing spec needs no routine edit to satisfy coupling and is not edited
+for one. A section unit is narrower than the file unit `specs/000` holds, so
+this is not a second origin and not an exception to one-origin-per-unit;
+`extends` stays the edge for adding surface to a unit a predecessor owns. The
+later spec must itself be `approved` to carry the authority; the gate proves
+participation and accepts a `draft` claimant, so that requirement is enforced
+by review, not by the tool.
 
 ## Amending a spec
 
@@ -91,7 +117,8 @@ relationships <amended-id>`.
 | any | `n-a`, `deferred` | no | takes its answer from `status` |
 | `superseded`, `retired` | any | no | takes its answer from `status` |
 
-Every spec in this corpus is `draft`. Draft is never a claim about code, and
+`status` is read per spec, from that spec's own frontmatter; no statement here
+asserts a corpus-wide value for it. Draft is never a claim about code, and
 `implementation: complete` is never a claim about approval. Ratification, merge,
 publication, release, and upstream acceptance are five further, separate things
 (constitution X). Ratification is per spec: approving one spec settles that

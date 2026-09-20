@@ -89,6 +89,6 @@
     "summary": "Repairs F-001 and F-002 by making the WAL writer's log I/O completion notification result-bearing, delivering the underlying cause to OpenRaft before a persistence failure ends the writer, and reporting that termination. The existing fail-stop policy is preserved. Amends 001's append-event, acceptance-boundary, and known-defect sections.\n",
     "title": "Repair the WAL append completion notification contract"
   },
-  "shardHash": "24a9df0e733f3e90114132676428d614bd49505e3cb7a13aa9fee175236235bc",
+  "shardHash": "090382389e0a395a58719414792b70b1607eb8dd68ffee720c43cb446639579c",
   "specVersion": "1.3.0"
 }

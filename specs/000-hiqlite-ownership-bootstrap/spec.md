@@ -52,7 +52,10 @@ It is a retroactive bootstrap over an existing, working repository. hiqlite was
 built before any of this text existed, and the corpus is built to describe it,
 not the other way round.
 
-The spec is `draft`. Nothing in it has been ratified.
+This spec's lifecycle state is its own `status` field and is read there, not
+restated in this prose, so that the document stays accurate through its own
+ratification. Ratification is an owner act (section 10); `implementation:
+complete` is not one.
 
 ## 1. The constitutional hierarchy
 
@@ -79,24 +82,80 @@ binds the corpus as drafted; it takes final force when an owner ratifies the
 spec.
 
 The same applies to tiers 2 and 3. The constitution's Amendment section requires
-an `approved` spec to change it, and no spec in this corpus is approved yet, so
-before ratification that rule has no subject. Until then the constitution, the
-contract, and the templates are authored text this spec establishes and owns,
-and they are corrected in place under that ownership: an edit to any of them
-still needs an authoring edit to an owning spec in the same range, so the
-coupling gate still refuses a silent one.
+an `approved` spec to change it. While this spec is `draft` that rule has no
+subject, and the constitution, the contract, and the templates are authored text
+this spec establishes and owns, corrected in place under that ownership: an edit
+to any of them still needs an authoring edit to an owning spec in the same
+range, so the coupling gate still refuses a silent one.
 
 Ratification is **per spec**: `status` is per-spec frontmatter, approving a spec
 settles that spec, and there is no aggregate state in which the corpus as a whole
 becomes ratified. No document here may invoke one, and partial ratification is
 the normal case.
 
-The constitution's Amendment section additionally **proposes**, as a policy
-choice awaiting an owner decision, that the in-place route close per document
-when the spec establishing it is approved: this spec for the constitution, the
-contract, and the templates; `004` for `AGENTS.md`. That proposal is recorded
-there rather than frozen here, and this spec's `unamendable` anchors do not
-include it.
+### 1.1 The per-document transition, adopted
+
+The owner decided on **2026-09-20** to adopt the transition the constitution had
+recorded as a proposal. What closes, per document, is the **establishing-draft
+route**: the licence section 1 grants to correct a document in place under the
+ownership of the still-`draft` spec that establishes it. It closes at the moment
+the owner sets `status: approved` on that establishing spec: this spec for
+`standards/spec/constitution.md`, `standards/spec/contract.md`, and
+`standards/spec/templates/`; `004` for `AGENTS.md`. The rule now lives in the
+constitution's Amendment section and in `standards/spec/contract.md`; this
+section records the decision and its bounds.
+
+**In-place editing does not stop; its authority changes.** These are standing
+documents: they state what is true now, so they are edited in place before and
+after the transition alike, and none of them freezes when this spec is approved.
+What changes is whose authority each edit runs on, from this spec's ownership
+while it is `draft` to an approved later spec's claim on the affected text.
+
+**It is bounded to three documents and one subtree**, namely
+`standards/spec/constitution.md`, `standards/spec/contract.md` and `AGENTS.md`,
+plus every file under `standards/spec/templates/`: today `spec-template.md` and
+`constitution-template.md`, and any template added later, because the unit this
+spec establishes there is the subtree and not a file list. Approving this spec
+closes nothing for the other units it establishes: `ARCHITECTURE.md`, the
+`justfile`, `.github/workflows/spec-spine.yaml`, `spec-spine.toml`, and
+`.gitignore`. Those are code, configuration, and build inputs. They change for
+reasons unrelated to constitutional authority, and they keep the ordinary flow
+with the defense they have today, which is the coupling gate plus review. The
+same bound applies to `004`: the policy reaches `AGENTS.md`, not `004`'s
+`extends` claims on the `justfile` and the workflow.
+
+**After the transition, no routine edit to this spec is needed.** A later spec
+claims the affected text as a `section` unit of the document: `establishes`
+where no spec owns that section yet, `refines` with a named `aspect` where one
+does and the later spec tightens it, `co_authority` where the text becomes
+genuinely shared. Template guidance that carries no sluggable heading is claimed
+at the file unit instead, through the same two non-establishing edges. That
+claim makes the later spec an owning spec of that path, and its own authoring
+edit in the same range is what `spec-spine couple` requires. This spec does not
+move, and no exception, waiver, or contradiction is involved: the gate's rule is
+unchanged, and the later spec simply satisfies it on its own claim.
+
+This is consistent with **one origin per unit** (section 4), because the units
+differ: this spec holds the `file` and `directory` units, and a `section` unit
+of one of those files is narrower and separate. `extends` remains the ordinary
+edge for adding surface to a unit this spec already owns, and it is what the
+units outside the policy keep using. A duplicate `establishes` declared merely
+to satisfy coupling is refused under section 6, whatever document it targets.
+
+**The gate proves participation; the owner provides authority.** Both halves
+were measured against the pinned revision rather than assumed. A spec that
+claims a `section` unit of `standards/spec/constitution.md` and moves in the
+same range satisfies the coupling gate **at any `status`, `draft` included**;
+editing that file with no owning spec moving is refused with `C-001
+'standards/spec/constitution.md' changed without an authoring edit to any owning
+spec`. So the requirement that the claiming spec be `approved` is a review
+obligation under section 6 and constitution X, enforced by a human and not by a
+tool. A `draft` claiming spec that edits one of the documents in scope after its
+establishing spec is approved is a governed-flow violation that passes CI, and
+review is the control that catches it.
+
+This spec's `unamendable` anchors do not include the policy, which stays
+revisable through the normal governed flow.
 
 ## 2. Authored truth and derived truth
 
@@ -152,11 +211,23 @@ frontmatter and the authority units it owns, and authority over any unit is
 
 Eight edges: `establishes` (first brings a unit into being), `extends` (adds
 surface to a predecessor), `refines` (tightens a named aspect), `supersedes`
-(replaces a predecessor and inherits its current authority), `amends` (patches a
-predecessor in place, granting co-authority over its `spec.md`), `co_authority`
+(replaces a predecessor and inherits its current authority), `amends` (grants
+the amending spec co-authority over a predecessor's `spec.md`), `co_authority`
 (a genuinely shared unit), `constrains` (an invariant others must respect), and
 `references`, which is the only non-owning edge and which the coupling gate
 ignores.
+
+**`amends` does not edit the amended document.** An earlier revision glossed it
+as patching "a predecessor in place", which reads as an edit to the amended
+`spec.md` and contradicts `standards/spec/contract.md`, "Amending a spec": the
+edge is declared once, in the amending spec's frontmatter, and the amended
+`spec.md` is **not** edited to record that it has been amended. Its text stays
+the contract as it stood, and the inbound view is `spec-spine registry
+relationships <amended-id>`. "In place" belongs to a standing document such as
+the constitution, which is edited in place because it states what is true now; a
+ratified `spec.md` is a historical record and is not. `008` exercises the edge
+against `001`, including acceptance replacement through `amends_verification`,
+and `001`'s file is unchanged by it.
 
 `origin` is a bootstrap marker, not an edge.
 
@@ -278,7 +349,9 @@ Seven states, never collapsed: *(anchor: `lifecycle-words-are-distinct`)*
 - **Release**: a versioned, tagged distribution.
 - **Upstream acceptance**: a decision by the upstream project.
 
-Every spec in this corpus is `draft`. No spec ratifies another spec.
+`status` is read per spec, from that spec's own frontmatter. This document
+asserts no corpus-wide value for it, so that it stays true through partial
+ratification. No spec ratifies another spec.
 
 `implementation` is measured against the obligations a spec places on **this
 tree**, and against nothing else. A clause that states a conditional policy for
@@ -315,9 +388,13 @@ The pilot consists of this bootstrap and:
 the `justfile` and workflow units established here. It does not re-establish
 them, and it does not replace this spec's ownership of them.
 
-All five are `draft` and retroactive. `implementation: complete` on this spec
-says its claimed units exist and its acceptance block passes against the tree.
-It does not mean approved, ratified, published, or released.
+All five are **retroactive**: the code and the governance artifacts existed
+before the text that adopts them. That is a historical fact about their origin
+and it does not change when a spec is approved. Their **current** lifecycle
+state is a separate question, read per spec from its own `status`, and it is not
+restated here. `implementation: complete` on this spec says its claimed units
+exist and its acceptance block passes against the tree. It does not mean
+approved, ratified, published, or released.
 
 ### 12.1 The inventory configuration, and what each key actually does
 
