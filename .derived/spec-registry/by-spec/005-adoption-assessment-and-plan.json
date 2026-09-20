@@ -1,0 +1,69 @@
+{
+  "record": {
+    "created": "2026-09-19",
+    "dependsOn": [
+      "000-hiqlite-ownership-bootstrap",
+      "004-governance-harness"
+    ],
+    "establishes": [
+      {
+        "kind": "file",
+        "path": "standards/spec/adoption-plan.md"
+      },
+      {
+        "kind": "file",
+        "path": "standards/spec/findings-register.md"
+      },
+      {
+        "kind": "file",
+        "path": "standards/spec/wal-repair-proposal.md"
+      }
+    ],
+    "id": "005-adoption-assessment-and-plan",
+    "implementation": "complete",
+    "kind": "governance",
+    "origin": {
+      "retroactive": false
+    },
+    "owner": "hiqlite maintainers",
+    "references": [
+      {
+        "role": "context",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/constitution.md"
+        }
+      },
+      {
+        "role": "context",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/contract.md"
+        }
+      }
+    ],
+    "risk": "low",
+    "sectionHeadings": [
+      "005: Record the whole-project assessment and the proposed adoption plan",
+      "1. Purpose",
+      "2. Territory",
+      "3. Behavior",
+      "B-1. The plan records a proposal, and says so in its own text",
+      "B-2. The three milestones stay apart",
+      "B-3. Findings carry stable identifiers and separate observation from inference",
+      "B-4. External ownership is described, never claimed",
+      "B-5. Generated output is governed through its source and its build",
+      "4. Evidence and its limits",
+      "5. Known defects",
+      "6. Out of scope",
+      "7. Resolved decisions",
+      "Verification"
+    ],
+    "specPath": "specs/005-adoption-assessment-and-plan/spec.md",
+    "status": "draft",
+    "summary": "Owns the two assessment documents under standards/spec: a reconciled whole-project inventory with a dependency-ordered adoption proposal, and a source-backed findings register with stable identifiers. Records what was measured and what is proposed. It adopts nothing, schedules nothing, enables no gate, and claims no territory outside the two documents.\n",
+    "title": "Record the whole-project assessment and the proposed adoption plan"
+  },
+  "shardHash": "5b4a092644dbd3e780d30c72ad69ec1c4f009275eaa5e72d04013d3e76b3a486",
+  "specVersion": "1.3.0"
+}

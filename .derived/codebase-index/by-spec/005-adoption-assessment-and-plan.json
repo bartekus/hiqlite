@@ -1,19 +1,20 @@
 {
   "mapping": {
     "dependsOn": [
-      "000-hiqlite-ownership-bootstrap"
+      "000-hiqlite-ownership-bootstrap",
+      "004-governance-harness"
     ],
     "implementingPaths": [
       {
-        "path": ".github/workflows/spec-spine.yaml",
+        "path": "standards/spec/adoption-plan.md",
         "source": "spec-edge"
       },
       {
-        "path": "AGENTS.md",
+        "path": "standards/spec/findings-register.md",
         "source": "spec-edge"
       },
       {
-        "path": "justfile",
+        "path": "standards/spec/wal-repair-proposal.md",
         "source": "spec-edge"
       }
     ],
@@ -21,40 +22,40 @@
       {
         "locations": [
           {
-            "file": "AGENTS.md"
+            "file": "standards/spec/adoption-plan.md"
           }
         ],
         "ownership": true,
         "sourceField": "establishes",
         "unit": {
           "kind": "file",
-          "path": "AGENTS.md"
+          "path": "standards/spec/adoption-plan.md"
         }
       },
       {
         "locations": [
           {
-            "file": ".github/workflows/spec-spine.yaml"
+            "file": "standards/spec/findings-register.md"
           }
         ],
         "ownership": true,
-        "sourceField": "extends",
+        "sourceField": "establishes",
         "unit": {
           "kind": "file",
-          "path": ".github/workflows/spec-spine.yaml"
+          "path": "standards/spec/findings-register.md"
         }
       },
       {
         "locations": [
           {
-            "file": "justfile"
+            "file": "standards/spec/wal-repair-proposal.md"
           }
         ],
         "ownership": true,
-        "sourceField": "extends",
+        "sourceField": "establishes",
         "unit": {
           "kind": "file",
-          "path": "justfile"
+          "path": "standards/spec/wal-repair-proposal.md"
         }
       },
       {
@@ -84,9 +85,9 @@
         }
       }
     ],
-    "specId": "004-governance-harness",
+    "specId": "005-adoption-assessment-and-plan",
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "6783b0fadc44c802df97d43d619e648fc0dd6c01677317bef6451edf85ea5e0f"
+  "shardHash": "897ce9d94133c949e0701f7efe16aff0cc6da159b81761fc7b56e4668cfc7d28"
 }
