@@ -351,6 +351,20 @@ spec's `status` untouched. The rule itself is stated in the constitution's
 Amendment section and summarized in `standards/spec/contract.md`; `AGENTS.md`
 carries the operating pointer.
 
+**D-6 (2026-09-20, the corpus table lists the corpus, not the pilot).**
+`AGENTS.md` carried a five-row table headed "The corpus" listing `000` through
+`004`. That was the whole corpus when it was written and has not been since
+`005` merged; a reader following the table would have concluded that `005`
+through `008` do not exist. The table now lists all nine specs and labels
+`000` through `004` as the initial pilot, which is the distinction constitution
+VI actually needs: pilot membership is a historical fact about origin, while
+corpus membership is current and changes whenever a spec merges.
+
+The pointer to `spec-spine registry list` is kept and strengthened, because a
+hand-maintained table is a copy and will go stale again. This spec owns
+`AGENTS.md` and therefore records the change; the reconciliation it belongs to
+is `005` D-6, which moves the assessment records in the same change.
+
 ## Verification
 
 ```verify:cli

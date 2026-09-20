@@ -78,6 +78,6 @@
     "summary": "The loop that operates the hiqlite governance corpus: AGENTS.md as the single cross-agent protocol authority, the justfile recipes that are the only sanctioned entry points to spec-spine, the read-only pull-request CI job, and the policy any future session hook must satisfy. Relates to the bootstrap by depends_on and by extends edges on the two units the bootstrap established; it does not re-establish them and does not replace the bootstrap's ownership.\n",
     "title": "Operate the governance corpus: agent protocol, commands, hooks, and CI"
   },
-  "shardHash": "0679fe3e0fb7d2640d0004eb544415b5808f7dcb753214444d560af17d88e84e",
+  "shardHash": "2d2ba72d6b26bb1863672c8f577971075d3ac9325e45b7b1df660947f1e3556e",
   "specVersion": "1.3.0"
 }

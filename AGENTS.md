@@ -46,15 +46,21 @@ Authority, highest wins:
 
 This is an authority ordering, not a statement about Git history or merge order.
 
-The corpus:
+The corpus. `000` through `004` are the **initial pilot**; the rest were added
+afterwards and are not retroactive by default. `spec-spine registry list` is the
+authority for what exists.
 
 | id | what it governs |
 |---|---|
-| `000-hiqlite-ownership-bootstrap` | what a spec is here, the ownership boundaries, the adoption scope, the workflow |
-| `001-wal-durability-and-completion` | WAL append acknowledgement, persistence, completion |
-| `002-snapshot-publication-and-recovery` | snapshot publication, restore, recovery integration |
-| `003-client-consistency-and-retry-outcomes` | client consistency and retry outcomes |
-| `004-governance-harness` | this protocol, the commands, hook policy, CI |
+| `000-hiqlite-ownership-bootstrap` | pilot: what a spec is here, the ownership boundaries, the adoption scope, the workflow |
+| `001-wal-durability-and-completion` | pilot: WAL append acknowledgement, persistence, completion |
+| `002-snapshot-publication-and-recovery` | pilot: snapshot publication, restore, recovery integration |
+| `003-client-consistency-and-retry-outcomes` | pilot: client consistency and retry outcomes |
+| `004-governance-harness` | pilot: this protocol, the commands, hook policy, CI |
+| `005-adoption-assessment-and-plan` | the whole-project assessment, the adoption plan, the findings register (`origin.retroactive: false`) |
+| `006-cache-state-machine` | the cache state machine, KV, dlock, TTL, notify |
+| `007-cache-log-store` | the OpenRaft log-store adapter and its memory variant |
+| `008-wal-append-completion-notification` | the WAL append completion repair; `amends` `001` and holds its acceptance |
 
 **Read `status` per spec, from that spec's own frontmatter.** This file asserts
 no corpus-wide lifecycle value, because ratification is per spec and partial
