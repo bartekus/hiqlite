@@ -1,0 +1,10 @@
+{
+  "package": {
+    "kind": "npm-package",
+    "name": "dashboard",
+    "path": "dashboard",
+    "version": "0.0.1"
+  },
+  "schemaVersion": "1.1.0",
+  "shardHash": "c9ef6f68feb7aac20cb8f92a523f7466fcf9982e4c458728c2aa03b4ed06fce1"
+}

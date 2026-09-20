@@ -1,0 +1,11 @@
+{
+  "package": {
+    "edition": "2021",
+    "kind": "rust-bin",
+    "name": "walkthrough",
+    "path": "examples/walkthrough",
+    "version": "0.1.0"
+  },
+  "schemaVersion": "1.1.0",
+  "shardHash": "b78c6c3570cd4e55fbadb735df092a0a9a294de7036a0c2e733e3a5f3fcc3a04"
+}

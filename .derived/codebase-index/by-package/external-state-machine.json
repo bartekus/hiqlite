@@ -1,0 +1,11 @@
+{
+  "package": {
+    "edition": "2021",
+    "kind": "rust-bin",
+    "name": "external-state-machine",
+    "path": "examples/external-state-machine",
+    "version": "0.1.0"
+  },
+  "schemaVersion": "1.1.0",
+  "shardHash": "61039b8b0bac4f35446874bc20add3260fa04f2fd3c2dd72c2dc3edcbd2d49f3"
+}

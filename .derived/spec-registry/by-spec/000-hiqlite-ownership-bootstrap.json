@@ -63,6 +63,7 @@
       "10. Lifecycle words are distinct",
       "11. Fork governance is local",
       "12. Adoption scope",
+      "12.1 The inventory configuration, and what each key actually does",
       "13. What each mechanism actually enforces",
       "13.1 The coupling bypass floor, and what overrides it",
       "14. Governance workflow",
@@ -89,6 +90,6 @@
       "fork-governance-boundary"
     ]
   },
-  "shardHash": "faf9202cae178372f34e86e87b39ab20294ad902f469cb21b800f5cf9ac996e0",
+  "shardHash": "e965c010c5660ff1e3b7aab9e117fa25dd33b8cba507cd3188d2d1a74b8117d9",
   "specVersion": "1.3.0"
 }

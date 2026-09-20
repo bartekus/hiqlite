@@ -62,56 +62,86 @@ without an acceptance block that can fail is not.
 
 ### 2.1 The denominator, reconciled
 
-`spec-spine index coverage` reports **57 of 131 source files specifically
-claimed (43.5%)**. The repository tracks **333 files**. The two numbers describe
-different sets, and the gap is configuration, not neglect.
+**Rung 0 is done.** The inventory configuration was corrected on 2026-09-19 after
+probing the pinned tool in an isolated checkout; `000` section 12.1 records what
+each key actually does. Numbers below are after that change.
 
-| in the 131 | files | claimed |
+| | before | after |
 |---|---|---|
-| `hiqlite` package: 97 `.rs` + 12 generated `.js` under `hiqlite/static` | 109 | 38 |
-| `hiqlite-wal` package `.rs` | 11 | 11 |
-| `hiqlite-derive` package `.rs` | 3 | 0 |
-| declared `coverage.governed_scope`: `ARCHITECTURE.md`, `justfile`, `spec-spine.toml`, `AGENTS.md`, `standards/spec/**/*.md` | 8 | 8 |
-| **total** | **131** | **57** |
+| denominator | 134 | **226** |
+| specifically claimed | 60 | **60** |
+| reported share | 44.8% | **26.5%** |
+| packages discovered | 3 | **10** |
 
-The 202 tracked files the denominator omits:
+**The share fell because the denominator grew, not because anything was
+unclaimed that was claimed before.** The numerator is unchanged at 60. This is
+the clearest available demonstration that a coverage percentage measures a
+configured set, not progress.
+
+Where the 92 new denominator files come from:
+
+| added | files | mechanism |
+|---|---|---|
+| `dashboard` `.ts` and `.js` | 24 | `standalone_npm_packages = ["dashboard"]` |
+| example crate `.rs` | 7 | `standalone_rust_workspaces`, six crates |
+| authored dashboard `.svelte`, `.css`, `.html`, build configs, and example `.sql` and `Cargo.toml` | 61 | `coverage.governed_scope` globs |
+
+The 45 `.svelte` files reach the denominator only through the third row: the
+pinned npm walk counts `.ts` and `.js` and nothing else. All of the above are
+also in `index.extra_hashed_inputs`, which is a **separate** mechanism that
+affects freshness and no denominator; without it a byte change in newly governed
+source would leave the committed index reporting `fresh`.
+
+The denominator, reconciled against `git ls-files` (339 tracked):
+
+| in the 226 | files |
+|---|---|
+| `hiqlite` package: 97 `.rs` + 12 generated `.js` | 109 |
+| `hiqlite-wal` `.rs` | 11 |
+| `hiqlite-derive` `.rs` | 3 |
+| `dashboard` package `.ts` + `.js` | 24 |
+| six example crates `.rs` | 7 |
+| declared scope (`coverage.governed_scope`) | 72 |
+| **total** | **226** |
+
+The 113 tracked files outside it:
 
 | omitted | files | why |
 |---|---|---|
-| `dashboard/` | 81 | `npm_workspaces` names root `package.json` and `pnpm-workspace.yaml`; neither exists, the manifest is `dashboard/package.json`, and `standalone_npm_packages` is empty (F-016) |
-| `examples/` | 35 | workspace-excluded in `Cargo.toml:4` and `standalone_rust_workspaces` is empty (F-015) |
-| `hiqlite/` non-source | 51 | 18 `.gz`, 18 `.br`, 6 `.sql`, 4 `.css`, and one each `.toml`, `.png`, `.md`, `.json`, `.html` |
-| `.derived/` | 13 | compiler output, correctly excluded |
+| `hiqlite/static` compressed and binary output | 43 | generated; `.gz`, `.br`, `.css`, `.png`, `.json`, `.html` |
+| `examples/` non-source | 17 | lockfiles, configs, `.gitignore`, README |
+| `.derived/` | 15 | compiler output, correctly excluded |
 | root files outside `governed_scope` | 9 | `Cargo.toml`, `Dockerfile`, `hiqlite.toml`, `hiqlite.env`, `README.md`, `CHANGELOG.md`, `LICENSE`, `.gitignore`, `.dockerignore` |
-| `specs/` | 5 | the corpus itself, not its subject |
-| `.github/`, `.cargo/`, non-`.rs` in the two smaller crates | 8 | outside every declared scope |
-| **total omitted** | **202** | |
+| `hiqlite/tests/cluster/migrations` `.sql` fixtures | 6 | test data |
+| `specs/` | 6 | the corpus itself, not its subject |
+| `dashboard/` other and binary assets | 7 | `.npmrc`, lockfile, `.gitignore`, `.wasm`, `.png` |
+| `.github/` | 3 | two workflows plus `FUNDING.yml` |
+| crate manifests, READMEs, `.cargo/config.toml` | 7 | manifests and docs |
+| **total** | **113** |
 
-These figures describe integration head `2d58a32`, before this document and the
-findings register existed. Adding the two of them, both claimed by
-`005-adoption-assessment-and-plan`, moves the reported figure to **59 of 133
-(44.4%)**, with the declared governance scope at 10 of 10 claimed. The rise is
-two new governance documents that arrived with an owner, not two source files
-that became governed, which is the distinction constitution XII draws and a
-worked example of why a coverage percentage is not a progress metric.
+**Known distortion, not fixable by configuration.** 12 of the 109 files in the
+`hiqlite` package row are generated `.js` under `hiqlite/static`. No probed key
+removes package-discovered source from the denominator, so those 12 are
+permanently unclaimed and the reported figure is understated by exactly that
+much. Quote the number with this sentence attached.
 
-**What the percentage means.** 43.5% is the share of a configured denominator
+**What the percentage means.** 26.5% is the share of a configured denominator
 that some spec names. It is not test coverage and not behavioral completeness.
 
-An earlier revision also quoted "57 of 333, about 17%" as a share of the
-repository. That figure is **withdrawn**: its numerator is the count of claims
-resolved inside the 131-file denominator, and it was never reconciled against the
-other 202 tracked paths, several of which (`AGENTS.md`, `justfile`, `.gitignore`,
-`spec-spine.toml`, `standards/spec/**`) *are* claimed while others can never be.
-Dividing one set's numerator by another set's denominator produces a number that
-means nothing. No repository-wide ownership percentage is quoted here until every
-tracked path has been independently resolved to an owner or to a recorded
-exclusion, which is work item 1 of rung 0.
+An earlier revision also quoted a repository-wide "about 17%". That figure is
+**withdrawn**: its numerator was resolved inside the package denominator and was
+never reconciled against the other tracked paths, several of which are claimed
+while others can never be. No repository-wide ownership percentage is quoted
+here until every tracked path is independently resolved to an owner or to a
+recorded exclusion.
 
-What can be said without that reconciliation: the denominator currently
-**includes** 12 minified build-output files and **excludes** all 81 authored
-dashboard files, so correcting it (section 5) precedes quoting any coverage
-figure as progress.
+**Third-party, generated, and authored are kept apart.** `dashboard/src/spow/`
+(5 files: wasm bindings and their declarations) is vendored third-party and is
+hashed, so drift is detected, but no spec will claim it. `hiqlite/static` is
+generated. Everything else under `dashboard/src` and `examples/*/src` is
+first-party authored source and none of it is hidden by an exclusion: there are
+no entries in `governed_scope_exclusions`, and `resolver_exclusions` is
+unchanged from its defaults.
 
 ### 2.2 Areas
 

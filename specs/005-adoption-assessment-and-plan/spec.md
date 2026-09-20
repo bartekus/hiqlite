@@ -201,6 +201,18 @@ not obligations of this spec. Marking it `in-progress` would repeat the error
 `004` D-4 corrected: reading a spec's description of future possibility as
 unmet implementation debt.
 
+**D-4 (2026-09-19, the inventory configuration was corrected, and the plan's
+numbers with it).** The owner placed the dashboard and the examples in the
+adoption target, so `spec-spine.toml` now declares them and the plan's section
+2.1 is rewritten against the result: denominator 134 to 226, numerator unchanged
+at 60, reported share 44.8% to 26.5%. The share fell because the denominator
+grew. That is recorded in the plan as the clearest available demonstration that
+the figure measures a configured set rather than progress.
+
+The configuration itself is owned by `000`, which records the probed semantics
+in its section 12.1. This spec records only that the plan's measurements were
+updated to match, which is why both files move in the same change.
+
 ## Verification
 
 ```verify:cli

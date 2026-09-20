@@ -1,0 +1,11 @@
+{
+  "package": {
+    "edition": "2024",
+    "kind": "rust-bin",
+    "name": "derive-complex-types",
+    "path": "examples/derive-complex-types",
+    "version": "0.1.0"
+  },
+  "schemaVersion": "1.1.0",
+  "shardHash": "7a9f88bd4299e9ce272f98c10fe83bddbede89b551a0533773ad2e89926c87fd"
+}

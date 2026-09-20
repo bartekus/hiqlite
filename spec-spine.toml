@@ -11,8 +11,18 @@ standards_dir = "standards/spec"
 schemas_dir = "standards/schemas"
 cargo_workspace = "Cargo.toml"
 npm_workspaces = ["package.json", "pnpm-workspace.yaml"]
-standalone_rust_workspaces = []
-standalone_npm_packages = []
+standalone_rust_workspaces = [
+  # Workspace-excluded example crates (Cargo.toml `exclude = ["examples"]`).
+  # Declaring them puts their .rs files in the coverage denominator; it does
+  # not hash them, which is why the globs below exist too.
+  "examples/bench",
+  "examples/cache-only",
+  "examples/derive-complex-types",
+  "examples/external-state-machine",
+  "examples/sqlite-only",
+  "examples/walkthrough",
+]
+standalone_npm_packages = ["dashboard"]
 
 [index]
 # These are the bounded pilot's contract-bearing implementation and workflow bytes.
@@ -38,6 +48,28 @@ extra_hashed_inputs = [
   # index the same way a source change does.
   "AGENTS.md",
   "standards/spec/**/*.md",
+  # Authored dashboard source and its build configuration. Declaring the npm
+  # package above puts its .ts and .js files in the coverage denominator, but
+  # the pinned indexer does not treat .svelte as package source, and package
+  # declaration does not feed the freshness hash at all. These globs cover both
+  # gaps: every authored dashboard file is hashed, and the ones the package
+  # walk misses enter the denominator through the declared scope.
+  "dashboard/src/**/*.svelte",
+  "dashboard/src/**/*.ts",
+  "dashboard/src/**/*.js",
+  "dashboard/src/**/*.css",
+  "dashboard/src/**/*.html",
+  "dashboard/package.json",
+  "dashboard/svelte.config.js",
+  "dashboard/vite.config.ts",
+  "dashboard/tsconfig.json",
+  "dashboard/playwright.config.ts",
+  "dashboard/tests/**/*.ts",
+  # Example inputs the Rust package walk does not cover. The .rs files are
+  # already covered by the standalone workspace declarations above; adding them
+  # here as well would be redundant.
+  "examples/*/migrations/*.sql",
+  "examples/*/Cargo.toml",
 ]
 resolver_exclusions = ["target", "node_modules", ".derived", "dist", "build", ".next"]
 slices = {}
@@ -61,6 +93,28 @@ governed_scope = [
   "spec-spine.toml",
   "AGENTS.md",
   "standards/spec/**/*.md",
+  # Authored dashboard source and its build configuration. Declaring the npm
+  # package above puts its .ts and .js files in the coverage denominator, but
+  # the pinned indexer does not treat .svelte as package source, and package
+  # declaration does not feed the freshness hash at all. These globs cover both
+  # gaps: every authored dashboard file is hashed, and the ones the package
+  # walk misses enter the denominator through the declared scope.
+  "dashboard/src/**/*.svelte",
+  "dashboard/src/**/*.ts",
+  "dashboard/src/**/*.js",
+  "dashboard/src/**/*.css",
+  "dashboard/src/**/*.html",
+  "dashboard/package.json",
+  "dashboard/svelte.config.js",
+  "dashboard/vite.config.ts",
+  "dashboard/tsconfig.json",
+  "dashboard/playwright.config.ts",
+  "dashboard/tests/**/*.ts",
+  # Example inputs the Rust package walk does not cover. The .rs files are
+  # already covered by the standalone workspace declarations above; adding them
+  # here as well would be redundant.
+  "examples/*/migrations/*.sql",
+  "examples/*/Cargo.toml",
 ]
 governed_scope_exclusions = []
 
