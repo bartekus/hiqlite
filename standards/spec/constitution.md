@@ -78,10 +78,19 @@ prompt-time defense. *(Bootstrap anchor: `refusal-rule`.)*
 
 ## VI. Adopted code is specced as found
 
-Every spec in this corpus is retroactive. hiqlite existed, and worked, before
-any of it was written. A spec that claims authority over pre-existing code
-declares `origin.retroactive: true` and then describes the behavior that is
-actually there, including the behavior it would not have chosen.
+A spec that claims authority over pre-existing code declares
+`origin.retroactive: true` and then describes the behavior that is actually
+there, including the behavior it would not have chosen. hiqlite existed, and
+worked, before any of this corpus was written, so every spec in it today,
+`000` through `004`, is retroactive.
+
+That is a fact about the corpus as it stands, not a requirement on what may be
+written next. `origin.retroactive` records when authority began. A future spec
+whose subject does not yet exist states that truthfully, declares the territory
+it will own (`planned: true` on a unit that is not yet written), and does not
+claim a retroactive origin it does not have. Misdeclaring origin to match the
+shape of the existing corpus would corrupt the one field that answers whether
+the text or the code came first.
 
 Behavior the spec would not have chosen is recorded under a **known-defects**
 heading, named, and left unfixed by that spec. Recording a defect does not bless
@@ -95,7 +104,20 @@ The heading is identified by its computed slug: `known-defects`, or any slug
 ending in `-known-defects`, at any level. `## Known defects` and
 `## 6. Known defects` both name the section; `## Known defects and open
 questions` does not, because a section that continues past the anchor is about
-something wider.
+something wider. A heading that names something else entirely, such as "Known
+limitations and follow-up", does not name this section at all, and entries that
+belong under it are reclassified into a recognized heading rather than left
+where a consumer cannot find them.
+
+**Ratifying a defect record is not endorsing the defect.** An approved spec that
+carries a known-defects section says the description was accurate for the code
+as adopted and that the defect was known when authority attached. It does not
+declare the behavior desirable, it does not make the behavior a requirement, and
+it does not bar a repair. A repair is an ordinary governed change: a later spec
+that `refines`, `amends`, or `supersedes` the adopting spec, carrying the
+behavior change and its own evidence. Nothing here makes a recorded defect
+harder to fix than an unrecorded one; the record is what lets the repair be
+reviewed against a stated baseline instead of against memory.
 
 ## VII. OpenRaft owns consensus; hiqlite owns its side of the trait boundary
 
@@ -167,10 +189,32 @@ branch; they never name upstream.
 
 ## XII. Bounded adoption is a declared state, not a defect
 
-This corpus deliberately governs part of the repository. `coupling.require_ownership`
-is off, so unclaimed source is migration debt that `spec-spine index coverage`
-reports rather than a repository-wide refusal. The bound is recorded in the
-bootstrap spec and is widened by an explicit adoption decision, not by drift.
+This corpus deliberately governs part of the repository. Three different things
+are routinely collapsed into the word "adoption", and no document may cite one
+of them as evidence for another:
+
+- **Current coverage** is a measurement. `spec-spine index coverage` reports
+  which files in its indexed denominator a spec specifically claims, at the
+  moment it runs. It is a fact about the ledger and never a statement about test
+  coverage or behavioral completeness: a claimed file may be only partly
+  specified, and an unclaimed file may be thoroughly tested. The denominator is
+  itself a configured artifact, so what it omits is part of what the number
+  means.
+- **Intended adoption scope** is a plan: which parts of the repository this
+  corpus means to govern eventually, and which are deliberately excluded and
+  why. It is authored text, it may exceed current coverage by a wide margin, and
+  a gap between the two is an expected state rather than a defect.
+- **Enforcement settings** are configuration. `coupling.require_ownership` is
+  off, so unclaimed source is migration debt that coverage reports rather than a
+  repository-wide refusal, and `index coverage` is not run with
+  `--fail-on-untraced`. Explicit, ownership-bearing unit claims still raise
+  `C-001` on the paths that carry them, including paths on the built-in bypass
+  floor.
+
+Each moves independently. Coverage rises when a spec claims new territory; the
+intended scope changes when an owner decides it should; an enforcement setting
+changes only by an explicit owner decision recorded in this corpus, never by
+drift and never as a side effect of coverage rising.
 
 ---
 
@@ -181,6 +225,37 @@ affected text as an authority unit of this file**, and contradicts no anchor in
 the `unamendable` list of `specs/000-hiqlite-ownership-bootstrap`. The bootstrap
 spec's freeze surface is the hard boundary; everything else here is revisable
 through the normal governed flow.
+
+**Before ratification, that rule has no subject.** No spec in this corpus is
+`approved`, ratification is an owner act, and an agent never performs one
+(section X), so requiring an approved amending spec would freeze this document
+against its own corrections until the day it is ratified. It does not. While no spec
+in this corpus is approved, this document remains authored text that
+`specs/000-hiqlite-ownership-bootstrap` establishes and owns, and it is edited
+in place under that ownership: the coupling gate still requires an owning spec to
+move in the same range, and the tier order and the `unamendable` anchors still
+bind. This is a statement about the present, in which no spec is approved, not a
+claim that the corpus has a ratification state of its own.
+
+**Ratification is per spec.** `status` is per-spec frontmatter and approving a
+spec settles that spec. There is no aggregate state in which "the corpus" becomes
+ratified, and no document in this repository may invoke one. Partial ratification
+is the normal case, and approving `001` through `003` changes nothing about how
+this file is amended.
+
+**Proposed policy, not yet settled: the transition is per document.** The
+in-place route for a document under `standards/spec/` would close at the moment
+the owner sets `status: approved` on the spec that **establishes that document**:
+`specs/000-hiqlite-ownership-bootstrap` for this file, for
+`standards/spec/contract.md`, and for `standards/spec/templates/`;
+`specs/004-governance-harness` for `AGENTS.md`.
+
+That is one defensible reading of ownership, and it is written here so the
+question is answerable rather than open. It is **a proposal awaiting an owner
+decision**, not a ratified rule: an owner who wants to approve `000` early while
+continuing to correct this document in place may choose otherwise, and the rule
+is then whatever they record. Nothing in this section ratifies anything, extends
+the proposal beyond the documents named, or widens what a session may change.
 
 The claim uses the ordinary ownership vocabulary over a **section unit of this
 file**, not the `amends` edge:

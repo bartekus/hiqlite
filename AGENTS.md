@@ -30,9 +30,11 @@ never against upstream.
 ## Governance model
 
 Governance is provided by `spec-spine`, pinned to source revision
-`aa559f5dcaa59bd9f27b0622b51ae5b57dc2185f`. The binary reports `0.20.0`, which
-`spec-spine.toml` enforces as a floor, so the **revision** is the
-reproducibility boundary.
+`aa559f5dcaa59bd9f27b0622b51ae5b57dc2185f`. The binary reports `0.20.0`, and
+`spec-spine.toml` sets `required_version = "=0.20.0"`: exact equality, not a
+floor, so any other reported version is refused. That equality still admits
+every revision that reports `0.20.0`, so the **revision** is the reproducibility
+boundary and the version requirement is the coarser of the two.
 
 Authority, highest wins:
 
@@ -208,8 +210,13 @@ Start from `standards/spec/templates/spec-template.md`. New specs are born
 `draft`; approval is a human act, and nothing imported from another repository
 carries its `approved` status across.
 
-Every spec here is retroactive: the code existed first. Declare
-`origin.retroactive: true` and describe the behavior that is actually there.
+Every spec in the corpus today is retroactive: the code existed first. A spec
+that adopts pre-existing code declares `origin.retroactive: true` and describes
+the behavior that is actually there. That is the current shape of the corpus,
+not a rule for what comes next: a spec whose subject does not yet exist says so,
+declares the territory it will own with `planned: true` on the units it has not
+written, and does not claim a retroactive origin it does not have (constitution
+VI).
 
 - **Name the configuration.** A durability or recovery claim that does not say
   whether it is about `LogSync::Immediate` or `LogSync::ImmediateAsync` states

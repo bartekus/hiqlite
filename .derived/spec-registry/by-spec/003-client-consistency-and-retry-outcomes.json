@@ -65,8 +65,10 @@
       "4. Leadership retries",
       "5. Reconnect response buffering",
       "6. External mode receipts",
-      "7. Known limitations and follow-up",
-      "8. Provenance",
+      "7. Known defects",
+      "8. Intentional limits, evidence gaps, and follow-up",
+      "9. Provenance",
+      "10. Resolved decisions",
       "Verification"
     ],
     "specPath": "specs/003-client-consistency-and-retry-outcomes/spec.md",
@@ -74,6 +76,6 @@
     "summary": "Records local and explicitly consistent read behavior, write success and ambiguity, leadership and reconnect retries, temporary response buffering, and external mode's bounded durable receipt contract.\n",
     "title": "Define client consistency and retry outcomes"
   },
-  "shardHash": "e7dbac1025b10bbceb8095079c76cfd9a15bf59ae89d8aa6cdf16b5036cf0fad",
+  "shardHash": "5cab15902c438d3895ed1a301e520fbe57291d5a88179a32c6f559858a228dc9",
   "specVersion": "1.3.0"
 }

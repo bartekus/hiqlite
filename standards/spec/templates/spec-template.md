@@ -60,13 +60,20 @@ implementation: pending        # pending | in-progress | complete | n-a | deferr
 # text as a section unit of that file instead (constitution, Amendment):
 #   establishes:
 #     - { kind: section, file: "standards/spec/constitution.md", anchor: "xiii-new-principle" }
-# The file is on the coupling gate's built-in bypass floor, so that claim is a
-# ledger fact rather than an enforced refusal. Human review is the control.
+# The file is on the coupling gate's built-in bypass floor, but an explicit,
+# ownership-bearing unit claim overrides that floor, and spec 000 claims this
+# file as an explicit `file` unit. Editing it without an authoring edit to an
+# owning spec therefore raises C-001 here. The gate still only checks that the
+# file and an owning spec moved together; whether an amendment is sound is a
+# question for human review.
 #
 # --- bootstrap marker (NOT an edge) ---
-# Every spec in this corpus is retroactive: hiqlite existed before the graph.
 # `origin.retroactive: true` records authority held since before the graph
-# existed, so the claim does not pose as a fresh `establishes`.
+# existed, so the claim does not pose as a fresh `establishes`. Every spec in
+# the corpus today is retroactive, because hiqlite existed before the graph.
+# A spec whose subject does not yet exist declares its origin truthfully
+# instead, and marks the units it has not written `planned: true`; do not copy
+# a retroactive marker this spec has not earned (constitution VI).
 origin:
   retroactive: true
   paths: ["hiqlite/src/"]
@@ -131,9 +138,30 @@ surface the contradiction rather than editing the spec to match the code
 ## Verification
 
 The acceptance, as commands. `just spine-verify <id>` runs this block; each line
-is one command and no shell variable survives to the next. Write lines that fail
-against the tree this spec is built on and pass after: a block that is green
-before the work asserts nothing.
+is one command and no shell variable survives to the next.
+
+**What the block must prove depends on what the spec is doing**, and the two
+cases have different standards. Do not apply one to the other.
+
+*A retroactive adoption spec* describes code that already works. Its acceptance
+is expected to pass the moment it is written, and manufacturing a before-state
+failure would prove nothing about the code. What it MUST do instead is
+**characterize accurately and detect meaningfully**: each line asserts a
+specific behavior the spec claims, phrased so that it **fails if that behavior
+changes**. A line that would stay green after the behavior it names was removed
+is not acceptance, it is decoration. Name the exact test, the exact symbol, or
+the exact configuration; `cargo test -p <crate> --lib <path::to::test> --
+--exact` beats a whole-suite run, which passes for reasons unrelated to the
+claim.
+
+*A behavioral repair spec* changes what the code does. Its acceptance MUST
+include at least one regression test demonstrated to **fail against the
+implementation being repaired and pass after the repair**, and the spec states
+where that was demonstrated. A test command that merely errors on the base
+because the test does not exist there is **not** that demonstration: absence of
+a test is not evidence of the defect. Where the old behavior was pinned by a
+test that asserted it, say which test is replaced and why, rather than deleting
+it silently.
 
 This block executes. It is therefore run by a maintainer who has read the
 commands, and never by pull-request CI, which treats a proposed tree as

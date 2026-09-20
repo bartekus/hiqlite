@@ -8,9 +8,12 @@ authoritative; where this summary is terser, they govern.
 ## Tool pin
 
 `spec-spine`, source revision `aa559f5dcaa59bd9f27b0622b51ae5b57dc2185f`. The
-binary reports `0.20.0`, which `spec-spine.toml` `[meta] required_version`
-enforces, so the **revision** is the reproducibility boundary and the version
-check is only a floor. Install it with `just spine-install`.
+binary reports `0.20.0`, and `spec-spine.toml` `[meta] required_version` is
+`"=0.20.0"`: exact equality, not a floor, so a binary reporting any other
+version is refused. Equality on a reported version still admits every revision
+that reports it, so the **revision** pinned in the `justfile` and in CI is the
+reproducibility boundary and the version requirement is the coarser of the two.
+Install it with `just spine-install`.
 
 ## Inputs (authored governance truth: markdown only)
 
@@ -56,6 +59,17 @@ with a named `aspect`, `co_authority` on one genuinely shared) and by
 contradicting no `specs/000` `unamendable` anchor. The constitution is a
 standing statement, so unlike an amended `spec.md` it is edited in place.
 
+Before ratification no spec is `approved`, so that rule has no subject yet. Until
+then the constitution is authored text owned by `specs/000` and is edited in
+place under that ownership, with the coupling gate still requiring an owning
+spec to move in the same range (constitution, Amendment).
+
+Ratification is **per spec**, and there is no aggregate corpus-level ratified
+state. The constitution **proposes**, pending an owner decision, that the
+in-place route close per document when the spec establishing it is approved
+(`specs/000` for the constitution, the contract, and the templates; `004` for
+`AGENTS.md`). Treat that as a proposal, not a settled rule.
+
 ## Amending a spec
 
 An `amends` edge is declared once, in the amending spec's frontmatter. The
@@ -80,7 +94,13 @@ relationships <amended-id>`.
 Every spec in this corpus is `draft`. Draft is never a claim about code, and
 `implementation: complete` is never a claim about approval. Ratification, merge,
 publication, release, and upstream acceptance are five further, separate things
-(constitution X).
+(constitution X). Ratification is per spec: approving one spec settles that
+spec, and the corpus has no ratified state of its own.
+
+Ratifying a spec that carries a known-defects section ratifies the record, not
+the behavior. It does not endorse the defect and does not bar a repair, which is
+an ordinary later spec that `refines`, `amends`, or `supersedes` the adopting
+one and carries its own evidence (constitution VI).
 
 ## What the gate actually enforces
 

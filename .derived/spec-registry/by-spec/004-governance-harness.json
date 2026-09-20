@@ -29,7 +29,7 @@
       }
     ],
     "id": "004-governance-harness",
-    "implementation": "in-progress",
+    "implementation": "complete",
     "kind": "governance",
     "origin": {
       "paths": [
@@ -78,6 +78,6 @@
     "summary": "The loop that operates the hiqlite governance corpus: AGENTS.md as the single cross-agent protocol authority, the justfile recipes that are the only sanctioned entry points to spec-spine, the read-only pull-request CI job, and the policy any future session hook must satisfy. Relates to the bootstrap by depends_on and by extends edges on the two units the bootstrap established; it does not re-establish them and does not replace the bootstrap's ownership.\n",
     "title": "Operate the governance corpus: agent protocol, commands, hooks, and CI"
   },
-  "shardHash": "921032d327e0177cf36a2e7c563c1cb57b516a95a718f99cbff5ae10a2de549c",
+  "shardHash": "8d9b1d105b94c0a827865882e438dd4f4df5432e137a324bb1bfa32d47456bf5",
   "specVersion": "1.3.0"
 }
