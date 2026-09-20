@@ -239,15 +239,29 @@ notification is produced. They do not exercise the writer loop.
 thread through `Action::Append`. The first covers all three `LogSync` modes on
 the success path; the second covers the acknowledged-then-failed path.
 
-**How termination is observed.** The second test asserts that the writer's
-`flume::Sender` becomes disconnected. The writer thread owns the only `Receiver`
-for that channel and holds it for as long as `run` is on the stack, so a
-disconnect is that thread's own exit, observed positively. It begins with a
-healthy append, so the disconnect is a change of state rather than a condition
-that was already true. The absence of an acknowledgement for a later append is
-asserted afterwards as the consequence of the policy, not as the proof of
-termination: not observing a reply within a budget is consistent with a writer
-that is merely slow, and on its own establishes nothing.
+**How the end of service is observed, and how precisely.** The second test
+asserts that the writer's `flume::Sender` becomes disconnected. `run` owns the
+only `Receiver` for that channel and holds it for as long as it is on the stack,
+so a disconnect establishes positively that `run` has left and the writer can
+receive no further action. It does **not** establish that the writer's OS thread
+has finished: the thread closure runs its error report after `run` returns, so
+the thread is still live at the moment the disconnect becomes observable. The
+claim carried here is the one the observation supports: the sole `Action`
+receiver is gone and no further append can be received.
+
+It begins with a healthy append, so the disconnect is a change of state rather
+than a condition that was already true. That healthy append is synchronized on
+its **completion notification**, not on its acknowledgement: `complete_append`
+sends the acknowledgement before the persistence step, so arming a fault
+injection on the acknowledgement would leave the healthy append's `persist` call
+still ahead of the writer and able to consume the injection armed for the next
+append. Waiting for `Ok(())` on the healthy notification places the arming
+strictly after that append's persistence step returned, and the writer serves
+actions one at a time, so the injection can only be taken by the append it was
+armed for. The absence of an acknowledgement for a later append is asserted
+afterwards as the consequence of the policy, not as the proof of the end of
+service: not observing a reply within a budget is consistent with a writer that
+is merely slow, and on its own establishes nothing.
 
 **Where ordering is established and where cardinality is.** The two are proved
 in different places on purpose. `complete_append` is the single ordering point

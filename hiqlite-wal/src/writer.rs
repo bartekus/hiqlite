@@ -926,8 +926,8 @@ mod tests {
 
     /// The whole F-002 chain through the live writer loop, which the helper-level test cannot
     /// see: the append is acknowledged, the injected persistence failure is notified with its
-    /// cause, and the writer then terminates as it did before the repair, so every later append
-    /// goes unacknowledged.
+    /// cause, and the writer then stops receiving, as it did before the repair, so every later
+    /// append goes unacknowledged.
     #[tokio::test(flavor = "multi_thread")]
     async fn persistence_failure_notifies_then_terminates_the_writer() {
         let base = "test_data/persistence_failure_terminates".to_string();
@@ -935,8 +935,26 @@ mod tests {
 
         // A healthy append first, so the disconnect asserted below is an observed change of state
         // rather than a condition that was already true.
-        let (healthy_ack, _healthy_note) = dispatch_append(&tx, 1, b"healthy".to_vec());
+        //
+        // The wait is on the healthy append's *completion notification*, not on its
+        // acknowledgement. `complete_append` sends the acknowledgement before it invokes the
+        // persistence step, so an awaited acknowledgement leaves that append's `persist` call
+        // still ahead of the writer: arming on it would let the healthy append consume the
+        // injection meant for the next one. The notification is sent after `persist` returned,
+        // and `Ok(())` says it returned successfully, so observing it places this test strictly
+        // after the healthy append's only chance to take an injection. The writer serves actions
+        // one at a time and `LogSync::Immediate` spawns no syncer, so the next `persist` to run
+        // is the injected append's.
+        let (healthy_ack, healthy_note) = dispatch_append(&tx, 1, b"healthy".to_vec());
         healthy_ack.await.unwrap().unwrap();
+        assert_eq!(
+            healthy_note
+                .recv_timeout(Duration::from_secs(5))
+                .expect("the healthy append must be notified")
+                .map_err(|err| err.to_string()),
+            Ok(()),
+            "the healthy append must complete successfully before an injection is armed"
+        );
         assert!(
             !tx.is_disconnected(),
             "the writer is serving before the injected failure"
@@ -959,18 +977,21 @@ mod tests {
             "the notification must carry the injected cause, got: {notified}"
         );
 
-        // Failure policy preserved, observed positively. The writer thread owns the only
-        // `Receiver` for this channel and holds it for as long as `run` is on the stack, so the
-        // sender reporting a disconnect is that thread's own exit, not merely the absence of a
-        // reply within some budget.
+        // Failure policy preserved, observed positively. `run` owns the only `Receiver` for this
+        // channel and holds it for as long as it is on the stack, so the sender reporting a
+        // disconnect establishes that `run` has left: the writer can receive no further action.
+        // It does not establish that the OS thread has finished, because the thread closure runs
+        // its error report after `run` returns. That is a stronger claim than this test makes and
+        // than the runtime supports.
         assert!(
             eventually(|| tx.is_disconnected()),
-            "the writer must still terminate after a persistence failure: its Action receiver is \
-            dropped only when the thread ends"
+            "the writer must still stop serving after a persistence failure: its sole Action \
+            receiver is dropped when `run` returns"
         );
 
-        // And the consequence the policy is about: with the writer gone, a later append is never
-        // acknowledged. This is a corollary of the disconnect above, not the proof of it.
+        // And the consequence the policy is about: with the writer no longer receiving, a later
+        // append is never acknowledged. This is a corollary of the disconnect above, not the
+        // proof of it.
         let (mut later_ack, _later_note) = dispatch_append(&tx, 3, b"later".to_vec());
         assert!(
             later_ack.try_recv().is_err(),
