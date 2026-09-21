@@ -1,0 +1,79 @@
+{
+  "record": {
+    "created": "2026-09-21",
+    "dependsOn": [
+      "000-hiqlite-ownership-bootstrap",
+      "002-snapshot-publication-and-recovery",
+      "012-cluster-integration-evidence"
+    ],
+    "establishes": [
+      {
+        "kind": "file",
+        "path": "hiqlite/src/migration.rs"
+      },
+      {
+        "kind": "file",
+        "path": "hiqlite/tests/cluster/migrations/"
+      }
+    ],
+    "extends": [
+      {
+        "nature": "additive",
+        "spec": "000-hiqlite-ownership-bootstrap",
+        "unit": {
+          "kind": "file",
+          "path": "spec-spine.toml"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "005-adoption-assessment-and-plan",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/findings-register.md"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "005-adoption-assessment-and-plan",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/adoption-plan.md"
+        }
+      }
+    ],
+    "id": "014-schema-migration-contract",
+    "implementation": "complete",
+    "kind": "adoption",
+    "origin": {
+      "paths": [
+        "hiqlite/src/migration.rs"
+      ],
+      "retroactive": true
+    },
+    "owner": "hiqlite maintainers",
+    "risk": "high",
+    "sectionHeadings": [
+      "014: Adopt the schema migration contract and its fixtures",
+      "1. Purpose",
+      "2. Territory",
+      "3. Behavior",
+      "B-1. The file-name contract, stated",
+      "B-2. The applied-set contract, stated, because it is what the hash is for",
+      "B-3. Two gap checks, two messages, two layers",
+      "B-4. The fixture set, and what each fixture is for",
+      "4. Evidence and its limits",
+      "5. Known defects",
+      "6. The inventory declarations this spec requires",
+      "7. Resolved decisions",
+      "8. Out of scope",
+      "Verification"
+    ],
+    "specPath": "specs/014-schema-migration-contract/spec.md",
+    "status": "draft",
+    "summary": "Adopts the migration file-name contract, the set it builds, and the six fixtures that exist to test it. Closes F-052 by making the two disabled fixture cases executable at the layer that actually rejects them, which is where #[should_panic] works and where the cluster test could not reach. Records three findings, one of them executed: the panic a malformed name produces names the wrong rule. Repairs no runtime behavior.\n",
+    "title": "Adopt the schema migration contract and its fixtures"
+  },
+  "shardHash": "b11f55c135781d2ac8e9757f45e320fccfa02f5d9ec2aee0907b695aa27b4f1d",
+  "specVersion": "1.3.0"
+}

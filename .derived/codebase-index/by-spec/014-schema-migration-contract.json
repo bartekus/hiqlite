@@ -1,19 +1,21 @@
 {
   "mapping": {
-    "amends": [
-      "001-wal-durability-and-completion"
-    ],
     "dependsOn": [
       "000-hiqlite-ownership-bootstrap",
-      "001-wal-durability-and-completion"
+      "002-snapshot-publication-and-recovery",
+      "012-cluster-integration-evidence"
     ],
     "implementingPaths": [
       {
-        "path": "hiqlite-wal/src/",
+        "path": "hiqlite/src/migration.rs",
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite/src/store/state_machine/sqlite/",
+        "path": "hiqlite/tests/cluster/migrations/",
+        "source": "spec-edge"
+      },
+      {
+        "path": "spec-spine.toml",
         "source": "spec-edge"
       },
       {
@@ -23,37 +25,46 @@
       {
         "path": "standards/spec/findings-register.md",
         "source": "spec-edge"
-      },
-      {
-        "path": "standards/spec/wal-repair-proposal.md",
-        "source": "spec-edge"
       }
     ],
     "resolvedUnits": [
       {
         "locations": [
           {
-            "file": "hiqlite-wal/src/"
+            "file": "hiqlite/src/migration.rs"
           }
         ],
         "ownership": true,
-        "sourceField": "extends",
+        "sourceField": "establishes",
         "unit": {
-          "kind": "directory",
-          "path": "hiqlite-wal/src/"
+          "kind": "file",
+          "path": "hiqlite/src/migration.rs"
         }
       },
       {
         "locations": [
           {
-            "file": "hiqlite/src/store/state_machine/sqlite/"
+            "file": "hiqlite/tests/cluster/migrations/"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/tests/cluster/migrations/"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "spec-spine.toml"
           }
         ],
         "ownership": true,
         "sourceField": "extends",
         "unit": {
-          "kind": "directory",
-          "path": "hiqlite/src/store/state_machine/sqlite/"
+          "kind": "file",
+          "path": "spec-spine.toml"
         }
       },
       {
@@ -81,24 +92,11 @@
           "kind": "file",
           "path": "standards/spec/findings-register.md"
         }
-      },
-      {
-        "locations": [
-          {
-            "file": "standards/spec/wal-repair-proposal.md"
-          }
-        ],
-        "ownership": true,
-        "sourceField": "extends",
-        "unit": {
-          "kind": "file",
-          "path": "standards/spec/wal-repair-proposal.md"
-        }
       }
     ],
-    "specId": "008-wal-append-completion-notification",
+    "specId": "014-schema-migration-contract",
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "954041a33245081a1dbe3d800fad738ef65b6e15fb0c294262785ddd006e7c56"
+  "shardHash": "24e95e76591e8f18a58524aacb01650904e2f90bb95209e36e4d78405e4a0bc9"
 }

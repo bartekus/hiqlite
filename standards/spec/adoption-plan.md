@@ -716,11 +716,17 @@ acceptance and say that it supersedes that line.
 
 ## 8. Current assignment table (2026-09-21)
 
-**Reconciled again on 2026-09-21** after W-15 was delivered as
-`012-cluster-integration-evidence`. Coverage moved to 94/230 (40.9%); the
-denominator did not move, because all fifteen files were already inside the
-`hiqlite` cargo package the walk counts. This is the first delivered wave that
-required no `spec-spine.toml` change at all.
+**Reconciled again on 2026-09-21**, three times in one pass. W-15 was delivered
+as `012-cluster-integration-evidence`: coverage moved to 94/230 (40.9%) with the
+denominator unchanged, because all fifteen files were already inside the
+`hiqlite` cargo package the walk counts, which made it the first delivered wave
+that required no `spec-spine.toml` change at all. W-09 and W-10 followed as
+`013-backup-retention-and-object-storage` and `014-schema-migration-contract`,
+taking coverage to **103/236 (43.6%)**. That denominator did move, by the six
+`.sql` migration fixtures `014` had to put into `coverage.governed_scope` to be
+measured against the files it claims; the three `.rs` files were already in the
+package walk. Numerator and denominator moved for different reasons again, and
+the two are kept apart here for the reason section 2.1 exists.
 
 **This is the queue.** Sections 3 and 7 are the reasoning and the history;
 this table is what is actually outstanding. A work identifier `W-nn` is stable
@@ -742,8 +748,8 @@ scheduled, authorized, or approved by this document.
 | W-06 | **optional** supervision of the WAL writer thread, on top of the termination policy `008` preserved | `001`, amended by `008` | the policy is **decided and in force**, not deferred: a persistence failure notifies, then ends the writer thread (`008` section 3.6, owner decision at `008` section 6) | the `run`-returns-`Err` termination is reported by a single ERROR log and tested by `writer_termination_is_reported`; `008` section 3.6 states what the report does not cover (panic, abort, signal), and `008` KD-3 records that the report has no consumer | **optional**: whether to add supervision at all (retain and join the `JoinHandle`, catch panics, wire a health check). Existing behavior stands unless the owner asks for a change; no decision is outstanding | none | supervision is either specified with evidence, or the corpus records that the reported termination is the whole of the contract and this row closes unchanged |
 | W-07 | F-028: a truncated entry stream acknowledged as a successful append | `001`, amended by `008` | not started | untested | **required, and specific to this defect**: how the writer tells a `recv` error from the `None` that ends a healthy stream; what becomes of the prefix already written; what the acknowledgement and the completion notification report for a partial append, and with what cardinality; whether the writer stays usable afterwards or ends as a persistence failure does | none | sender disconnect before the first entry and after a prefix produce no false success, with the old behavior demonstrated failing rather than merely untested, in every supported `LogSync` mode |
 | W-08 | F-027: unvalidated `cache_idx` and incompatible cache variant sets | `006` | not started | untested | **required**: what a replicated invalid command means | none | incompatible inputs produce the agreed deterministic result and no node silently skips committed work |
-| W-09 | backup and object storage: `backup.rs`, `s3.rs` (A10) | none | not started | cluster tests exist but are unclaimed; S3 is skipped in CI (F-019) | none outstanding | W-01 | cron, naming, retention, validation bypass and restore ordering are specified, with skipped service tests reported as skipped |
-| W-10 | schema migrations: `migration.rs` and its fixtures (A11) | none | not started | the cluster test is now claimed by `012`; three `bad_*` fixtures, two of which have their assertions commented out (F-052) | none outstanding | W-01 | ordering, gaps, malformed names and migration-failure restart behavior are asserted against the existing fixtures, including the two `bad_*` cases F-052 records as disabled |
+| W-09 | backup and object storage: `backup.rs`, `s3.rs` (A10) | **`013-backup-retention-and-object-storage`**, 2026-09-21 | **delivered at M1**: `013` establishes both files; `spec-spine.toml` gained their freshness declarations | M2 partly: three characterization tests pin the cron validation, the remote name filter and the local retention sweep, and `013` section 4 states what they do not reach, which is every S3 transfer, the restore sequence and the schedule itself | none outstanding | W-01 | **closed at M1.** Cron, naming, retention, validation bypass and restore ordering are all specified in `013` B-1 to B-7. Eight findings recorded (F-056 to F-063), one of them, the inverted retention guard, demonstrated deleting a non-backup file. The skipped S3 tests are reported as skipped in section 4 and remain F-019's |
+| W-10 | schema migrations: `migration.rs` and its fixtures (A11) | **`014-schema-migration-contract`**, 2026-09-21 | **delivered at M1**: `014` establishes `migration.rs` and the fixture subtree; `spec-spine.toml` gained the freshness declarations and, for the `.sql` fixtures, a `governed_scope` entry as well | M2 partly: four tests exercise all four fixtures, including the two whose assertions had been commented out since the pilot, and `014` section 4 states what has no fixture at all | none outstanding | W-01 | **closed at M1.** Ordering and malformed names are asserted against the existing fixtures and **F-052 is closed**. Three findings recorded (F-064 to F-066). Not asserted, and stated as such: the `.sql` suffix rule, the gap rule and the duplicate-index case, none of which ever had a fixture (`014` D-2), and migration-failure restart behavior, which needs the cluster surface `012` owns |
 | W-11 | server binary and proxy (A12) | none | not started | not exercised by CI (F-019) | none outstanding | W-01 | authentication, forwarding, errors, reconnect and shutdown are tested with `server` enabled |
 | W-12 | dashboard service and UI (A13, A14) | none | not started | not exercised by CI (F-019) | none outstanding | W-01 | session, password, cookie and query contracts, invalid and expired sessions, and the authorization boundary are tested rather than asserted |
 | W-13 | dashboard build contract and drift check (F-012, A16) | none; forward-looking, `planned: true` | not started | none | OD-2 decided: keep the bytes committed | W-12 | a rebuild under recorded toolchain and lockfile inputs compares deterministically and drift fails the check |
