@@ -807,6 +807,138 @@ a startup error, and for an embedded node the profile is the **consumer's**, as
 F-014 records for the same reason. Source-established. Same class as F-025.
 `010` KD-4.
 
+### F-041 `defect`, confidence `high`
+
+**A half-configured TLS endpoint downgrades silently.**
+`hiqlite/src/tls.rs:71-82` (`ServerTlsConfig::from_env`) selects `Specific` only
+when `HQL_TLS_{variant}_KEY` **and** `HQL_TLS_{variant}_CERT` are both set. If
+exactly one is set, the branch simply fails and the function falls through: with
+`HQL_TLS_AUTO_CERTS` off the endpoint runs in plaintext, and with it on the
+endpoint runs with a self-signed certificate no client verifies. Nothing logs,
+warns or errors, and `NodeConfig::is_valid` inspects no TLS material.
+
+**Observed by execution**, both halves, in
+`tls_env::from_env_branches_including_the_silent_downgrade`.
+
+Consequence: one misspelled variable name yields a running node with weaker
+transport than was configured, and the only way to notice is to inspect the
+wire. `011` KD-1.
+
+### F-042 `defect`, confidence `high`
+
+**Two booleans four lines apart disagree about whether a typo is fatal.**
+`hiqlite/src/tls.rs:58-60` reads `HQL_TLS_AUTO_CERTS` with
+`parse::<bool>().unwrap_or(false)`, so `HQL_TLS_AUTO_CERTS=ture` silently means
+"off", which through F-041 can mean plaintext. `:64-69` reads
+`HQL_TLS_{variant}_DANGER_TLS_NO_VERIFY` with
+`parse::<bool>().expect("Cannot parse HQL_TLS_*_DANGER_TLS_NO_VERIFY to bool")`,
+so the same class of typo panics. The rest of the module is uniformly fatal: the
+PEM load (`:93`), key generation and the `OnceLock` set (`:102-105`), certificate
+construction (`:134`, `:141`) and the host name in `into_tls_stream` (`:177`).
+
+**Observed by execution** for the panic half, in
+`tls_env::a_malformed_no_verify_override_panics`; the rest is source-established.
+
+Note in favour of the current code: `server_config` is awaited in the caller's
+own task (`start.rs:140`, `:226`), so a missing or malformed certificate file
+panics out of `start_node_inner` rather than through F-040's detached-task route.
+That is the better of the two outcomes and is written down nowhere. Same class as
+F-009. `011` KD-2.
+
+### F-043 `defect`, confidence `high`
+
+**A verifying client has nothing to verify against.**
+`hiqlite/src/tls.rs:152-170` (`build_tls_config`) builds
+`RootCertStore::empty()` and adds certificates only under
+`#[cfg(feature = "webpki-roots")]`, which is not in `default`
+(`hiqlite/Cargo.toml:22`). `reqwest` is configured `default-features = false`
+with `rustls-no-provider` and no roots feature (`Cargo.toml:80-85`), and
+`hiqlite/src/http_client.rs:15-22` merges the webpki bundle under the same
+`cfg`. `ServerTlsConfigCerts` has three fields and none is a CA, and no
+environment variable or TOML key supplies one.
+
+**Source-established**, with the material type's shape executed in
+`tls::tests::the_tls_material_type_has_no_field_for_a_trust_anchor`. What
+`reqwest` itself trusts under that feature set was not executed and is not
+claimed.
+
+Consequence: in a default build, `danger_tls_no_verify = false` with specific
+certificates means verification against an empty trust store, which no peer
+certificate satisfies; with the feature enabled it means verification against
+the public web PKI, which an internally issued certificate does not satisfy
+either. The only configuration in which specific certificates and a working
+connection coexist is the one named `danger`. Fail-closed, so nothing is
+weakened; the safe setting simply has no reachable use. `011` KD-3.
+
+### F-044 `defect`, confidence `high`
+
+**The API channel's no-verify flag is read from the raft configuration.** Four
+consumers make REST requests to a peer's `addr_api` and use three different
+pairings of scheme flag and verification flag:
+
+| caller | scheme from | verification from | client |
+|---|---|---|---|
+| `store/mod.rs:98-109`, `:195-206` | `tls_api` | `tls_api` | `build_http_client` |
+| `start.rs:254-284` to `become_cluster_member` | `tls_raft` | `tls_raft` | `build_http_client` |
+| `start.rs:114-118` to `split_brain_check::spawn` | `tls_api` | neither | `reqwest::Client::new()` |
+| `start.rs:291-295`, then `client/mgmt.rs:186-190` | `tls_api` | `tls_raft` | `build_http_client` |
+
+`start.rs:38-43` derives `tls_no_verify` from `node_config.tls_raft`;
+`init.rs:275-276` turns the paired flag into `https` or `http` against
+`node.addr_api`; `split_brain_check.rs:135` builds a default `reqwest::Client`
+that honours no override.
+
+**Source-established.** `011`'s acceptance block pins each call site's text.
+
+Consequences, most likely first. A cluster with TLS on one endpoint and not the
+other has a join sequence that speaks the wrong scheme to `addr_api` and cannot
+form. A cluster using auto-certificates has a split-brain checker whose every
+request fails verification, so the observability path of `010` B-8 reports
+connection errors on an interval instead of memberships. And the API side's own
+`danger_tls_no_verify` is doubly dead: unreachable from TOML (F-031) and ignored
+by two of the four consumers. `011` KD-4.
+
+### F-045 `contradiction`, confidence `high`
+
+**The stated reason for not verifying certificates does not cover the endpoints
+that send a bearer secret.** `hiqlite/src/tls.rs:20-23` and `hiqlite.toml:173-175`
+both justify unverified certificates with a 3-way handshake that validates both
+parties "without the secret ever being sent over the network".
+
+That is accurate for the WebSocket channels, which use `HandshakeSecret`
+(`hiqlite/src/network/handshake.rs`, at `network/api.rs:488` and
+`network/raft_server.rs`). It is not accurate for the REST endpoints:
+`network/mod.rs:64-76` (`validate_secret`) compares the `X-API-SECRET` **request
+header** against `secret_api`, and that header is set on every `/cluster/*`,
+`/listen` and `/backup` request (`init.rs:186`, `:458`, `:583`, `:683`, `:742`,
+`split_brain_check.rs:140`, `client/mgmt.rs:73`, `client/listen_notify.rs:57`).
+
+Consequence: under auto-certificates or any `danger_tls_no_verify`, those
+requests carry `secret_api` in cleartext inside a TLS session whose server
+certificate is not checked, so an attacker able to intercept the connection can
+present any certificate and read the credential for the whole management
+surface. Classed as a contradiction and not a defect because the code does what
+it was written to do; an authored sentence describes a narrower channel than the
+one it is printed beside. Whether to narrow the sentence, verify the API
+channel, or move the REST endpoints onto the challenge-response is a security
+design decision with three different costs and no default here.
+**Source-established.** `011` KD-5.
+
+### F-046 `evidence`, confidence `high`
+
+**`HQL_TLS_AUTO_CERTS` was documented in one reference file only.** It appeared
+in `hiqlite.toml:170-182` and in neither `hiqlite.env` nor anywhere else an
+operator reads, although it is the single switch that turns certificate
+verification off on both endpoints at once.
+
+**Found and closed on 2026-09-21 by `011` section 5**, which adds it to
+`hiqlite.env` with what it does, how it interacts with the per-endpoint
+variables, and its parse behavior. The entry deliberately omits the
+justification `hiqlite.toml:173-175` gives, because F-045 records that the
+justification is true of one channel and false of the others, and copying it
+into a second reference file would propagate the claim. Recorded rather than
+performed silently, and retained as the record of the gap.
+
 ## Summary by class
 
 Class is what a finding **is**. State is what has **happened** to it. They are
@@ -816,10 +948,10 @@ record.
 
 | class | ids | count |
 |---|---|---|
-| `defect` | F-001 to F-006, F-009, F-021 to F-024, F-027 to F-029, F-031, F-036 to F-040 | 20 |
-| `contradiction` | F-018, F-030, F-032 to F-034 | 5 |
+| `defect` | F-001 to F-006, F-009, F-021 to F-024, F-027 to F-029, F-031, F-036 to F-044 | 24 |
+| `contradiction` | F-018, F-030, F-032 to F-034, F-045 | 6 |
 | `gap` | F-010, F-013 | 2 |
-| `evidence` | F-011, F-012, F-017, F-019 | 4 |
+| `evidence` | F-011, F-012, F-017, F-019, F-046 | 5 |
 | `limit` | F-007, F-008, F-015, F-016, F-026, F-035 | 6 |
 | `decision` | F-014, F-020, F-025 | 3 |
 
@@ -828,15 +960,15 @@ record.
 | state | ids | count |
 |---|---|---|
 | repaired | F-001, F-002, F-030 | 3 |
-| closed, entry retained | F-013 (at M1, by wave 1), F-011 (2026-09-21, by `010`) | 2 |
-| open | everything else: F-003 to F-010, F-012, F-014 to F-029, F-031 to F-040 | 35 |
+| closed, entry retained | F-013 (at M1, by wave 1), F-011 and F-046 (2026-09-21, by `010` and `011`) | 3 |
+| open | everything else: F-003 to F-010, F-012, F-014 to F-029, F-031 to F-045 | 40 |
 
 A finding's state answers whether the thing it records is still in the tree, and
 nothing else. F-030 is repaired because its contradiction is gone; the optional
 process decision it surfaced is W-24's, and a work item's being undecided has
 never been a reason to hold a finding open.
 
-Thirty-five open, of which three carry a dated disposition appended on
+Forty open, of which three carry a dated disposition appended on
 2026-09-20 recording what has moved since they were written: F-015 (examples
 now visible, still unclaimed), F-016 (dashboard now visible, the generated and
 vendored
@@ -846,8 +978,8 @@ not close it. An earlier revision said four and listed three.
 
 Open **defects**, which is the subset a repair workstream draws from:
 F-003, F-004, F-005, F-006, F-009, F-021, F-022, F-023, F-024, F-027, F-028,
-F-029, F-031, F-036, F-037, F-038, F-039, F-040. Eighteen of the twenty
-defects; F-001 and F-002 are the two repaired.
+F-029, F-031, F-036 to F-044. Twenty-two of the twenty-four defects; F-001 and
+F-002 are the two repaired.
 
 **Reclassified on 2026-09-19**, after each class test was applied rather than
 assumed: F-007 and F-008 from `defect` to `limit`, because a stated contract with
@@ -857,13 +989,14 @@ migration state rather than faults; and the consequences of F-001, F-002, and
 F-014 rewritten against traced source, with three earlier claims withdrawn in
 place.
 
-Twenty defects: six from the pilot specs, F-009 from the whole-project pass,
+Twenty-four defects: six from the pilot specs, F-009 from the whole-project pass,
 five (F-021 to F-024, F-027) found by wave 1, F-028 found while tracing the
 `008` repair, F-029 found on 2026-09-20 while re-reading the memory log store
 against the locked trait, F-031 and F-036 found by the configuration adoption on
-2026-09-20, and F-037 to F-040 found by the node-lifecycle adoption on
-2026-09-21. F-013 is closed at M1 by wave 1 and F-011 by `010`; both are
-retained as records rather than deleted. No finding in this register authorizes
+2026-09-20, F-037 to F-040 found by the node-lifecycle adoption on 2026-09-21,
+and F-041 to F-044 found by the transport-security adoption on the same day.
+F-013 is closed at M1 by wave 1, F-011 by `010`, and F-046 by `011` in the same
+change that recorded it; all three are retained as records rather than deleted. No finding in this register authorizes
 a repair; each repair is a separate governed change with its own spec and
 evidence.
 
@@ -873,10 +1006,10 @@ on 2026-09-20. A repaired entry is annotated in place and keeps its identifier,
 its class, and its original text, so the baseline a repair was reviewed against
 stays readable.
 
-**Eighteen defects are open**: F-003 to F-006, F-009, F-021 to F-024, F-027
-to F-029, F-031, F-036 to F-040. Two earlier revisions of this paragraph were
+**Twenty-two defects are open**: F-003 to F-006, F-009, F-021 to F-024, F-027
+to F-029, F-031, F-036 to F-044. Two earlier revisions of this paragraph were
 stale: one said ten against a table of fourteen, and the next said twelve after
-`009` had already added F-031 and F-036. The arithmetic is twenty recorded minus
-the two repaired, and this paragraph is the one that has to be recomputed
+`009` had already added F-031 and F-036. The arithmetic is twenty-four recorded
+minus the two repaired, and this paragraph is the one that has to be recomputed
 whenever the class table changes. F-021 through F-024 and F-029 are a separate
 cache-log repair that was deliberately not bundled into `008`.
