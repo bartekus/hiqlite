@@ -303,6 +303,15 @@ Second consequence, on the ledger: the 12 uncompressed `.js` files under
 `hiqlite/static` are counted in the coverage denominator as unclaimed source,
 so build output inflates the reported migration debt. See F-016.
 
+**Disposition appended 2026-09-21 by `019-dashboard-build-contract`**, which ran
+the comparison this entry says nothing performs. Both halves came back negative
+and they are separate findings: F-092, the build is not reproducible because
+`kit.version.name` is unset and SvelteKit stamps a millisecond timestamp into
+`version.json`; and F-093, the committed artifact does not come from this source
+at this lockfile, measured as 64 emitted files against 55 committed. F-012 stays
+open: the missing check is still missing, and F-092 is why it cannot be written
+before a one-line configuration change.
+
 ### F-013 `gap`, confidence `high`
 
 **Cache state machine and log-store adapter are unclaimed.**
@@ -1632,6 +1641,190 @@ then reverted, because updating dependency locks is not something an adoption
 does (`017` D-2). Same family as F-012 and F-071: artifacts that must agree, with
 no check. `017` KD-3.
 
+### F-084 `defect`, confidence `high`
+
+**The dashboard's single-flight hashing lock is dropped before it guards
+anything.** `hiqlite/src/dashboard/password.rs:13` is
+`let _ = IS_HASHING.write().await;`. A `_` pattern drops its value at the end of
+the statement, so the write guard is released immediately and the argon2 work
+that follows is not serialized.
+
+Two authored texts state the opposite. `password.rs:7-9`: "only a single password
+hash at a time is allowed, the dashboard is just for debugging. prevents
+brute-fore effectively". `dashboard/session.rs:36-37`, reasoning about the global
+login cooldown: "the single-flight lock in `password::verify_password` still
+serializes the actual hashing".
+
+Consequence: concurrent login attempts each start their own argon2id at
+`m=32768, t=2, p=2`, so N simultaneous requests cost N times 32 MiB and N hashing
+threads. The control meant to bound that does nothing, and the cooldown F-087
+describes engages only **after** a failure has been computed, so the first burst
+is unbounded. The fix is `let _guard =`.
+
+**Observed by execution.**
+`dashboard::password::tests::the_single_flight_lock_is_released_before_any_hashing`
+acquires the lock exactly as `verify_password` does, then acquires it again.
+`018` KD-1.
+
+### F-085 `defect`, confidence `high`
+
+**The unauthenticated dashboard fallback panics on a multi-byte path.**
+`hiqlite/src/dashboard/static_files.rs:28`:
+`let path_ending = &path[path.len().saturating_sub(4)..];` slices at a byte index
+without asking whether it is a character boundary. `http::Uri` accepts raw UTF-8
+in a path, verified against the pinned `http` crate, so
+`GET /dashboard/\u{20ac}abc` reaches `static_files::handler`, which is the
+`/dashboard` **fallback** (`start.rs:215`) and therefore requires no session, and
+panics with `byte index 2 is not a char boundary`.
+
+Consequence: any client that can reach the API port of a node with the dashboard
+enabled can panic a request task without authenticating. Under unwinding the
+connection dies; under `panic = abort` the node does, which is `010` B-7's split.
+The dashboard tree exists only when `password_dashboard.is_some()`
+(`start.rs:189`), which bounds exposure to deployments that configured it.
+
+**Observed by execution**
+(`dashboard::static_files::tests::a_multibyte_path_panics_the_fallback`).
+`018` KD-2.
+
+### F-086 `defect`, confidence `high`
+
+**The same character-boundary mistake in the dashboard query classifier.**
+`hiqlite/src/dashboard/query.rs:24`: `let sql_start = sql[..7].to_lowercase();`,
+guarded at `:14` by `sql.len() < 8`. The guard stops the out-of-range case and
+not the boundary one: a statement whose seventh byte falls inside a multi-byte
+character, for example `aaaaaa\u{20ac}`, panics. `post_query` builds the string
+with `String::from_utf8_lossy` over the raw request body
+(`dashboard/handlers.rs:112`), so the input is whatever was sent.
+
+Behind the `Session` extractor, so the caller must be logged in, which is why it
+is separated from F-085 rather than folded into it. Recorded because it is the
+same defect in the same module, which makes it a pattern rather than a slip.
+Source-established. `018` KD-3.
+
+### F-087 `defect`, confidence `high`
+
+**The global login cooldown is a denial of service against the operator.**
+`hiqlite/src/dashboard/session.rs:33-54` and `:174-183`. After any failed
+password, **every** login is rejected with `429` for five seconds, with no client
+identity involved. The authored justification at `:33-37` is that "there is no
+per-client state to spoof or exhaust".
+
+That is true and it is not the exposure. The global lock is itself the
+exhaustible resource: an unauthenticated client sending one wrong password every
+five seconds keeps the dashboard permanently unloginable for the real operator,
+at one request per five seconds. The cost asymmetry runs the wrong way, because
+the attacker's request is rejected at `:175` before any hashing while the
+operator is locked out.
+
+Recorded as a defect rather than a design preference because the code states its
+own threat model in a comment and the stated model does not cover this. The
+answer is a policy choice with at least three forms (per-client cooldown,
+exponential backoff, accepting the exposure), which is why `018` D-1 does not
+pick one. Source-established; no availability test was written. `018` KD-4.
+
+### F-088 `defect`, confidence `high`
+
+**A dashboard read that does not begin with one of three keywords is replicated
+as a write.** `hiqlite/src/dashboard/query.rs:24-27` lowercases the first seven
+bytes and treats the statement as a read only if that prefix starts with
+`select`, `explain` or `pragma`. So `WITH x AS (SELECT 1) SELECT * FROM x`,
+`VALUES (1)`, and any statement preceded by a comment such as
+`/* note */ SELECT 1` are classified as writes and sent through `client_write` to
+be applied on every node.
+
+Consequence: a read issued from the dashboard can take the write path, occupy the
+Raft, and be rejected by the non-deterministic-function guard for containing a
+function that would have been accepted on the read path. Nothing is corrupted; a
+read is charged as a cluster-wide write. Source-established. `018` KD-5.
+
+### F-089 `defect`, confidence `high`
+
+**A malformed dashboard password ends the process at startup.**
+`hiqlite/src/dashboard/mod.rs:41`:
+`String::from_utf8(b64_decode(&b64).unwrap()).unwrap()`. A
+`HQL_PASSWORD_DASHBOARD` that is not base64, or that decodes to non-UTF-8, panics
+inside `DashboardState::from_env`, on the configuration path.
+
+The `Err` arm four lines below handles the variable being **absent** gracefully,
+disabling the dashboard with a warning, so two adjacent cases of the same
+misconfiguration are handled in opposite ways. Same class as F-009, F-042 and
+F-061, and part of W-22. Source-established. `018` KD-6.
+
+### F-090 `evidence`, confidence `high`
+
+**The dashboard UI has one test and nothing runs it.**
+`dashboard/tests/smoke.spec.ts` loads the login page against a preview server
+with no backend and asserts it hydrates without page errors, which is a
+reasonable smoke test. `dashboard/package.json` exposes it as
+`npm run test:smoke`, and that string appears **nowhere else**: no `just` recipe,
+no workflow step. The `justfile` touches `dashboard` only to build it.
+
+Consequence: the dashboard's single automated check is opt-in and, on the
+evidence of the repository, opted out of. Same shape as F-081 for the examples,
+and a further consequence of F-019. Source-established. `018` KD-7.
+
+### F-091 `limit`, confidence `high`
+
+**A dashboard session cannot be revoked.** The cookie is an encrypted
+`{ created, expires }` (`hiqlite/src/dashboard/session.rs:76-80`, `:113-129`)
+with no identity, no nonce, no server-side record, no rotation and no logout
+route. Validity is `expires < now` and the lifetime is 3600 seconds (`:24`,
+`:157-164`).
+
+Consequences: changing `HQL_PASSWORD_DASHBOARD` does not invalidate a live
+session; a leaked cookie is valid for up to an hour and cannot be withdrawn; and
+the only revocation available is rotating the encryption keys, which invalidates
+every encrypted value in the process and not only sessions. Classed as a limit: a
+stateless one-hour session on an ops surface is a defensible design, and what is
+missing is the statement of what it costs. Source-established. `018` KD-8.
+
+### F-094 `defect`, confidence `high`
+
+**A local dashboard build inflates the coverage denominator and stales the
+committed index.** `npm run build` creates `dashboard/.svelte-kit`, which
+`dashboard/.gitignore:5` ignores. The pinned indexer's npm package walk does not
+consult `.gitignore`: with the directory present, `spec-spine index coverage`
+reports a denominator of **292** instead of 236, having taken 56 generated `.js`
+and `.d.ts` files as package source, and `spec-spine check` reports the committed
+shards stale. Deleting the directory returns it to 236 exactly, on an otherwise
+identical tree.
+
+Consequence: the drift check W-13 asks for **must** build the dashboard, and on
+this tool a build makes `spec-spine index coverage` disagree with the committed
+shards, so the check cannot be added without either excluding `.svelte-kit` or
+cleaning it afterwards. Today, a contributor who runs `just build ui` sees
+`just spine-check` fail for a reason unrelated to anything they changed. CI never
+builds the dashboard, so the committed index is unaffected in practice, which is
+why this went unnoticed.
+
+Same family as F-016, and blocked on the same missing capability: whether
+`resolver_exclusions` or any other key reaches a path inside a declared npm
+package was not probed here, and W-14 records that the equivalent question for
+`hiqlite/static` has no answer at this pin. **Observed by execution.**
+`019` KD-3.
+
+### F-095 `defect`, confidence `high`
+
+**The dashboard's three cooldown tests race each other.**
+`hiqlite/src/dashboard/session.rs:197-231` are three pre-existing tests over one
+process-global `NEXT_LOGIN_ALLOWED` (`:39`), which libtest runs in parallel
+threads by default. `cooldown_locks_and_unlocks` unlocks and asserts unlocked
+while `cooldown_response_reports_remaining_wait` locks, so their assertions
+contradict each other whenever they interleave.
+
+**Observed by execution, 2026-09-21**: eight consecutive runs of
+`cargo test -p hiqlite --features dashboard --lib dashboard::session::tests`
+produced three failures, once with two of the three failing.
+
+Consequence: enabling the `dashboard` feature in CI, which F-019 and several
+findings in `018` point towards, introduces a flaky test on the first day. `018`'s
+acceptance block passes `--test-threads=1` for that group, which is correct for an
+acceptance block and is **not** a fix: `cargo test` does not. Recorded rather than
+repaired, because serializing them changes tests the adoption did not write and
+the right fix is a per-test lock or a reset fixture, which is a small design
+choice. `018` KD-9.
+
 ## Summary by class
 
 Class is what a finding **is**. State is what has **happened** to it. They are
@@ -1641,11 +1834,11 @@ record.
 
 | class | ids | count |
 |---|---|---|
-| `defect` | F-001 to F-006, F-009, F-021 to F-024, F-027 to F-029, F-031, F-036 to F-044, F-047, F-049 to F-051, F-054 to F-061, F-065 to F-070, F-072, F-077, F-078, F-083 | 46 |
+| `defect` | F-001 to F-006, F-009, F-021 to F-024, F-027 to F-029, F-031, F-036 to F-044, F-047, F-049 to F-051, F-054 to F-061, F-065 to F-070, F-072, F-077, F-078, F-083 to F-089, F-092 to F-095 | 56 |
 | `contradiction` | F-018, F-030, F-032 to F-034, F-045, F-062 to F-064, F-074, F-075, F-082 | 12 |
 | `gap` | F-010, F-013 | 2 |
-| `evidence` | F-011, F-012, F-017, F-019, F-046, F-048, F-052, F-071, F-081 | 9 |
-| `limit` | F-007, F-008, F-015, F-016, F-026, F-035, F-053, F-073, F-076, F-079, F-080 | 11 |
+| `evidence` | F-011, F-012, F-017, F-019, F-046, F-048, F-052, F-071, F-081, F-090 | 10 |
+| `limit` | F-007, F-008, F-015, F-016, F-026, F-035, F-053, F-073, F-076, F-079, F-080, F-091 | 12 |
 | `decision` | F-014, F-020, F-025 | 3 |
 
 ### Summary by state (2026-09-21)
@@ -1654,27 +1847,28 @@ record.
 |---|---|---|
 | repaired | F-001, F-002, F-030 | 3 |
 | closed, entry retained | F-013 (at M1, by wave 1), F-011 and F-046 (2026-09-21, by `010` and `011`), F-052 (by `014`) and F-015 (by `017`), both 2026-09-21 | 5 |
-| open | everything else: F-003 to F-010, F-012, F-014, F-016 to F-029, F-031 to F-045, F-047 to F-051, F-053 to F-083 | 75 |
+| open | everything else: F-003 to F-010, F-012, F-014, F-016 to F-029, F-031 to F-045, F-047 to F-051, F-053 to F-095 | 87 |
 
 A finding's state answers whether the thing it records is still in the tree, and
 nothing else. F-030 is repaired because its contradiction is gone; the optional
 process decision it surfaced is W-24's, and a work item's being undecided has
 never been a reason to hold a finding open.
 
-Seventy-five open, of which three carry a dated disposition recording what has
+Eighty-seven open, of which four carry a dated disposition recording what has
 moved since they were written. Two were appended on 2026-09-20: F-016 (dashboard
 now visible, the generated and vendored denominator problem unresolved) and
 F-018 (the `AGENTS.md` half resolved, the three-way naming collision unchanged).
-The third was appended on 2026-09-21: F-017, whose unclaimed-files half is closed
-at M1 by `012` while its recorded non-completion is diagnosed as F-051 and still
-in the tree. F-015 carried a fourth until `017` closed it outright on the same
+Two more were appended on 2026-09-21: F-017, whose unclaimed-files half is
+closed at M1 by `012` while its recorded non-completion is diagnosed as F-051 and
+still in the tree, and F-012, whose missing drift check was finally run and came
+back negative twice (F-092, F-093). F-015 carried a fourth until `017` closed it outright on the same
 day. A disposition narrows an entry; it does not close it.
 
 Open **defects**, which is the subset a repair workstream draws from:
 F-003, F-004, F-005, F-006, F-009, F-021, F-022, F-023, F-024, F-027, F-028,
 F-029, F-031, F-036 to F-044, F-047, F-049 to F-051, F-054 to F-061, F-065 to
-F-070, F-072, F-077, F-078, F-083. Forty-four of the forty-six defects; F-001
-and F-002 are the two repaired.
+F-070, F-072, F-077, F-078, F-083 to F-089, F-092 to F-095. Fifty-four of the
+fifty-six defects; F-001 and F-002 are the two repaired.
 
 **Reclassified on 2026-09-19**, after each class test was applied rather than
 assumed: F-007 and F-008 from `defect` to `limit`, because a stated contract with
@@ -1697,8 +1891,12 @@ suite rather than by reading it, F-056 to F-061 found on the same day by the
 backup and object-storage adoption, F-065 and F-066 by the schema migration
 adoption, F-067 to F-070 and F-072 by the server-binary and proxy adoption,
 whose first finding is that the proxy subcommand panics before it binds, and
-F-077 and F-078 by the derive-macro adoption, and F-083 by the examples
-adoption, which found it by running the documented build.
+F-077 and F-078 by the derive-macro adoption, F-083 by the examples adoption,
+which found it by running the documented build, and F-084 to F-089 and F-095 by the
+dashboard adoption, two of them found by writing the first test their file had
+ever had and one by running the ones it already had eight times, and F-092 to
+F-094 by the dashboard build adoption, all three found by running the rebuild
+W-13 asks for.
 F-013 is closed at M1 by wave 1, F-011 by `010`, and F-046 by `011` in the same
 change that recorded it; all three are retained as records rather than deleted. No finding in this register authorizes
 a repair; each repair is a separate governed change with its own spec and
@@ -1710,11 +1908,11 @@ on 2026-09-20. A repaired entry is annotated in place and keeps its identifier,
 its class, and its original text, so the baseline a repair was reviewed against
 stays readable.
 
-**Forty-four defects are open**: F-003 to F-006, F-009, F-021 to F-024,
+**Fifty-four defects are open**: F-003 to F-006, F-009, F-021 to F-024,
 F-027 to F-029, F-031, F-036 to F-044, F-047, F-049 to F-051, F-054 to F-061,
-F-065 to F-070, F-072, F-077, F-078, F-083. Two earlier revisions of this paragraph were
+F-065 to F-070, F-072, F-077, F-078, F-083 to F-089, F-092 to F-095. Two earlier revisions of this paragraph were
 stale: one said ten against a table of fourteen, and the next said twelve after
-`009` had already added F-031 and F-036. The arithmetic is forty-six recorded
+`009` had already added F-031 and F-036. The arithmetic is fifty-six recorded
 minus the two repaired, and this paragraph is the one that has to be recomputed
 whenever the class table changes. F-021 through F-024 and F-029 are a separate
 cache-log repair that was deliberately not bundled into `008`.

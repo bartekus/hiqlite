@@ -74,3 +74,48 @@ pub async fn handler(uri: Uri, req: Request) -> response::Response {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::extract::Request;
+
+    fn request_for(path: &str) -> (Uri, Request) {
+        let uri: Uri = path.parse().unwrap();
+        let req = Request::builder()
+            .uri(uri.clone())
+            .body(Body::empty())
+            .unwrap();
+        (uri, req)
+    }
+
+    #[tokio::test]
+    async fn a_known_asset_is_served_with_its_cache_headers() {
+        let (uri, req) = request_for("/index.html");
+        let resp = handler(uri, req).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            resp.headers().get(header::CACHE_CONTROL).unwrap(),
+            "max-age=3600, public"
+        );
+    }
+
+    #[tokio::test]
+    async fn an_unknown_asset_is_a_plain_404() {
+        let (uri, req) = request_for("/does-not-exist.html");
+        let resp = handler(uri, req).await;
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    /// F-085: the compression suffix check slices the path at
+    /// `len().saturating_sub(4)` without asking whether that byte index is a
+    /// character boundary. `http::Uri` accepts raw UTF-8 in a path, so a request
+    /// whose last four bytes split a multi-byte character panics this handler,
+    /// which is the unauthenticated `/dashboard` fallback.
+    #[tokio::test]
+    #[should_panic(expected = "byte index 2 is not a char boundary")]
+    async fn a_multibyte_path_panics_the_fallback() {
+        let (uri, req) = request_for("/\u{20ac}abc");
+        let _ = handler(uri, req).await;
+    }
+}

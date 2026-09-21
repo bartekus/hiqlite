@@ -2,32 +2,31 @@
   "mapping": {
     "dependsOn": [
       "000-hiqlite-ownership-bootstrap",
-      "003-client-consistency-and-retry-outcomes",
-      "009-configuration-contract"
+      "018-dashboard-service-and-ui"
     ],
     "implementingPaths": [
       {
-        "path": "hiqlite.env",
+        "path": "dashboard/package.json",
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite/src/app_state.rs",
+        "path": "dashboard/playwright.config.ts",
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite/src/init.rs",
+        "path": "dashboard/svelte.config.js",
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite/src/split_brain_check.rs",
+        "path": "dashboard/tsconfig.json",
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite/src/start.rs",
+        "path": "dashboard/vite.config.ts",
         "source": "spec-edge"
       },
       {
-        "path": "spec-spine.toml",
+        "path": "justfile",
         "source": "spec-edge"
       },
       {
@@ -43,79 +42,79 @@
       {
         "locations": [
           {
-            "file": "hiqlite/src/app_state.rs"
+            "file": "dashboard/package.json"
           }
         ],
         "ownership": true,
         "sourceField": "establishes",
         "unit": {
           "kind": "file",
-          "path": "hiqlite/src/app_state.rs"
+          "path": "dashboard/package.json"
         }
       },
       {
         "locations": [
           {
-            "file": "hiqlite/src/init.rs"
+            "file": "dashboard/playwright.config.ts"
           }
         ],
         "ownership": true,
         "sourceField": "establishes",
         "unit": {
           "kind": "file",
-          "path": "hiqlite/src/init.rs"
+          "path": "dashboard/playwright.config.ts"
         }
       },
       {
         "locations": [
           {
-            "file": "hiqlite/src/split_brain_check.rs"
+            "file": "dashboard/svelte.config.js"
           }
         ],
         "ownership": true,
         "sourceField": "establishes",
         "unit": {
           "kind": "file",
-          "path": "hiqlite/src/split_brain_check.rs"
+          "path": "dashboard/svelte.config.js"
         }
       },
       {
         "locations": [
           {
-            "file": "hiqlite/src/start.rs"
+            "file": "dashboard/tsconfig.json"
           }
         ],
         "ownership": true,
         "sourceField": "establishes",
         "unit": {
           "kind": "file",
-          "path": "hiqlite/src/start.rs"
+          "path": "dashboard/tsconfig.json"
         }
       },
       {
         "locations": [
           {
-            "file": "hiqlite.env"
+            "file": "dashboard/vite.config.ts"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "dashboard/vite.config.ts"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "justfile"
           }
         ],
         "ownership": true,
         "sourceField": "extends",
         "unit": {
           "kind": "file",
-          "path": "hiqlite.env"
-        }
-      },
-      {
-        "locations": [
-          {
-            "file": "spec-spine.toml"
-          }
-        ],
-        "ownership": true,
-        "sourceField": "extends",
-        "unit": {
-          "kind": "file",
-          "path": "spec-spine.toml"
+          "path": "justfile"
         }
       },
       {
@@ -145,9 +144,9 @@
         }
       }
     ],
-    "specId": "010-node-lifecycle-and-split-brain",
+    "specId": "019-dashboard-build-contract",
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "4c2464f41aa4ce1a453ec034f8fad6462948a46b1b044055391da6e97e140c7a"
+  "shardHash": "c94b7d30f26d697b6118d7f714f2c7c97a925df49e6916b77abf04540fb0b311"
 }
