@@ -61,3 +61,44 @@ impl Config {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn cfg(nodes: Vec<String>, secret_api: &str) -> Config {
+        Config {
+            listen_port: 8200,
+            nodes,
+            tls_config: None,
+            secret_api: secret_api.to_string(),
+        }
+    }
+
+    /// Characterizes the proxy's only validation, including F-074: the message
+    /// for a short secret names `secret_raft`, which the proxy has no concept
+    /// of. Nothing validates the port, the TLS material or node reachability.
+    #[test]
+    fn proxy_validation_covers_two_fields_and_names_a_third() {
+        let ok = cfg(vec!["127.0.0.1:8200".to_string()], "0123456789abcdef");
+        assert!(ok.is_valid().is_ok());
+
+        let no_nodes = cfg(Vec::new(), "0123456789abcdef");
+        let err = no_nodes.is_valid().unwrap_err().to_string();
+        assert!(err.contains("'nodes' must not be empty"), "{err}");
+
+        // exactly 16 is accepted, 15 is not
+        assert!(
+            cfg(vec!["127.0.0.1:8200".to_string()], "0123456789abcde")
+                .is_valid()
+                .is_err()
+        );
+
+        let short = cfg(vec!["127.0.0.1:8200".to_string()], "short");
+        let err = short.is_valid().unwrap_err().to_string();
+        assert!(
+            err.contains("'secret_raft'"),
+            "F-074: the proxy reports a secret_raft it does not have: {err}"
+        );
+    }
+}

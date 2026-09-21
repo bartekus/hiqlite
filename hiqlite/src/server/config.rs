@@ -431,3 +431,78 @@ insecure_cookie = {insecure_cookie}
 "#
     ))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Collects the top-level keys a reference configuration documents, whether
+    /// the line is active or commented out, which is how both files mark
+    /// defaults.
+    fn documented_keys(toml: &str) -> Vec<String> {
+        let mut keys = toml
+            .lines()
+            .filter_map(|line| {
+                let line = line.trim_start().strip_prefix('#').unwrap_or(line.trim_start());
+                let (key, _) = line.split_once(" = ")?;
+                if !key.is_empty()
+                    && key
+                        .chars()
+                        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+                {
+                    Some(key.to_string())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        keys.sort();
+        keys.dedup();
+        keys
+    }
+
+    /// F-071: `generate` writes a second full copy of the reference
+    /// configuration, and nothing compares it to `hiqlite.toml`. This pins the
+    /// exact set of keys the generated file leaves out, so the divergence
+    /// cannot widen or silently close without this test failing.
+    #[test]
+    fn the_generated_config_omits_keys_the_reference_file_documents() {
+        let generated = default_config("cGFzc3dvcmQ=", false).unwrap();
+        let reference =
+            std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../hiqlite.toml"))
+                .unwrap();
+
+        let generated_keys = documented_keys(&generated);
+        let reference_keys = documented_keys(&reference);
+
+        let missing = reference_keys
+            .iter()
+            .filter(|k| !generated_keys.contains(k))
+            .cloned()
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            missing,
+            vec![
+                "listen_addr_api".to_string(),
+                "listen_addr_raft".to_string(),
+                "rate_limit_cache_burst".to_string(),
+                "rate_limit_cache_rps".to_string(),
+                "rate_limit_db_burst".to_string(),
+                "rate_limit_db_rps".to_string(),
+                "secrets_file".to_string(),
+                "tls_auto_certificates".to_string(),
+            ],
+            "F-071: the generated config and hiqlite.toml have drifted"
+        );
+
+        // the other direction is currently clean, and stays asserted so a new
+        // key added only to the generated copy is caught too
+        let extra = generated_keys
+            .iter()
+            .filter(|k| !reference_keys.contains(k))
+            .cloned()
+            .collect::<Vec<_>>();
+        assert!(extra.is_empty(), "generated-only keys: {extra:?}");
+    }
+}

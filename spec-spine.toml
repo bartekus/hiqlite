@@ -65,6 +65,11 @@ extra_hashed_inputs = [
   "hiqlite/src/client/**/*.rs",
   "hiqlite/src/network/**/*.rs",
   "hiqlite/src/server/proxy/stream.rs",
+  # The server binary and the proxy, claimed by 015. The subtree glob subsumes
+  # the proxy/stream.rs entry above, which is kept because it is 000's
+  # statement about 003's territory and 015 does not own that statement.
+  "hiqlite/src/main.rs",
+  "hiqlite/src/server/**/*.rs",
   "hiqlite/src/store/state_machine/sqlite/**/*.rs",
   "hiqlite/src/external_state_machine.rs",
   "hiqlite/tests/cluster/**/*.rs",
