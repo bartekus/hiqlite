@@ -1,0 +1,125 @@
+{
+  "record": {
+    "created": "2026-09-21",
+    "dependsOn": [
+      "000-hiqlite-ownership-bootstrap",
+      "002-snapshot-publication-and-recovery",
+      "003-client-consistency-and-retry-outcomes"
+    ],
+    "establishes": [
+      {
+        "kind": "file",
+        "path": "hiqlite/tests/cluster/main.rs"
+      },
+      {
+        "kind": "file",
+        "path": "hiqlite/tests/cluster/start.rs"
+      },
+      {
+        "kind": "file",
+        "path": "hiqlite/tests/cluster/check.rs"
+      },
+      {
+        "kind": "file",
+        "path": "hiqlite/tests/cluster/migration.rs"
+      },
+      {
+        "kind": "file",
+        "path": "hiqlite/tests/cluster/execute_query.rs"
+      },
+      {
+        "kind": "file",
+        "path": "hiqlite/tests/cluster/transaction.rs"
+      },
+      {
+        "kind": "file",
+        "path": "hiqlite/tests/cluster/batch.rs"
+      },
+      {
+        "kind": "file",
+        "path": "hiqlite/tests/cluster/type_conversions.rs"
+      },
+      {
+        "kind": "file",
+        "path": "hiqlite/tests/cluster/cache.rs"
+      },
+      {
+        "kind": "file",
+        "path": "hiqlite/tests/cluster/listen_notify.rs"
+      },
+      {
+        "kind": "file",
+        "path": "hiqlite/tests/cluster/dlock.rs"
+      },
+      {
+        "kind": "file",
+        "path": "hiqlite/tests/cluster/remote_only.rs"
+      },
+      {
+        "kind": "file",
+        "path": "hiqlite/tests/cluster/learner_only.rs"
+      },
+      {
+        "kind": "file",
+        "path": "hiqlite/tests/cluster/backup.rs"
+      },
+      {
+        "kind": "file",
+        "path": "hiqlite/tests/cluster/backup_restore.rs"
+      }
+    ],
+    "extends": [
+      {
+        "nature": "additive",
+        "spec": "005-adoption-assessment-and-plan",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/findings-register.md"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "005-adoption-assessment-and-plan",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/adoption-plan.md"
+        }
+      }
+    ],
+    "id": "012-cluster-integration-evidence",
+    "implementation": "complete",
+    "kind": "adoption",
+    "origin": {
+      "paths": [
+        "hiqlite/tests/cluster/"
+      ],
+      "retroactive": true
+    },
+    "owner": "hiqlite maintainers",
+    "risk": "high",
+    "sectionHeadings": [
+      "012: Adopt the cluster integration evidence surface",
+      "1. Purpose",
+      "2. Territory",
+      "3. Behavior",
+      "B-1. The suite is one test, and the phase order is the contract",
+      "B-2. `learner_only` is a second, independent test in the same process",
+      "B-3. Every cluster test runs with TLS off, deliberately",
+      "B-4. The fixture configuration, and the two variables that change it",
+      "B-5. Success ends the process; any panic ends the process",
+      "B-6. A remote client's event subscription is asynchronous and unsignalled",
+      "4. Evidence and its limits",
+      "5. The stall, diagnosed",
+      "6. Known defects",
+      "7. Resolved decisions",
+      "8. Out of scope",
+      "Verification"
+    ],
+    "specPath": "specs/012-cluster-integration-evidence/spec.md",
+    "status": "draft",
+    "summary": "Adopts the fifteen unclaimed files of hiqlite/tests/cluster/ and maps each phase to the guarantee it establishes. Diagnoses F-017's recorded non-completion by execution rather than restating it: the suite is a single sequential test whose self-healing phase runs last, and the stall that prevents it from being reached is a connect-versus-publish race in Client::remote, localised here to the microsecond. Records eight defects and limits, including an unbounded wait, a success path that exits the process while a second test is running, and the fact that no cluster test has ever run with TLS enabled. Repairs no runtime behavior and modifies no test.\n",
+    "title": "Adopt the cluster integration evidence surface"
+  },
+  "shardHash": "63352c7f06ccf6347decd725b94945ff041b4515a11dc26bd7b46e6642a8f5c8",
+  "specVersion": "1.3.0"
+}

@@ -422,6 +422,17 @@ evidence is a focused storage test with a narrower reach. Not re-run here: the
 task scope excludes expensive cluster runs, and this is reported unresolved
 rather than guessed at.
 
+**Disposition appended 2026-09-21 by `012-cluster-integration-evidence`.** Both
+halves have moved, and neither is closed by the same mechanism. The first half,
+fifteen unclaimed files, is **closed at M1**: `012` establishes all fifteen and
+maps each phase to the guarantee it establishes (`012` B-1). The second half is
+**diagnosed, not closed**: the stall is a connect-versus-publish race in
+`Client::remote`, recorded as F-051 with a measured 175 ms losing window, and it
+is still in the tree. The entry stays open on that basis. A third fact the
+original entry did not have: the non-completion is not specific to self-healing
+at all, because `self_heal.rs` is phase 15 of a fifteen-phase sequential test
+(F-048), so any stall anywhere before it produces the same report.
+
 ### F-018 `contradiction`, confidence `high`
 
 **Three different things are called "verify".** `just verify` is the
@@ -966,6 +977,162 @@ spec in the same way F-029 was: `007-cache-log-store` records four known defects
 and now omits two. Reconciling both into `007` is queued under W-04 and is not
 done by this change.
 
+### F-048 `evidence`, confidence `high`
+
+**Fifteen integration guarantees share one test result.**
+`hiqlite/tests/cluster/` builds one binary whose `test_cluster`
+(`main.rs:39-71`) delegates to `exec_tests` (`:73-229`), a flat sequence of
+fifteen `?`-propagating phases. There are no sub-tests and no way to select,
+skip or reorder a phase. The order is load-bearing and undeclared: phase 4
+inserts the rows phases 12 and 15 check for, phase 8 seeds the cache value
+phase 15 reads, phase 13 drops `_metadata` so phase 14 exercises the validation
+bypass, and `check.rs:38-44` hard-codes six row ids left by phases 5 and 6.
+
+Consequence: phase *n* passing means phases 1 to *n* passed in that order on
+that tree, and a failure or stall at phase *n* leaves phases *n+1* to 15 unrun
+and unreported. Realised twice already: `002` recorded a non-completion for a
+guarantee whose test never ran, and the 2026-09-21 run recorded in F-051 leaves
+eleven of fifteen guarantees unestablished for a reason unrelated to any of
+them. Not a fault in any phase; a property of the composition.
+**Observed by execution.** `012` KD-1.
+
+### F-049 `defect`, confidence `high`
+
+**The suite's success path exits the process while a second test may still be
+running.** `hiqlite/tests/cluster/main.rs:65-68` calls `process::exit(0)` from
+inside `test_cluster`. The binary contains two `#[tokio::test]` functions,
+`test_cluster` and `learner_only::learner_only_node_stays_non_voter_and_becomes_ready`
+(`learner_only.rs:9-38`), and libtest runs them in parallel threads of one
+process by default; an executed run prints `running 2 tests`.
+
+Consequence: if `test_cluster` finishes first, the process ends immediately. The
+other test is terminated wherever it is, libtest never prints its result or the
+summary line, and cargo sees exit status 0 and reports success. The reverse
+exposure is `set_panic_hook` (`:231-254`), whose `process::exit(1)` turns a panic
+in either test into a whole-binary failure attributed to neither. The authored
+`// TODO sometimes the test gets stuck here` immediately above the exit records
+that this path has been unreliable before.
+
+The concurrency is **observed** (both clusters initialise within the same
+millisecond in the 2026-09-21 run); the truncation is source-established and did
+not fire in that run, because `learner_only` happened to finish first. Nothing
+enforces that order. `012` KD-2.
+
+### F-050 `defect`, confidence `high`
+
+**The cluster health wait is unbounded, and so is the public client call
+underneath it.** `hiqlite/tests/cluster/start.rs:92-125`
+(`wait_for_healthy_cluster`) is `for i in 1..=3 { loop { sleep(1s); ... } }` with
+no iteration cap and no deadline. `check.rs:10-11` reaches the same shape through
+the public API: `Client::wait_until_healthy_db` and `wait_until_healthy_cache`
+(`hiqlite/src/client/mgmt.rs:139-153`) are unbounded `loop`s over `is_healthy_*`
+with a 500 ms sleep.
+
+Consequence: a regression that stops a cluster forming is reported as an
+unbounded hang rather than a failure, in a harness that imposes no timeout of
+its own; CI then sits until its job limit and is killed without a diagnosis. The
+same binary already contains the bounded form of this wait
+(`learner_only.rs:67-80`: thirty attempts, then a real error), so both idioms sit
+side by side.
+
+The unbounded shape is source-established; that the suite can hang indefinitely
+is **observed** (F-051). The library half is in `003`'s unit. `012` KD-3.
+
+### F-051 `defect`, confidence `high`
+
+**`Client::remote` returns before its event subscription exists, so an event
+published soon after construction is dropped and `listen()` waits forever.**
+`hiqlite/src/client/create.rs:163` calls `RemoteListener::spawn`, which is
+`task::spawn(Self::handler(...))` followed by an immediate return of the receiver
+(`hiqlite/src/client/listen_notify.rs:29-37`). The handler then connects an SSE
+stream to `/listen` (`:45-62`), and the server registers the subscriber only when
+that connection is accepted. `Client::remote` awaits none of it, returns no
+readiness signal, and the client exposes none afterwards. `Client::listen`
+(`:104-110`) is `recv_async().await` on an unbounded `flume` receiver with no
+timeout.
+
+**Observed by execution**, on 2026-09-21, in the run `012` section 5 records.
+Client 1's listener began connecting at `19:28:51.645559`; the test published at
+`19:28:51.885931` (`remote_only.rs:42-48`); the server registered client 1's
+subscription at `19:28:52.060964` and client 2's at `19:28:52.118574`. The
+publish therefore reached an empty subscriber set, `Notify` has no buffering or
+replay, and both `listen()` calls blocked permanently. The losing window was
+175 ms.
+
+Consequence, beyond the test: any consumer that constructs a remote client and
+publishes an event soon afterwards can lose it silently and then block forever
+waiting for it.
+
+**This is the cause of F-017's recorded non-completion.** Self-healing is phase
+15 of 15 and was not reached because phase 11 does not return; the stall says
+nothing about `self_heal.rs`. Not a flake: the ordering in `remote_only.rs` is
+deterministic, and whether the race is lost depends only on whether the SSE
+connection completes inside the ~120 ms between `Client::remote` returning and
+the publish. The unit is `003`'s; recorded here because `012` is where it was
+diagnosed. `012` KD-4 and section 5.
+
+### F-052 `evidence`, confidence `high`
+
+**Two of the three bad-migration fixtures are on disk with their assertions
+commented out.** `hiqlite/tests/cluster/migration.rs:8-14` comments out the
+`rust_embed` derives for `bad_1` and `bad_2`, and `:33-41` and `:121-126` comment
+out the assertions that used them. The authored reason is at `:29-31`:
+`#[should_panic]` does not work in an async helper called from another test. The
+fixtures are still in the tree
+(`tests/cluster/migrations/bad_1/no_leading_index.sql`,
+`tests/cluster/migrations/bad_2/2_bad_start_index.sql`).
+
+Consequence: the two migration-naming rules those fixtures exist to test, that a
+file needs a leading integer index and that the sequence must start at 1, have
+fixtures, a disabled test and no evidence. Only `bad_3`, the SQL-syntax case, is
+exercised. W-10 owns the closure. Source-established. `012` KD-5.
+
+### F-053 `limit`, confidence `high`
+
+**No cluster test has ever run with TLS enabled.**
+`hiqlite/tests/cluster/start.rs:76-81` sets `config.tls_raft = None` and
+`config.tls_api = None` for every node the suite starts, with an authored
+reason: TLS routes through `axum_server`, which has no graceful shutdown, which
+the suite needs because it runs three nodes in one process.
+
+Consequence, stated once so other specs can cite it rather than re-derive it:
+`011`'s entire wire behavior, `010` B-5's TLS-dependent shutdown path, and
+F-044's scheme mismatch are all unreachable by the only integration surface this
+repository has. Classed as a limit because the boundary is deliberate, authored
+and explained; what was missing is any record of what it costs.
+Source-established. `012` KD-6.
+
+### F-054 `defect`, confidence `medium`
+
+**A restart race in the WAL is papered over by a sleep in the test.**
+`hiqlite/tests/cluster/main.rs:140-142`: `// TODO if this next action comes too
+fast, there will be a WAL log ID mismatch -> find out why and fix it`, followed
+by `time::sleep(Duration::from_millis(1000))` before the first post-restart cache
+write. A second 250 ms sleep at `:131-132` waits for the log sync task to notice
+a closed channel.
+
+Consequence: the restart guarantee of phase 12 holds only for a caller that waits
+a second, and nothing in the library documents the wait. Recorded as a defect in
+the code under test rather than as a test smell: the sleep is the evidence, not
+the fault. **Confidence medium** because the mismatch itself was not reproduced;
+the authored admission and the workaround are what is established. `012` KD-7.
+
+### F-055 `defect`, confidence `medium`
+
+**Two concurrently running tests share process-wide environment mutation.**
+`hiqlite/tests/cluster/backup_restore.rs:13-42` sets and removes
+`HQL_BACKUP_RESTORE` and `HQL_BACKUP_SKIP_VALIDATION` through
+`unsafe { env::set_var }`, and `main.rs:47` removes the first at startup. These
+are process-wide, and per F-049 the process is also running `learner_only`,
+which starts three nodes that read the environment at startup. Nothing sequences
+the two tests.
+
+Consequence: a learner-only node can be constructed while a restore variable
+belonging to the other test is set, which would start it on a backup image. The
+window is narrow in practice, because `learner_only` finishes early and the
+restore phases are late. **Not observed**; recorded because the ordering that
+makes it safe is incidental and undeclared. `012` KD-8.
+
 ## Summary by class
 
 Class is what a finding **is**. State is what has **happened** to it. They are
@@ -975,11 +1142,11 @@ record.
 
 | class | ids | count |
 |---|---|---|
-| `defect` | F-001 to F-006, F-009, F-021 to F-024, F-027 to F-029, F-031, F-036 to F-044, F-047 | 25 |
+| `defect` | F-001 to F-006, F-009, F-021 to F-024, F-027 to F-029, F-031, F-036 to F-044, F-047, F-049 to F-051, F-054, F-055 | 30 |
 | `contradiction` | F-018, F-030, F-032 to F-034, F-045 | 6 |
 | `gap` | F-010, F-013 | 2 |
-| `evidence` | F-011, F-012, F-017, F-019, F-046 | 5 |
-| `limit` | F-007, F-008, F-015, F-016, F-026, F-035 | 6 |
+| `evidence` | F-011, F-012, F-017, F-019, F-046, F-048, F-052 | 7 |
+| `limit` | F-007, F-008, F-015, F-016, F-026, F-035, F-053 | 7 |
 | `decision` | F-014, F-020, F-025 | 3 |
 
 ### Summary by state (2026-09-21)
@@ -988,25 +1155,26 @@ record.
 |---|---|---|
 | repaired | F-001, F-002, F-030 | 3 |
 | closed, entry retained | F-013 (at M1, by wave 1), F-011 and F-046 (2026-09-21, by `010` and `011`) | 3 |
-| open | everything else: F-003 to F-010, F-012, F-014 to F-029, F-031 to F-045, F-047 | 41 |
+| open | everything else: F-003 to F-010, F-012, F-014 to F-029, F-031 to F-045, F-047 to F-055 | 49 |
 
 A finding's state answers whether the thing it records is still in the tree, and
 nothing else. F-030 is repaired because its contradiction is gone; the optional
 process decision it surfaced is W-24's, and a work item's being undecided has
 never been a reason to hold a finding open.
 
-Forty-one open, of which three carry a dated disposition appended on
-2026-09-20 recording what has moved since they were written: F-015 (examples
-now visible, still unclaimed), F-016 (dashboard now visible, the generated and
-vendored
-denominator problem unresolved), F-018 (the `AGENTS.md` half resolved, the
-three-way naming collision unchanged). A disposition narrows an entry; it does
-not close it. An earlier revision said four and listed three.
+Forty-nine open, of which four carry a dated disposition recording what has
+moved since they were written. Three were appended on 2026-09-20: F-015
+(examples now visible, still unclaimed), F-016 (dashboard now visible, the
+generated and vendored denominator problem unresolved), F-018 (the `AGENTS.md`
+half resolved, the three-way naming collision unchanged). The fourth was
+appended on 2026-09-21: F-017, whose unclaimed-files half is closed at M1 by
+`012` while its recorded non-completion is diagnosed as F-051 and still in the
+tree. A disposition narrows an entry; it does not close it.
 
 Open **defects**, which is the subset a repair workstream draws from:
 F-003, F-004, F-005, F-006, F-009, F-021, F-022, F-023, F-024, F-027, F-028,
-F-029, F-031, F-036 to F-044, F-047. Twenty-three of the twenty-five defects;
-F-001 and F-002 are the two repaired.
+F-029, F-031, F-036 to F-044, F-047, F-049, F-050, F-051, F-054, F-055.
+Twenty-eight of the thirty defects; F-001 and F-002 are the two repaired.
 
 **Reclassified on 2026-09-19**, after each class test was applied rather than
 assumed: F-007 and F-008 from `defect` to `limit`, because a stated contract with
@@ -1016,14 +1184,16 @@ migration state rather than faults; and the consequences of F-001, F-002, and
 F-014 rewritten against traced source, with three earlier claims withdrawn in
 place.
 
-Twenty-five defects: six from the pilot specs, F-009 from the whole-project pass,
+Thirty defects: six from the pilot specs, F-009 from the whole-project pass,
 five (F-021 to F-024, F-027) found by wave 1, F-028 found while tracing the
 `008` repair, F-029 found on 2026-09-20 while re-reading the memory log store
 against the locked trait, F-031 and F-036 found by the configuration adoption on
 2026-09-20, F-037 to F-040 found by the node-lifecycle adoption on 2026-09-21,
-F-041 to F-044 found by the transport-security adoption on the same day, and
+F-041 to F-044 found by the transport-security adoption on the same day,
 F-047 found on 2026-09-21 while tracing the cache log store against the locked
-trait for the W-04 proposal.
+trait for the W-04 proposal, and F-049 to F-051, F-054 and F-055 found on
+2026-09-21 by the cluster integration adoption, three of them by running the
+suite rather than by reading it.
 F-013 is closed at M1 by wave 1, F-011 by `010`, and F-046 by `011` in the same
 change that recorded it; all three are retained as records rather than deleted. No finding in this register authorizes
 a repair; each repair is a separate governed change with its own spec and
@@ -1035,10 +1205,11 @@ on 2026-09-20. A repaired entry is annotated in place and keeps its identifier,
 its class, and its original text, so the baseline a repair was reviewed against
 stays readable.
 
-**Twenty-three defects are open**: F-003 to F-006, F-009, F-021 to F-024,
-F-027 to F-029, F-031, F-036 to F-044, F-047. Two earlier revisions of this paragraph were
+**Twenty-eight defects are open**: F-003 to F-006, F-009, F-021 to F-024,
+F-027 to F-029, F-031, F-036 to F-044, F-047, F-049 to F-051, F-054, F-055.
+Two earlier revisions of this paragraph were
 stale: one said ten against a table of fourteen, and the next said twelve after
-`009` had already added F-031 and F-036. The arithmetic is twenty-five recorded
+`009` had already added F-031 and F-036. The arithmetic is thirty recorded
 minus the two repaired, and this paragraph is the one that has to be recomputed
 whenever the class table changes. F-021 through F-024 and F-029 are a separate
 cache-log repair that was deliberately not bundled into `008`.
