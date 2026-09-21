@@ -45,6 +45,12 @@ extra_hashed_inputs = [
   "hiqlite/src/init.rs",
   "hiqlite/src/app_state.rs",
   "hiqlite/src/split_brain_check.rs",
+  # Transport security material and its REST client, claimed by 011, plus that
+  # spec's own environment-route test target, which sits outside the
+  # hiqlite/tests/cluster glob below.
+  "hiqlite/src/tls.rs",
+  "hiqlite/src/http_client.rs",
+  "hiqlite/tests/tls_env.rs",
   "hiqlite/src/query/**/*.rs",
   "hiqlite/src/client/**/*.rs",
   "hiqlite/src/network/**/*.rs",

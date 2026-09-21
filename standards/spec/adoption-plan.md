@@ -275,10 +275,11 @@ is the natural first expansion.
 
 ### Wave 2: the configuration contract, node lifecycle, and transport security
 
-**Status on 2026-09-21: two thirds delivered.** W-01 as `009` on 2026-09-20 and
-W-02 as `010` on 2026-09-21. W-03 is the remaining third. The scope and review
-text below is kept as written, because it is the standard each delivered spec
-was reviewed against; section 8 is the queue.
+**Status on 2026-09-21: delivered.** W-01 as `009` on 2026-09-20, W-02 as `010`
+and W-03 as `011` on 2026-09-21. The scope and review text below is kept as
+written, because it is the standard each delivered spec was reviewed against;
+section 8 is the queue. Wave 2 closes at M1 across A5, A8, A9 and A22, with the
+M2 limits each spec's evidence section states.
 
 **Scope.** A5, A8, A9, A22 (the config reference half).
 **Proposed specs:** one for the configuration contract (W-01), one for node
@@ -300,7 +301,7 @@ intent ruling.
 claims, plus a documentation assertion that every claimed variable appears in
 `hiqlite.toml` or `hiqlite.env`.
 **Known defects retained.** F-009 is recorded, not fixed. F-011 was closed by
-`010` section 5 instead of retained: documenting a variable is an addition to a
+`010` section 5 and F-046 by `011` section 5 instead of retained: documenting a variable is an addition to a
 reference file, not a change to behavior, and `009` section 7 had already
 assigned it here by name.
 **Owner decisions.** OD-3 (F-014 intent), honoured by `010` D-1: the watchdog is
@@ -729,7 +730,7 @@ scheduled, authorized, or approved by this document.
 |---|---|---|---|---|---|---|---|
 | W-01 | configuration contract: `config.rs`, `config_toml.rs`, `hiqlite.toml`, `hiqlite.env` (A5, A22) | **`009-configuration-contract`**, 2026-09-20 | **delivered at M1**: `009` establishes `config_toml.rs`, `hiqlite.toml` and `hiqlite.env` and `extends` `001` on `config.rs`; `spec-spine.toml` gained the freshness and denominator declarations | M2 partly: four characterization tests pin the contract, and `009` section 4 states what they do not reach, notably every environment-route claim, which is source-read only | none outstanding | none | closed at M1. The remaining evidence gap is the environment route, which cannot be tested without process-wide mutation (`009` D-3), and the per-variable validation assertions for the variables other specs will claim |
 | W-02 | node lifecycle and split-brain: `init.rs`, `start.rs`, `app_state.rs`, `split_brain_check.rs` (A8) | **`010-node-lifecycle-and-split-brain`**, 2026-09-21 | **delivered at M1**: `010` establishes all four files; `spec-spine.toml` gained their freshness declarations | M2 partly: six characterization tests pin the listen-address and node-identity contracts, and `010` section 4 states what they do not reach, which is everything needing a running node or cluster (B-1, B-4 to B-8) and both source-established defects | OD-3 honoured: the watchdog is described, not changed (`010` D-1) | none | closed at M1. Four new defects recorded (F-037 to F-040), F-009 and F-014 retained, F-011 closed by documenting `HQL_SPLIT_BRAIN_INTERVAL`. The remaining evidence gap is the join and shutdown sequences, which need the cluster surface W-15 owns |
-| W-03 | transport security material: `tls.rs` (A9) | none | not started | none focused | none outstanding | W-01 | material loading, trust validation and each `DANGER_*` override are specified and tested in every claimed configuration |
+| W-03 | transport security material: `tls.rs`, and `http_client.rs` as its REST consumer (A9) | **`011-transport-security-material`**, 2026-09-21 | **delivered at M1**: `011` establishes `tls.rs`, `http_client.rs` and its own `hiqlite/tests/tls_env.rs`; `spec-spine.toml` gained their freshness declarations | M2 partly: four tests cover every `from_env` branch and the variant selection, and `011` section 4 states what they do not reach, which is every claim that needs a handshake or a socket | none outstanding for the adoption; F-045 raises one for a later change | none | closed at M1. Six defects recorded (F-041 to F-046), F-031 retained. F-044 and F-045 are the two that warrant attention before any TLS deployment: the API channel's no-verify flag is read from the raft configuration by two of four consumers, and the documented reason for not verifying does not cover the REST endpoints that send `X-API-SECRET` as a header |
 | W-04 | cache log store contract repair: F-021 to F-024 and F-029, and reconciling F-029 into `007` as a KD entry | `007` | not started | two characterization tests, which pin the current behavior including the exclusive purge | none outstanding for the trait mismatch itself | none | the contract matches the locked trait, the replaced acceptance is carried through the governed mechanism rather than left asserting the old outcome, and `007` records or closes the fifth defect |
 | W-05 | `006` evidence gaps: counter and Notify semantics, dead-handler behavior, cache-index validation, cross-node convergence, clock-dependent lock limits | `006` | delivered at M1 | narrow; `006` section 4 states the limits | some gaps need W-08 and a lock policy decision first | W-08 | each gap is either evidenced or restated as a declared limit with its consequence |
 | W-06 | **optional** supervision of the WAL writer thread, on top of the termination policy `008` preserved | `001`, amended by `008` | the policy is **decided and in force**, not deferred: a persistence failure notifies, then ends the writer thread (`008` section 3.6, owner decision at `008` section 6) | the `run`-returns-`Err` termination is reported by a single ERROR log and tested by `writer_termination_is_reported`; `008` section 3.6 states what the report does not cover (panic, abort, signal), and `008` KD-3 records that the report has no consumer | **optional**: whether to add supervision at all (retain and join the `JoinHandle`, catch panics, wire a health check). Existing behavior stands unless the owner asks for a change; no decision is outstanding | none | supervision is either specified with evidence, or the corpus records that the reported termination is the whole of the contract and this row closes unchanged |

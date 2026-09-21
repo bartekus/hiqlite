@@ -229,3 +229,42 @@ impl ServerCertVerifier for NoTlsVerifier {
         ]
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 011 B-1. `TlsAutoCertificates` disables certificate verification for
+    /// whichever endpoint selects it, and `ServerTlsConfigCerts::new` starts
+    /// from verification enabled.
+    #[test]
+    fn auto_certificates_always_disable_verification() {
+        assert!(ServerTlsConfig::TlsAutoCertificates.danger_tls_no_verify());
+
+        let specific = ServerTlsConfig::Specific(ServerTlsConfigCerts::new(
+            "tls/key.pem",
+            "tls/cert-chain.pem",
+        ));
+        assert!(!specific.danger_tls_no_verify());
+    }
+
+    /// 011 B-4 and KD-3. `ServerTlsConfigCerts` carries a key, a certificate
+    /// and one boolean. There is no field for a trust anchor, so the only
+    /// trust roots a verifying client can ever have are the webpki bundle,
+    /// which `build_tls_config` adds only under the `webpki-roots` feature.
+    #[test]
+    fn the_tls_material_type_has_no_field_for_a_trust_anchor() {
+        let certs = ServerTlsConfigCerts::new("tls/key.pem", "tls/cert-chain.pem");
+
+        assert_eq!(certs.key.as_ref(), "tls/key.pem");
+        assert_eq!(certs.cert.as_ref(), "tls/cert-chain.pem");
+        assert!(!certs.danger_tls_no_verify);
+
+        let mirrored = ServerTlsConfigCerts {
+            key: certs.key.clone(),
+            cert: certs.cert.clone(),
+            danger_tls_no_verify: certs.danger_tls_no_verify,
+        };
+        assert_eq!(mirrored.key, certs.key);
+    }
+}

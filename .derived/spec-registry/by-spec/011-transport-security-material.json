@@ -1,0 +1,96 @@
+{
+  "record": {
+    "created": "2026-09-21",
+    "dependsOn": [
+      "000-hiqlite-ownership-bootstrap",
+      "009-configuration-contract",
+      "010-node-lifecycle-and-split-brain"
+    ],
+    "establishes": [
+      {
+        "kind": "file",
+        "path": "hiqlite/src/tls.rs"
+      },
+      {
+        "kind": "file",
+        "path": "hiqlite/src/http_client.rs"
+      },
+      {
+        "kind": "file",
+        "path": "hiqlite/tests/tls_env.rs"
+      }
+    ],
+    "extends": [
+      {
+        "nature": "additive",
+        "spec": "000-hiqlite-ownership-bootstrap",
+        "unit": {
+          "kind": "file",
+          "path": "spec-spine.toml"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "009-configuration-contract",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite.env"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "005-adoption-assessment-and-plan",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/findings-register.md"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "005-adoption-assessment-and-plan",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/adoption-plan.md"
+        }
+      }
+    ],
+    "id": "011-transport-security-material",
+    "implementation": "complete",
+    "kind": "adoption",
+    "origin": {
+      "paths": [
+        "hiqlite/src/tls.rs",
+        "hiqlite/src/http_client.rs"
+      ],
+      "retroactive": true
+    },
+    "owner": "hiqlite maintainers",
+    "risk": "critical",
+    "sectionHeadings": [
+      "011: Adopt the transport security material and its consumers",
+      "1. Purpose",
+      "2. Territory",
+      "3. Behavior",
+      "B-1. Two endpoints, three ways to end up without verification",
+      "B-2. `client_config` and `build_http_client` are two different clients",
+      "B-3. `from_env` reads three variables per endpoint and one shared switch",
+      "B-4. A verifying client has no configurable trust anchor",
+      "B-5. Four consumers, three different pairings of scheme and verification",
+      "B-6. The self-signed path names the listen address and lives for three years",
+      "B-7. Every failure in this module is a panic, and one of them is silent",
+      "4. Evidence and its limits",
+      "5. Documenting `HQL_TLS_AUTO_CERTS`, and what the entry deliberately omits",
+      "6. Known defects",
+      "7. Resolved decisions",
+      "8. The inventory declarations this spec requires",
+      "9. Out of scope",
+      "Verification"
+    ],
+    "specPath": "specs/011-transport-security-material/spec.md",
+    "status": "draft",
+    "summary": "Adopts hiqlite's TLS material as a contract traced end to end: how the two endpoints select certificates, what each dangerous override actually disables, which client honours which override, and what a verifying client can trust. Six defects are recorded, two of them executed. The most consequential are that the API channel's no-verify flag is read from the raft configuration by two of its four consumers, that a verifying client has no configurable trust anchor, and that the documented justification for not verifying does not cover the endpoints that send a bearer secret. Documents HQL_TLS_AUTO_CERTS. Repairs no runtime behavior.\n",
+    "title": "Adopt the transport security material and its consumers"
+  },
+  "shardHash": "dc7e8461f19a18368cc85b29f2af2183a5debf23b5928d83d7a8b4814d9e337f",
+  "specVersion": "1.3.0"
+}

@@ -2,7 +2,8 @@
   "mapping": {
     "dependsOn": [
       "000-hiqlite-ownership-bootstrap",
-      "001-wal-durability-and-completion"
+      "009-configuration-contract",
+      "010-node-lifecycle-and-split-brain"
     ],
     "implementingPaths": [
       {
@@ -10,19 +11,27 @@
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite.toml",
+        "path": "hiqlite/src/http_client.rs",
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite/src/config.rs",
+        "path": "hiqlite/src/tls.rs",
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite/src/config_toml.rs",
+        "path": "hiqlite/tests/tls_env.rs",
         "source": "spec-edge"
       },
       {
         "path": "spec-spine.toml",
+        "source": "spec-edge"
+      },
+      {
+        "path": "standards/spec/adoption-plan.md",
+        "source": "spec-edge"
+      },
+      {
+        "path": "standards/spec/findings-register.md",
         "source": "spec-edge"
       }
     ],
@@ -30,53 +39,53 @@
       {
         "locations": [
           {
+            "file": "hiqlite/src/http_client.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/http_client.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/tls.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/tls.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/tests/tls_env.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/tests/tls_env.rs"
+        }
+      },
+      {
+        "locations": [
+          {
             "file": "hiqlite.env"
-          }
-        ],
-        "ownership": true,
-        "sourceField": "establishes",
-        "unit": {
-          "kind": "file",
-          "path": "hiqlite.env"
-        }
-      },
-      {
-        "locations": [
-          {
-            "file": "hiqlite.toml"
-          }
-        ],
-        "ownership": true,
-        "sourceField": "establishes",
-        "unit": {
-          "kind": "file",
-          "path": "hiqlite.toml"
-        }
-      },
-      {
-        "locations": [
-          {
-            "file": "hiqlite/src/config_toml.rs"
-          }
-        ],
-        "ownership": true,
-        "sourceField": "establishes",
-        "unit": {
-          "kind": "file",
-          "path": "hiqlite/src/config_toml.rs"
-        }
-      },
-      {
-        "locations": [
-          {
-            "file": "hiqlite/src/config.rs"
           }
         ],
         "ownership": true,
         "sourceField": "extends",
         "unit": {
           "kind": "file",
-          "path": "hiqlite/src/config.rs"
+          "path": "hiqlite.env"
         }
       },
       {
@@ -91,11 +100,37 @@
           "kind": "file",
           "path": "spec-spine.toml"
         }
+      },
+      {
+        "locations": [
+          {
+            "file": "standards/spec/adoption-plan.md"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/adoption-plan.md"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "standards/spec/findings-register.md"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/findings-register.md"
+        }
       }
     ],
-    "specId": "009-configuration-contract",
+    "specId": "011-transport-security-material",
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "fe6478df59cffd1d3f76bab379f5bd37c5d9c2ca9de4d0d3f96cd91e9d132090"
+  "shardHash": "3cfe8861fa803463bd7ae878d850e57f7c894c85f48127fadff9efe8243d9039"
 }
