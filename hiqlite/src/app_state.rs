@@ -17,7 +17,11 @@ use crate::store::state_machine::memory::dlock_handler::LockRequest;
 #[cfg(feature = "listen_notify")]
 use crate::store::state_machine::memory::notify_handler::NotifyRequest;
 #[cfg(feature = "cache")]
+use crate::store::state_machine::memory::state_machine::CacheIncompatibility;
+#[cfg(feature = "cache")]
 use crate::store::state_machine::memory::{TypeConfigKV, kv_handler::CacheRequestHandler};
+#[cfg(feature = "cache")]
+use std::sync::OnceLock;
 #[cfg(feature = "sqlite")]
 use crate::store::state_machine::sqlite::{
     TypeConfigSqlite, state_machine::SqlitePool, writer::WriterRequest,
@@ -100,6 +104,11 @@ pub struct StateRaftDB {
 pub struct StateRaftCache {
     pub raft: openraft::Raft<TypeConfigKV>,
     pub tx_caches: Vec<flume::Sender<CacheRequestHandler>>,
+    /// Set once, and never cleared, when a replicated cache command could not be applied on
+    /// this node. While it is set the cache Raft group has stopped applying committed work, so
+    /// every cache read and write on this node refuses instead of answering from state that is
+    /// known to be behind.
+    pub cache_incompatible: Arc<OnceLock<CacheIncompatibility>>,
     #[cfg(feature = "listen_notify")]
     pub tx_notify: flume::Sender<NotifyRequest>,
     #[cfg(feature = "listen_notify_local")]
@@ -111,4 +120,21 @@ pub struct StateRaftCache {
     pub shutdown_handle: Option<hiqlite_wal::ShutdownHandle>,
     #[cfg(feature = "cache")]
     pub cache_storage_disk: bool,
+}
+
+#[cfg(feature = "cache")]
+impl StateRaftCache {
+    /// Refuse every cache operation once a replicated cache command could not be applied.
+    ///
+    /// This is the read half of the `apply` guard. Stopping application is what keeps this
+    /// node from executing work it does not understand; without this check the node would go
+    /// on answering cache reads from a state machine that stopped advancing, which is a
+    /// misleading read rather than a visible failure. It is terminal on purpose: the offending
+    /// entry is committed, so a restart replays it.
+    pub fn ensure_cache_compatible(&self) -> Result<(), crate::Error> {
+        match self.cache_incompatible.get() {
+            None => Ok(()),
+            Some(incompat) => Err(crate::Error::CacheIncompatible(incompat.message().into())),
+        }
+    }
 }

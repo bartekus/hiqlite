@@ -25,6 +25,16 @@ pub enum Error {
     Bincode(String),
     #[error("Cache: {0}")]
     Cache(Cow<'static, str>),
+    /// A replicated cache command named something this build cannot apply: a cache index the
+    /// node does not have, or a command variant its feature set does not support.
+    ///
+    /// This is terminal for the cache Raft group on this node. Committed work stopped being
+    /// applied at the offending entry, so every cache read and write on this node fails with
+    /// this error from then on rather than answering from state that is known to be behind.
+    /// Restarting does not clear it: the same entry is replayed. The cluster has to be brought
+    /// to one cache definition and feature set.
+    #[error("CacheIncompatible: {0}")]
+    CacheIncompatible(Cow<'static, str>),
     /// Internal Channel errors from `flume`
     #[error("Channel: {0}")]
     Channel(String),
@@ -132,6 +142,8 @@ impl IntoResponse for Error {
             Error::BadRequest(_) => StatusCode::BAD_REQUEST,
             Error::Bincode(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Error::Cache(_) => StatusCode::BAD_REQUEST,
+            // The node cannot serve this cache at all, and no retry against it will change that.
+            Error::CacheIncompatible(_) => StatusCode::SERVICE_UNAVAILABLE,
             Error::Channel(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Error::CheckIsLeaderError(_) => StatusCode::CONFLICT,
             Error::ConstraintViolation(_) => StatusCode::BAD_REQUEST,

@@ -12,6 +12,23 @@ use std::borrow::Cow;
 use std::collections::BTreeMap;
 use tokio::sync::oneshot;
 
+/// A cache index this node does not have, asked for locally rather than through the raft log.
+///
+/// The local read paths used to `.unwrap()` here. That is the same mismatch F-027 describes,
+/// one level up: an index is only in range while every participant was built from the same
+/// generated cache enum, and nothing checks that.
+#[cfg(feature = "cache")]
+fn local_cache_index_error(cache_idx: usize, state: &crate::app_state::AppState) -> Error {
+    Error::CacheIncompatible(
+        format!(
+            "cache index {cache_idx} does not exist on this node, which has {} cache(s); the \
+             caller was built against a different cache definition",
+            state.raft_cache.tx_caches.len()
+        )
+        .into(),
+    )
+}
+
 impl Client {
     /// Clears a single cache.
     pub async fn clear_cache<C>(&self, cache: C) -> Result<(), Error>
@@ -101,14 +118,16 @@ impl Client {
         K: Into<String>,
     {
         if let Some(state) = &self.inner.state {
+            state.raft_cache.ensure_cache_compatible()?;
+
             let (ack, rx) = oneshot::channel();
             state
                 .raft_cache
                 .tx_caches
                 .get(cache.hiqlite_cache_index())
-                .unwrap()
+                .ok_or_else(|| local_cache_index_error(cache.hiqlite_cache_index(), state))?
                 .send(CacheRequestHandler::Get((key.into(), ack)))
-                .expect("kv handler to always be running");
+                .map_err(|err| Error::Channel(err.to_string()))?;
             let value = await_channel_response(rx).await?;
             Ok(value)
         } else {
@@ -139,14 +158,16 @@ impl Client {
         V: for<'a> Deserialize<'a>,
     {
         if let Some(state) = &self.inner.state {
+            state.raft_cache.ensure_cache_compatible()?;
+
             let (ack, rx) = oneshot::channel();
             state
                 .raft_cache
                 .tx_caches
                 .get(cache.hiqlite_cache_index())
-                .unwrap()
+                .ok_or_else(|| local_cache_index_error(cache.hiqlite_cache_index(), state))?
                 .send(CacheRequestHandler::SnapshotBuildCacheOnly(ack))
-                .expect("kv handler to always be running");
+                .map_err(|err| Error::Channel(err.to_string()))?;
             let snapshot = await_channel_response(rx).await?;
 
             let mut res = BTreeMap::new();
@@ -365,12 +386,14 @@ impl Client {
         K: Into<Cow<'static, str>>,
     {
         if let Some(state) = &self.inner.state {
+            state.raft_cache.ensure_cache_compatible()?;
+
             let (ack, rx) = oneshot::channel();
             state
                 .raft_cache
                 .tx_caches
                 .get(cache.hiqlite_cache_index())
-                .unwrap()
+                .ok_or_else(|| local_cache_index_error(cache.hiqlite_cache_index(), state))?
                 .send(CacheRequestHandler::CounterGet((
                     key.into().to_string(),
                     ack,
@@ -471,6 +494,14 @@ impl Client {
         cache_req: CacheRequest,
         is_remote_get: bool,
     ) -> Result<CacheResponse, Error> {
+        // Refuse before dispatching. Once this node could not apply a committed cache command
+        // it must not report a successful write either: the write would be accepted into a log
+        // this node has stopped applying, which is exactly the misleading success the guard in
+        // `apply` exists to prevent.
+        if let Some(state) = &self.inner.state {
+            state.raft_cache.ensure_cache_compatible()?;
+        }
+
         match self.cache_req(cache_req.clone(), is_remote_get).await {
             Ok(resp) => Ok(resp),
             Err(err) => {
