@@ -10,6 +10,10 @@
         "source": "spec-edge"
       },
       {
+        "path": "standards/spec/cache-log-repair-proposal.md",
+        "source": "spec-edge"
+      },
+      {
         "path": "standards/spec/findings-register.md",
         "source": "spec-edge"
       },
@@ -30,6 +34,19 @@
         "unit": {
           "kind": "file",
           "path": "standards/spec/adoption-plan.md"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "standards/spec/cache-log-repair-proposal.md"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/cache-log-repair-proposal.md"
         }
       },
       {
@@ -89,5 +106,5 @@
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "b12954d4fadc78935454c4e0bdce6f396f208fc26d695edf036e1286eda6bec1"
+  "shardHash": "fea0a6d404ecb9e2bd39f0d568c71c0e37c3feb35f7f3b38860ac1467c849932"
 }

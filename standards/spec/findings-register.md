@@ -939,6 +939,33 @@ justification is true of one channel and false of the others, and copying it
 into a second reference file would propagate the claim. Recorded rather than
 performed silently, and retained as the record of the gap.
 
+### F-047 `defect`, confidence `high`
+
+**`try_get_log_entries` panics on an empty store instead of returning nothing.**
+`hiqlite/src/store/logs/memory.rs:76-78` calls
+`logs.front().expect("to have at least 1 entry in logs as long as end > 0")`
+after the `end < start` early return, so a request for any range with a non-zero
+end bound against an empty deque panics rather than returning an empty `Vec`.
+OpenRaft 0.9.24 states the opposite requirement on the trait method: "Entry that
+is not found is allowed"
+(`openraft-0.9.24/src/storage/mod.rs:162-167`, read from the locked crate in the
+local registry checkout).
+
+Configuration: `cache` with `cache_storage_disk = false`, which is the only
+configuration that selects this store (`hiqlite/src/store/mod.rs:161`).
+
+**Source-established. Reachability not established**, for the same reason
+F-023's is not: whether OpenRaft asks this store for a range it does not hold
+was not determined by execution. Distinct from F-023, which is the `*i - 1`
+underflow at an exclusive end bound of zero; this entry is about the empty-store
+path that runs after that subtraction succeeds.
+
+**Recorded 2026-09-21 by the cache-log repair proposal**
+(`standards/spec/cache-log-repair-proposal.md` section 2.5), ahead of its owning
+spec in the same way F-029 was: `007-cache-log-store` records four known defects
+and now omits two. Reconciling both into `007` is queued under W-04 and is not
+done by this change.
+
 ## Summary by class
 
 Class is what a finding **is**. State is what has **happened** to it. They are
@@ -948,7 +975,7 @@ record.
 
 | class | ids | count |
 |---|---|---|
-| `defect` | F-001 to F-006, F-009, F-021 to F-024, F-027 to F-029, F-031, F-036 to F-044 | 24 |
+| `defect` | F-001 to F-006, F-009, F-021 to F-024, F-027 to F-029, F-031, F-036 to F-044, F-047 | 25 |
 | `contradiction` | F-018, F-030, F-032 to F-034, F-045 | 6 |
 | `gap` | F-010, F-013 | 2 |
 | `evidence` | F-011, F-012, F-017, F-019, F-046 | 5 |
@@ -961,14 +988,14 @@ record.
 |---|---|---|
 | repaired | F-001, F-002, F-030 | 3 |
 | closed, entry retained | F-013 (at M1, by wave 1), F-011 and F-046 (2026-09-21, by `010` and `011`) | 3 |
-| open | everything else: F-003 to F-010, F-012, F-014 to F-029, F-031 to F-045 | 40 |
+| open | everything else: F-003 to F-010, F-012, F-014 to F-029, F-031 to F-045, F-047 | 41 |
 
 A finding's state answers whether the thing it records is still in the tree, and
 nothing else. F-030 is repaired because its contradiction is gone; the optional
 process decision it surfaced is W-24's, and a work item's being undecided has
 never been a reason to hold a finding open.
 
-Forty open, of which three carry a dated disposition appended on
+Forty-one open, of which three carry a dated disposition appended on
 2026-09-20 recording what has moved since they were written: F-015 (examples
 now visible, still unclaimed), F-016 (dashboard now visible, the generated and
 vendored
@@ -978,8 +1005,8 @@ not close it. An earlier revision said four and listed three.
 
 Open **defects**, which is the subset a repair workstream draws from:
 F-003, F-004, F-005, F-006, F-009, F-021, F-022, F-023, F-024, F-027, F-028,
-F-029, F-031, F-036 to F-044. Twenty-two of the twenty-four defects; F-001 and
-F-002 are the two repaired.
+F-029, F-031, F-036 to F-044, F-047. Twenty-three of the twenty-five defects;
+F-001 and F-002 are the two repaired.
 
 **Reclassified on 2026-09-19**, after each class test was applied rather than
 assumed: F-007 and F-008 from `defect` to `limit`, because a stated contract with
@@ -989,12 +1016,14 @@ migration state rather than faults; and the consequences of F-001, F-002, and
 F-014 rewritten against traced source, with three earlier claims withdrawn in
 place.
 
-Twenty-four defects: six from the pilot specs, F-009 from the whole-project pass,
+Twenty-five defects: six from the pilot specs, F-009 from the whole-project pass,
 five (F-021 to F-024, F-027) found by wave 1, F-028 found while tracing the
 `008` repair, F-029 found on 2026-09-20 while re-reading the memory log store
 against the locked trait, F-031 and F-036 found by the configuration adoption on
 2026-09-20, F-037 to F-040 found by the node-lifecycle adoption on 2026-09-21,
-and F-041 to F-044 found by the transport-security adoption on the same day.
+F-041 to F-044 found by the transport-security adoption on the same day, and
+F-047 found on 2026-09-21 while tracing the cache log store against the locked
+trait for the W-04 proposal.
 F-013 is closed at M1 by wave 1, F-011 by `010`, and F-046 by `011` in the same
 change that recorded it; all three are retained as records rather than deleted. No finding in this register authorizes
 a repair; each repair is a separate governed change with its own spec and
@@ -1006,10 +1035,10 @@ on 2026-09-20. A repaired entry is annotated in place and keeps its identifier,
 its class, and its original text, so the baseline a repair was reviewed against
 stays readable.
 
-**Twenty-two defects are open**: F-003 to F-006, F-009, F-021 to F-024, F-027
-to F-029, F-031, F-036 to F-044. Two earlier revisions of this paragraph were
+**Twenty-three defects are open**: F-003 to F-006, F-009, F-021 to F-024,
+F-027 to F-029, F-031, F-036 to F-044, F-047. Two earlier revisions of this paragraph were
 stale: one said ten against a table of fourteen, and the next said twelve after
-`009` had already added F-031 and F-036. The arithmetic is twenty-four recorded
+`009` had already added F-031 and F-036. The arithmetic is twenty-five recorded
 minus the two repaired, and this paragraph is the one that has to be recomputed
 whenever the class table changes. F-021 through F-024 and F-029 are a separate
 cache-log repair that was deliberately not bundled into `008`.
