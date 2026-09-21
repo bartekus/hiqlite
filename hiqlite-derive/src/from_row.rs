@@ -289,6 +289,90 @@ mod tests {
         );
     }
 
+    /// F-078: `is_field_ty_opt` strips a leading `std` and an `option`
+    /// segment, but not `core`, so `core::option::Option<T>` takes the
+    /// non-optional branch and the generated code asks the row for a bare
+    /// `i64`.
+    #[test]
+    fn the_core_spelling_of_option_is_not_recognised() {
+        let std_path = generate(
+            r#"struct Test { #[column(from_i64)] a: std::option::Option<i64> }"#,
+        )
+        .replace(' ', "");
+        assert!(
+            std_path.contains("row.get::<Option<i64>>"),
+            "std::option::Option should take the optional branch: {std_path}"
+        );
+
+        let core_path = generate(
+            r#"struct Test { #[column(from_i64)] a: core::option::Option<i64> }"#,
+        )
+        .replace(' ', "");
+        assert!(
+            core_path.contains("row.get::<i64>(\"a\").into()"),
+            "F-078: core::option::Option takes the non-optional branch: {core_path}"
+        );
+        assert!(
+            !core_path.contains("row.get::<Option<i64>>"),
+            "F-078: core::option::Option takes the non-optional branch: {core_path}"
+        );
+    }
+
+    /// Every conversion the derive emits is infallible by construction, because
+    /// the trait it implements is `From` and not `TryFrom`. F-079: three of the
+    /// six attributes therefore expand to a panic on bad data.
+    #[test]
+    fn the_fallible_attributes_expand_to_unwrap_or_expect() {
+        let out = generate(
+            r#"struct Test {
+                #[column(flatten)] a: Inner,
+                #[column(parse)] b: u32,
+                #[column(skip)] c: bool,
+            }"#,
+        );
+        let compact = out.replace(' ', "");
+
+        assert!(
+            compact.contains("TryFrom::try_from(&mut*row).unwrap()"),
+            "flatten unwraps: {out}"
+        );
+        assert!(compact.contains("parse().unwrap()"), "parse unwraps: {out}");
+        assert!(
+            compact.contains("use::std::str::FromStr;"),
+            "parse pulls FromStr into scope: {out}"
+        );
+        assert!(
+            compact.contains("Default::default()"),
+            "skip defaults: {out}"
+        );
+        assert!(
+            compact.contains("From<&mut::hiqlite::Row"),
+            "the trait is From, so none of the above can report an error: {out}"
+        );
+    }
+
+    /// Both orders of a combined rename are accepted and mean the same thing.
+    #[test]
+    fn rename_combines_with_a_conversion_in_either_order() {
+        let first = generate(
+            r#"struct Test { #[column(rename = "col", from_i64)] a: i64 }"#,
+        );
+        let second = generate(
+            r#"struct Test { #[column(from_i64, rename = "col")] a: i64 }"#,
+        );
+        assert!(first.contains("col"), "{first}");
+        assert!(second.contains("col"), "{second}");
+        assert_eq!(first, second);
+    }
+
+    /// F-080: a non-struct input ends the compilation with a proc-macro panic
+    /// rather than a spanned `compile_error!`.
+    #[test]
+    #[should_panic(expected = "not implemented")]
+    fn an_enum_input_panics_instead_of_emitting_a_diagnostic() {
+        let _ = generate(r#"enum Test { A }"#);
+    }
+
     #[test]
     fn basic_mapping_uses_row_get_by_column_name() {
         let out = generate(

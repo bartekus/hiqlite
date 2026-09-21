@@ -30,6 +30,10 @@ standalone_npm_packages = ["dashboard"]
 # makes the intended freshness boundary visible in one place.
 extra_hashed_inputs = [
   "hiqlite-wal/src/**/*.rs",
+  # The derive macros, claimed by 016. The package walk already counts these
+  # three files in the coverage denominator; package membership does not feed
+  # the freshness hash, so they need this entry.
+  "hiqlite-derive/src/**/*.rs",
   "hiqlite/src/config.rs",
   # The rest of the configuration contract, claimed by 009. config_toml.rs is
   # already in the hiqlite package walk for coverage, but package membership
@@ -100,9 +104,12 @@ extra_hashed_inputs = [
   "dashboard/tsconfig.json",
   "dashboard/playwright.config.ts",
   "dashboard/tests/**/*.ts",
-  # Example inputs the Rust package walk does not cover. The .rs files are
-  # already covered by the standalone workspace declarations above; adding them
-  # here as well would be redundant.
+  # Example inputs the Rust package walk does not cover, plus the example
+  # sources themselves. The standalone workspace declarations above put the .rs
+  # files in the coverage denominator but do not hash them, which is what the
+  # first glob here is for: 017 claims all seven, so a byte change in one must
+  # stale the committed index.
+  "examples/*/src/*.rs",
   "examples/*/migrations/*.sql",
   "examples/*/Cargo.toml",
 ]

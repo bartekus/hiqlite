@@ -2,17 +2,23 @@
   "mapping": {
     "dependsOn": [
       "000-hiqlite-ownership-bootstrap",
-      "002-snapshot-publication-and-recovery",
-      "009-configuration-contract",
-      "012-cluster-integration-evidence"
+      "006-cache-state-machine"
     ],
     "implementingPaths": [
       {
-        "path": "hiqlite/src/backup.rs",
+        "path": "hiqlite-derive",
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite/src/s3.rs",
+        "path": "hiqlite-derive/src/from_row.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite-derive/src/into_cache_data.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite-derive/src/lib.rs",
         "source": "spec-edge"
       },
       {
@@ -32,27 +38,53 @@
       {
         "locations": [
           {
-            "file": "hiqlite/src/backup.rs"
+            "file": "hiqlite-derive"
           }
         ],
         "ownership": true,
         "sourceField": "establishes",
         "unit": {
-          "kind": "file",
-          "path": "hiqlite/src/backup.rs"
+          "id": "hiqlite-derive",
+          "kind": "crate"
         }
       },
       {
         "locations": [
           {
-            "file": "hiqlite/src/s3.rs"
+            "file": "hiqlite-derive/src/from_row.rs"
           }
         ],
         "ownership": true,
         "sourceField": "establishes",
         "unit": {
           "kind": "file",
-          "path": "hiqlite/src/s3.rs"
+          "path": "hiqlite-derive/src/from_row.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite-derive/src/into_cache_data.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite-derive/src/into_cache_data.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite-derive/src/lib.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite-derive/src/lib.rs"
         }
       },
       {
@@ -95,9 +127,9 @@
         }
       }
     ],
-    "specId": "013-backup-retention-and-object-storage",
+    "specId": "016-derive-macros",
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "2b1abfe01417577189b087baffb18916d2d8ada6407f87811b864bd3008a9d24"
+  "shardHash": "df3f4add2681c31254d7848f73e50c7d09ae169aa4d31ca4a69dad2238f6fd66"
 }

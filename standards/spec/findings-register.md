@@ -153,6 +153,19 @@ depends on deployment-level exclusivity, which the code does not enforce. `002`
 section 7, bullet 3. This is an exclusive-access assumption that `000` section 7
 states hiqlite owns, so the gap is on hiqlite's side of the boundary.
 
+**Incidental observation appended 2026-09-21, and it is not an experiment.**
+While running the `sqlite-only` example for `017`, two instances of that example
+were started against the same data directory by accident. The second was not
+refused: it started, ran, and on shutdown the two raced on the lock file, one of
+them panicking at `hiqlite-wal/src/writer.rs:576` with
+`LockFile removal failed: IO(Os { code: 2, kind: NotFound })`. Recorded because
+it is the first time this repository has seen two processes share storage, and
+because the observed failure mode is a panic during shutdown rather than a
+refusal at startup. It is **not** controlled evidence: the overlap was
+unintentional, the timing was not arranged, and a single occurrence establishes
+neither reproducibility nor the general behavior. W-21 is where that would be
+established, and it is undecided.
+
 ### F-006 `defect`, confidence `high`
 
 **Startup does not fall back to an older valid snapshot.** It selects the
@@ -375,6 +388,12 @@ six crates through `layout.standalone_rust_workspaces`, and
 adoption half is not: all seven example `.rs` files are still unclaimed, and no
 spec claims any of them. F-015 stays open with its scope narrowed to the
 unclaimed territory; the configuration blocker it named is gone.
+
+**Closed 2026-09-21 by `017-examples-as-documentation`**, which establishes all
+seven. The entry is retained as the record of both halves: the configuration
+blocker, fixed on 2026-09-20, and the unclaimed territory, closed here. What is
+still open is a separate thing with its own identifier: nothing runs the
+examples, which is F-081.
 
 ### F-016 `limit`, confidence `high`
 
@@ -1478,6 +1497,141 @@ and the per-target directives an operator would reach for, including silencing
 and not a contradiction; it is recorded because every other Rust service an
 operator runs does read it. Source-established. `015` KD-10.
 
+### F-077 `defect`, confidence `high`
+
+**`CacheVariants` cannot be derived on a generic enum, or on one with
+data-carrying variants.** `hiqlite-derive/src/into_cache_data.rs:25` emits
+`impl ::hiqlite::CacheVariants for #impl_generics #name #ty_generics
+#where_clause`, with the generics after `for` instead of after `impl`. For a
+non-generic enum `#impl_generics` is empty and the header is accidentally
+correct; for `enum Generic<T>` it expands to
+`impl ::hiqlite::CacheVariants for <T> Generic<T>`, which is not Rust.
+
+Separately, `Self::#id => #idx` (`:17`) is a unit-variant pattern, so a variant
+carrying data is rejected by the generated code.
+
+**Observed by execution**, both halves, by compiling probes against this tree:
+
+```
+error: expected `::`, found `Generic`
+error: proc-macro derive produced unparsable tokens
+```
+```
+error[E0533]: expected unit struct, unit variant or constant,
+              found tuple variant `Self::One`
+```
+
+Consequence: a cache-variant enum must be a plain unit-variant, non-generic enum,
+which every current consumer happens to be, and neither restriction is documented
+or diagnosed. The first is a one-token fix; the second is a design choice that
+should be a `compile_error!` rather than an E0533 pointing at the derive. The
+probes are not committed, because a source file that fails to compile cannot live
+in a crate CI builds; `016` D-2 records that and why no compile-fail harness was
+added. `016` KD-1.
+
+### F-078 `defect`, confidence `high`
+
+**`core::option::Option` is treated as a non-optional type.**
+`hiqlite-derive/src/from_row.rs:104-119` (`is_field_ty_opt`) strips a leading
+`std` segment and an `option` segment, but not `core`, so
+`core::option::Option<i64>` fails the check and the field takes the non-optional
+branch: `row.get::<i64>("a").into()`.
+
+Consequence: in a codebase that spells the path through `core`, a nullable column
+mapped through `from_i32`, `from_i64`, `from_string` or `parse` asks the row for
+a bare value and fails at runtime rather than yielding `None`. **Observed by
+execution**, both spellings
+(`from_row::tests::the_core_spelling_of_option_is_not_recognised`). `016` KD-2.
+
+### F-079 `limit`, confidence `high`
+
+**The derived row conversion cannot report a failure.**
+`hiqlite-derive/src/from_row.rs:92` implements
+`::std::convert::From<&mut ::hiqlite::Row<'_>>`, not `TryFrom`, so the generated
+`from` has no error channel. Three of the seven `#[column]` attributes therefore
+expand to a panic: `flatten` to `try_from(...).unwrap()` (`:28`), `parse` to
+`parse().unwrap()` (`:60`, `:63`), and `from_i32` to
+`try_from(i).expect("column value does not fit into i32")` (`:33-37`).
+
+Consequence: a row whose value does not fit, does not parse, or whose nested type
+rejects it panics inside a query result mapping, surfacing wherever `query_map`
+was called rather than as an `Err` the caller can handle. Classed as a limit: the
+trait choice is deliberate and `From` is what makes `query_map` ergonomic; what
+is missing is any statement of the cost and a fallible counterpart. **Observed by
+execution** for all three expansions
+(`from_row::tests::the_fallible_attributes_expand_to_unwrap_or_expect`).
+`016` KD-3.
+
+### F-080 `limit`, confidence `high`
+
+**A non-struct input panics instead of producing a diagnostic.**
+`hiqlite-derive/src/from_row.rs:81-82` and
+`hiqlite-derive/src/into_cache_data.rs:21` are `unimplemented!()`. Consequence:
+`#[derive(FromRow)]` on an enum ends the compilation with `proc-macro derive
+panicked: not implemented`, with the span on the derive and no statement of what
+is supported, where a `syn::Error::to_compile_error` would point at the item and
+name the supported shape. The same applies to `CacheVariants` on a struct or
+union. `lib.rs:12` carries a `TODO` about returning a result, which is about the
+macro's internal shape rather than about its diagnostics. **Observed by
+execution** for the `FromRow` half
+(`from_row::tests::an_enum_input_panics_instead_of_emitting_a_diagnostic`).
+`016` KD-4.
+
+### F-081 `evidence`, confidence `high`
+
+**Fifty-four example assertions are compiled and never evaluated.** The six
+example crates contain 54 `assert*` calls: 16 in `walkthrough`, 15 each in
+`sqlite-only` and `derive-complex-types`, 5 in `cache-only`, 2 in `bench` and 1
+in `external-state-machine`. They are self-checking programs, not illustrations
+with printed output. The only thing CI does with them is `just clippy-examples`
+(`.github/workflows/code_style.yaml`), which compiles.
+
+Consequence: a library change that breaks what an example README promises
+compiles, lints and merges; the examples' value as documentation is exactly the
+part CI does not verify. Related to F-019, which is the same shape for the
+`dashboard` and `server` features.
+
+**Partly observed.** The assertion count is source-established. The four examples
+that take no arguments were run by hand on 2026-09-21 and all four exited `0`:
+`external-state-machine`, `derive-complex-types`, `cache-only` and `sqlite-only`.
+`walkthrough` and `bench` take arguments and were not run. Those runs are a dated
+observation, not a control, which is the gap this entry is about. `017` KD-1.
+
+### F-082 `contradiction`, confidence `high`
+
+**The examples are the one clippy step that does not deny warnings.**
+`justfile:112-123`: `clippy-examples` runs bare `cargo clippy`, while
+`cargo clippy -- -D warnings` and every line of `just clippy` deny them, and the
+workflow step immediately above this one is named "Clippy (deny warnings)".
+
+Consequence: a warning introduced in an example is reported and ignored, inside a
+recipe that `just verify` runs beside two that fail on one. Source-established;
+the 2026-09-21 local run of all six crates produced zero warnings, so nothing is
+currently hidden by it. `017` KD-2.
+
+### F-083 `defect`, confidence `high`
+
+**The four tracked example lockfiles are stale, and the documented build rewrites
+them.** Running `just clippy-examples` on this tree modified all four tracked
+`Cargo.lock` files. Each gained `constant_time_eq`, which `hiqlite` now depends
+on, and `examples/cache-only/Cargo.lock` gained thirteen packages including the
+whole `rusqlite`, `libsqlite3-sys` and `serde_rusqlite` chain, so its lock
+predates a change in what its feature set pulls in.
+
+Consequence: the dependency set a reader, or a scanner, sees in a committed
+example lockfile is not the set CI builds, and CI discards its own corrected
+version on every run. The inconsistency extends to which crates have a lockfile
+at all: neither `examples/derive-complex-types` nor
+`examples/external-state-machine` has a tracked one, the first having an
+untracked file on disk and the second none until it is built, while
+`.gitignore:7` ignores `Cargo.lock` so the four tracked ones were force-added and
+nothing in the repository records the rule.
+
+**Observed by execution**: the rewrite was produced, its contents recorded, and
+then reverted, because updating dependency locks is not something an adoption
+does (`017` D-2). Same family as F-012 and F-071: artifacts that must agree, with
+no check. `017` KD-3.
+
 ## Summary by class
 
 Class is what a finding **is**. State is what has **happened** to it. They are
@@ -1487,11 +1641,11 @@ record.
 
 | class | ids | count |
 |---|---|---|
-| `defect` | F-001 to F-006, F-009, F-021 to F-024, F-027 to F-029, F-031, F-036 to F-044, F-047, F-049 to F-051, F-054 to F-061, F-065 to F-070, F-072 | 43 |
-| `contradiction` | F-018, F-030, F-032 to F-034, F-045, F-062 to F-064, F-074, F-075 | 11 |
+| `defect` | F-001 to F-006, F-009, F-021 to F-024, F-027 to F-029, F-031, F-036 to F-044, F-047, F-049 to F-051, F-054 to F-061, F-065 to F-070, F-072, F-077, F-078, F-083 | 46 |
+| `contradiction` | F-018, F-030, F-032 to F-034, F-045, F-062 to F-064, F-074, F-075, F-082 | 12 |
 | `gap` | F-010, F-013 | 2 |
-| `evidence` | F-011, F-012, F-017, F-019, F-046, F-048, F-052, F-071 | 8 |
-| `limit` | F-007, F-008, F-015, F-016, F-026, F-035, F-053, F-073, F-076 | 9 |
+| `evidence` | F-011, F-012, F-017, F-019, F-046, F-048, F-052, F-071, F-081 | 9 |
+| `limit` | F-007, F-008, F-015, F-016, F-026, F-035, F-053, F-073, F-076, F-079, F-080 | 11 |
 | `decision` | F-014, F-020, F-025 | 3 |
 
 ### Summary by state (2026-09-21)
@@ -1499,28 +1653,28 @@ record.
 | state | ids | count |
 |---|---|---|
 | repaired | F-001, F-002, F-030 | 3 |
-| closed, entry retained | F-013 (at M1, by wave 1), F-011 and F-046 (2026-09-21, by `010` and `011`), F-052 (2026-09-21, by `014`) | 4 |
-| open | everything else: F-003 to F-010, F-012, F-014 to F-029, F-031 to F-045, F-047 to F-051, F-053 to F-076 | 69 |
+| closed, entry retained | F-013 (at M1, by wave 1), F-011 and F-046 (2026-09-21, by `010` and `011`), F-052 (by `014`) and F-015 (by `017`), both 2026-09-21 | 5 |
+| open | everything else: F-003 to F-010, F-012, F-014, F-016 to F-029, F-031 to F-045, F-047 to F-051, F-053 to F-083 | 75 |
 
 A finding's state answers whether the thing it records is still in the tree, and
 nothing else. F-030 is repaired because its contradiction is gone; the optional
 process decision it surfaced is W-24's, and a work item's being undecided has
 never been a reason to hold a finding open.
 
-Sixty-nine open, of which four carry a dated disposition recording what has
-moved since they were written. Three were appended on 2026-09-20: F-015
-(examples now visible, still unclaimed), F-016 (dashboard now visible, the
-generated and vendored denominator problem unresolved), F-018 (the `AGENTS.md`
-half resolved, the three-way naming collision unchanged). The fourth was
-appended on 2026-09-21: F-017, whose unclaimed-files half is closed at M1 by
-`012` while its recorded non-completion is diagnosed as F-051 and still in the
-tree. A disposition narrows an entry; it does not close it.
+Seventy-five open, of which three carry a dated disposition recording what has
+moved since they were written. Two were appended on 2026-09-20: F-016 (dashboard
+now visible, the generated and vendored denominator problem unresolved) and
+F-018 (the `AGENTS.md` half resolved, the three-way naming collision unchanged).
+The third was appended on 2026-09-21: F-017, whose unclaimed-files half is closed
+at M1 by `012` while its recorded non-completion is diagnosed as F-051 and still
+in the tree. F-015 carried a fourth until `017` closed it outright on the same
+day. A disposition narrows an entry; it does not close it.
 
 Open **defects**, which is the subset a repair workstream draws from:
 F-003, F-004, F-005, F-006, F-009, F-021, F-022, F-023, F-024, F-027, F-028,
 F-029, F-031, F-036 to F-044, F-047, F-049 to F-051, F-054 to F-061, F-065 to
-F-070, F-072. Forty-one of the forty-three defects; F-001 and F-002 are the two
-repaired.
+F-070, F-072, F-077, F-078, F-083. Forty-four of the forty-six defects; F-001
+and F-002 are the two repaired.
 
 **Reclassified on 2026-09-19**, after each class test was applied rather than
 assumed: F-007 and F-008 from `defect` to `limit`, because a stated contract with
@@ -1541,8 +1695,10 @@ trait for the W-04 proposal, F-049 to F-051, F-054 and F-055 found on
 2026-09-21 by the cluster integration adoption, three of them by running the
 suite rather than by reading it, F-056 to F-061 found on the same day by the
 backup and object-storage adoption, F-065 and F-066 by the schema migration
-adoption, and F-067 to F-070 and F-072 by the server-binary and proxy adoption,
-whose first finding is that the proxy subcommand panics before it binds.
+adoption, F-067 to F-070 and F-072 by the server-binary and proxy adoption,
+whose first finding is that the proxy subcommand panics before it binds, and
+F-077 and F-078 by the derive-macro adoption, and F-083 by the examples
+adoption, which found it by running the documented build.
 F-013 is closed at M1 by wave 1, F-011 by `010`, and F-046 by `011` in the same
 change that recorded it; all three are retained as records rather than deleted. No finding in this register authorizes
 a repair; each repair is a separate governed change with its own spec and
@@ -1554,11 +1710,11 @@ on 2026-09-20. A repaired entry is annotated in place and keeps its identifier,
 its class, and its original text, so the baseline a repair was reviewed against
 stays readable.
 
-**Forty-one defects are open**: F-003 to F-006, F-009, F-021 to F-024,
+**Forty-four defects are open**: F-003 to F-006, F-009, F-021 to F-024,
 F-027 to F-029, F-031, F-036 to F-044, F-047, F-049 to F-051, F-054 to F-061,
-F-065 to F-070, F-072. Two earlier revisions of this paragraph were
+F-065 to F-070, F-072, F-077, F-078, F-083. Two earlier revisions of this paragraph were
 stale: one said ten against a table of fourteen, and the next said twelve after
-`009` had already added F-031 and F-036. The arithmetic is forty-three recorded
+`009` had already added F-031 and F-036. The arithmetic is forty-six recorded
 minus the two repaired, and this paragraph is the one that has to be recomputed
 whenever the class table changes. F-021 through F-024 and F-029 are a separate
 cache-log repair that was deliberately not bundled into `008`.
