@@ -1,0 +1,124 @@
+{
+  "record": {
+    "created": "2026-09-21",
+    "dependsOn": [
+      "000-hiqlite-ownership-bootstrap",
+      "003-client-consistency-and-retry-outcomes",
+      "009-configuration-contract",
+      "010-node-lifecycle-and-split-brain",
+      "011-transport-security-material"
+    ],
+    "establishes": [
+      {
+        "kind": "file",
+        "path": "hiqlite/src/main.rs"
+      },
+      {
+        "kind": "file",
+        "path": "hiqlite/src/server/mod.rs"
+      },
+      {
+        "kind": "file",
+        "path": "hiqlite/src/server/args.rs"
+      },
+      {
+        "kind": "file",
+        "path": "hiqlite/src/server/cache.rs"
+      },
+      {
+        "kind": "file",
+        "path": "hiqlite/src/server/config.rs"
+      },
+      {
+        "kind": "file",
+        "path": "hiqlite/src/server/logging.rs"
+      },
+      {
+        "kind": "file",
+        "path": "hiqlite/src/server/password.rs"
+      },
+      {
+        "kind": "file",
+        "path": "hiqlite/src/server/proxy/mod.rs"
+      },
+      {
+        "kind": "file",
+        "path": "hiqlite/src/server/proxy/config.rs"
+      },
+      {
+        "kind": "file",
+        "path": "hiqlite/src/server/proxy/handlers.rs"
+      },
+      {
+        "kind": "file",
+        "path": "hiqlite/src/server/proxy/notify.rs"
+      },
+      {
+        "kind": "file",
+        "path": "hiqlite/src/server/proxy/state.rs"
+      }
+    ],
+    "extends": [
+      {
+        "nature": "additive",
+        "spec": "000-hiqlite-ownership-bootstrap",
+        "unit": {
+          "kind": "file",
+          "path": "spec-spine.toml"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "005-adoption-assessment-and-plan",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/findings-register.md"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "005-adoption-assessment-and-plan",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/adoption-plan.md"
+        }
+      }
+    ],
+    "id": "015-server-binary-and-proxy",
+    "implementation": "complete",
+    "kind": "adoption",
+    "origin": {
+      "paths": [
+        "hiqlite/src/main.rs",
+        "hiqlite/src/server/"
+      ],
+      "retroactive": true
+    },
+    "owner": "hiqlite maintainers",
+    "risk": "critical",
+    "sectionHeadings": [
+      "015: Adopt the server binary and the proxy",
+      "1. Purpose",
+      "2. Territory",
+      "3. Behavior",
+      "B-1. Three subcommands, and what each one does",
+      "B-2. The `$HOME` default is a sentinel string, expanded on one of two paths",
+      "B-3. `generate-config` writes a second copy of the reference configuration",
+      "B-4. The proxy is a remote client behind four routes",
+      "B-5. Logging is set once from the flag, and ignores the environment",
+      "B-6. The proxy's validation is two fields, and one of them is misnamed",
+      "4. Evidence and its limits",
+      "5. Known defects",
+      "6. Resolved decisions",
+      "7. The inventory declarations this spec requires",
+      "8. Out of scope",
+      "Verification"
+    ],
+    "specPath": "specs/015-server-binary-and-proxy/spec.md",
+    "status": "draft",
+    "summary": "Adopts the three subcommands of the hiqlite binary and the proxy that one of them starts. The proxy does not start: it registers an axum 0.7 route literal against the pinned axum 0.8, which panics at router construction before the bind, and nothing caught it because CI never enables the server feature for a test. Ten findings recorded, four executed, including a non-constant-time comparison of the API secret in the proxy's copy of a function the node hardened. Repairs no runtime behavior.\n",
+    "title": "Adopt the server binary and the proxy"
+  },
+  "shardHash": "63055127931a95b8931bdefee29a5bbb2588a9b1328bf2dce5fc3d6ea6fbffaa",
+  "specVersion": "1.3.0"
+}

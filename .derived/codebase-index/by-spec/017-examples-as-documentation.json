@@ -2,28 +2,36 @@
   "mapping": {
     "dependsOn": [
       "000-hiqlite-ownership-bootstrap",
-      "003-client-consistency-and-retry-outcomes",
-      "009-configuration-contract"
+      "009-configuration-contract",
+      "016-derive-macros"
     ],
     "implementingPaths": [
       {
-        "path": "hiqlite.env",
+        "path": "examples/bench/src/bench.rs",
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite/src/app_state.rs",
+        "path": "examples/bench/src/main.rs",
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite/src/init.rs",
+        "path": "examples/cache-only/src/main.rs",
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite/src/split_brain_check.rs",
+        "path": "examples/derive-complex-types/src/main.rs",
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite/src/start.rs",
+        "path": "examples/external-state-machine/src/main.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "examples/sqlite-only/src/main.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "examples/walkthrough/src/main.rs",
         "source": "spec-edge"
       },
       {
@@ -43,66 +51,92 @@
       {
         "locations": [
           {
-            "file": "hiqlite/src/app_state.rs"
+            "file": "examples/bench/src/bench.rs"
           }
         ],
         "ownership": true,
         "sourceField": "establishes",
         "unit": {
           "kind": "file",
-          "path": "hiqlite/src/app_state.rs"
+          "path": "examples/bench/src/bench.rs"
         }
       },
       {
         "locations": [
           {
-            "file": "hiqlite/src/init.rs"
+            "file": "examples/bench/src/main.rs"
           }
         ],
         "ownership": true,
         "sourceField": "establishes",
         "unit": {
           "kind": "file",
-          "path": "hiqlite/src/init.rs"
+          "path": "examples/bench/src/main.rs"
         }
       },
       {
         "locations": [
           {
-            "file": "hiqlite/src/split_brain_check.rs"
+            "file": "examples/cache-only/src/main.rs"
           }
         ],
         "ownership": true,
         "sourceField": "establishes",
         "unit": {
           "kind": "file",
-          "path": "hiqlite/src/split_brain_check.rs"
+          "path": "examples/cache-only/src/main.rs"
         }
       },
       {
         "locations": [
           {
-            "file": "hiqlite/src/start.rs"
+            "file": "examples/derive-complex-types/src/main.rs"
           }
         ],
         "ownership": true,
         "sourceField": "establishes",
         "unit": {
           "kind": "file",
-          "path": "hiqlite/src/start.rs"
+          "path": "examples/derive-complex-types/src/main.rs"
         }
       },
       {
         "locations": [
           {
-            "file": "hiqlite.env"
+            "file": "examples/external-state-machine/src/main.rs"
           }
         ],
         "ownership": true,
-        "sourceField": "extends",
+        "sourceField": "establishes",
         "unit": {
           "kind": "file",
-          "path": "hiqlite.env"
+          "path": "examples/external-state-machine/src/main.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "examples/sqlite-only/src/main.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "examples/sqlite-only/src/main.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "examples/walkthrough/src/main.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "examples/walkthrough/src/main.rs"
         }
       },
       {
@@ -145,9 +179,9 @@
         }
       }
     ],
-    "specId": "010-node-lifecycle-and-split-brain",
+    "specId": "017-examples-as-documentation",
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "1e1bee7e2f0188b03b358f163e672834ce7065740a5f29328417d9a87d835d21"
+  "shardHash": "01347cfcc89d96a2862cb06f5818d950d6533c01eb57f044ee4ec0bf8d112e34"
 }

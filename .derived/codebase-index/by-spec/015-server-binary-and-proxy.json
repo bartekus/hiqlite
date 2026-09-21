@@ -2,68 +2,62 @@
   "mapping": {
     "dependsOn": [
       "000-hiqlite-ownership-bootstrap",
-      "002-snapshot-publication-and-recovery",
-      "003-client-consistency-and-retry-outcomes"
+      "003-client-consistency-and-retry-outcomes",
+      "009-configuration-contract",
+      "010-node-lifecycle-and-split-brain",
+      "011-transport-security-material"
     ],
     "implementingPaths": [
       {
-        "path": "hiqlite/tests/cluster/backup.rs",
+        "path": "hiqlite/src/main.rs",
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite/tests/cluster/backup_restore.rs",
+        "path": "hiqlite/src/server/args.rs",
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite/tests/cluster/batch.rs",
+        "path": "hiqlite/src/server/cache.rs",
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite/tests/cluster/cache.rs",
+        "path": "hiqlite/src/server/config.rs",
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite/tests/cluster/check.rs",
+        "path": "hiqlite/src/server/logging.rs",
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite/tests/cluster/dlock.rs",
+        "path": "hiqlite/src/server/mod.rs",
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite/tests/cluster/execute_query.rs",
+        "path": "hiqlite/src/server/password.rs",
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite/tests/cluster/learner_only.rs",
+        "path": "hiqlite/src/server/proxy/config.rs",
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite/tests/cluster/listen_notify.rs",
+        "path": "hiqlite/src/server/proxy/handlers.rs",
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite/tests/cluster/main.rs",
+        "path": "hiqlite/src/server/proxy/mod.rs",
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite/tests/cluster/migration.rs",
+        "path": "hiqlite/src/server/proxy/notify.rs",
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite/tests/cluster/remote_only.rs",
+        "path": "hiqlite/src/server/proxy/state.rs",
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite/tests/cluster/start.rs",
-        "source": "spec-edge"
-      },
-      {
-        "path": "hiqlite/tests/cluster/transaction.rs",
-        "source": "spec-edge"
-      },
-      {
-        "path": "hiqlite/tests/cluster/type_conversions.rs",
+        "path": "spec-spine.toml",
         "source": "spec-edge"
       },
       {
@@ -79,196 +73,170 @@
       {
         "locations": [
           {
-            "file": "hiqlite/tests/cluster/backup.rs"
+            "file": "hiqlite/src/main.rs"
           }
         ],
         "ownership": true,
         "sourceField": "establishes",
         "unit": {
           "kind": "file",
-          "path": "hiqlite/tests/cluster/backup.rs"
+          "path": "hiqlite/src/main.rs"
         }
       },
       {
         "locations": [
           {
-            "file": "hiqlite/tests/cluster/backup_restore.rs"
+            "file": "hiqlite/src/server/args.rs"
           }
         ],
         "ownership": true,
         "sourceField": "establishes",
         "unit": {
           "kind": "file",
-          "path": "hiqlite/tests/cluster/backup_restore.rs"
+          "path": "hiqlite/src/server/args.rs"
         }
       },
       {
         "locations": [
           {
-            "file": "hiqlite/tests/cluster/batch.rs"
+            "file": "hiqlite/src/server/cache.rs"
           }
         ],
         "ownership": true,
         "sourceField": "establishes",
         "unit": {
           "kind": "file",
-          "path": "hiqlite/tests/cluster/batch.rs"
+          "path": "hiqlite/src/server/cache.rs"
         }
       },
       {
         "locations": [
           {
-            "file": "hiqlite/tests/cluster/cache.rs"
+            "file": "hiqlite/src/server/config.rs"
           }
         ],
         "ownership": true,
         "sourceField": "establishes",
         "unit": {
           "kind": "file",
-          "path": "hiqlite/tests/cluster/cache.rs"
+          "path": "hiqlite/src/server/config.rs"
         }
       },
       {
         "locations": [
           {
-            "file": "hiqlite/tests/cluster/check.rs"
+            "file": "hiqlite/src/server/logging.rs"
           }
         ],
         "ownership": true,
         "sourceField": "establishes",
         "unit": {
           "kind": "file",
-          "path": "hiqlite/tests/cluster/check.rs"
+          "path": "hiqlite/src/server/logging.rs"
         }
       },
       {
         "locations": [
           {
-            "file": "hiqlite/tests/cluster/dlock.rs"
+            "file": "hiqlite/src/server/mod.rs"
           }
         ],
         "ownership": true,
         "sourceField": "establishes",
         "unit": {
           "kind": "file",
-          "path": "hiqlite/tests/cluster/dlock.rs"
+          "path": "hiqlite/src/server/mod.rs"
         }
       },
       {
         "locations": [
           {
-            "file": "hiqlite/tests/cluster/execute_query.rs"
+            "file": "hiqlite/src/server/password.rs"
           }
         ],
         "ownership": true,
         "sourceField": "establishes",
         "unit": {
           "kind": "file",
-          "path": "hiqlite/tests/cluster/execute_query.rs"
+          "path": "hiqlite/src/server/password.rs"
         }
       },
       {
         "locations": [
           {
-            "file": "hiqlite/tests/cluster/learner_only.rs"
+            "file": "hiqlite/src/server/proxy/config.rs"
           }
         ],
         "ownership": true,
         "sourceField": "establishes",
         "unit": {
           "kind": "file",
-          "path": "hiqlite/tests/cluster/learner_only.rs"
+          "path": "hiqlite/src/server/proxy/config.rs"
         }
       },
       {
         "locations": [
           {
-            "file": "hiqlite/tests/cluster/listen_notify.rs"
+            "file": "hiqlite/src/server/proxy/handlers.rs"
           }
         ],
         "ownership": true,
         "sourceField": "establishes",
         "unit": {
           "kind": "file",
-          "path": "hiqlite/tests/cluster/listen_notify.rs"
+          "path": "hiqlite/src/server/proxy/handlers.rs"
         }
       },
       {
         "locations": [
           {
-            "file": "hiqlite/tests/cluster/main.rs"
+            "file": "hiqlite/src/server/proxy/mod.rs"
           }
         ],
         "ownership": true,
         "sourceField": "establishes",
         "unit": {
           "kind": "file",
-          "path": "hiqlite/tests/cluster/main.rs"
+          "path": "hiqlite/src/server/proxy/mod.rs"
         }
       },
       {
         "locations": [
           {
-            "file": "hiqlite/tests/cluster/migration.rs"
+            "file": "hiqlite/src/server/proxy/notify.rs"
           }
         ],
         "ownership": true,
         "sourceField": "establishes",
         "unit": {
           "kind": "file",
-          "path": "hiqlite/tests/cluster/migration.rs"
+          "path": "hiqlite/src/server/proxy/notify.rs"
         }
       },
       {
         "locations": [
           {
-            "file": "hiqlite/tests/cluster/remote_only.rs"
+            "file": "hiqlite/src/server/proxy/state.rs"
           }
         ],
         "ownership": true,
         "sourceField": "establishes",
         "unit": {
           "kind": "file",
-          "path": "hiqlite/tests/cluster/remote_only.rs"
+          "path": "hiqlite/src/server/proxy/state.rs"
         }
       },
       {
         "locations": [
           {
-            "file": "hiqlite/tests/cluster/start.rs"
+            "file": "spec-spine.toml"
           }
         ],
         "ownership": true,
-        "sourceField": "establishes",
+        "sourceField": "extends",
         "unit": {
           "kind": "file",
-          "path": "hiqlite/tests/cluster/start.rs"
-        }
-      },
-      {
-        "locations": [
-          {
-            "file": "hiqlite/tests/cluster/transaction.rs"
-          }
-        ],
-        "ownership": true,
-        "sourceField": "establishes",
-        "unit": {
-          "kind": "file",
-          "path": "hiqlite/tests/cluster/transaction.rs"
-        }
-      },
-      {
-        "locations": [
-          {
-            "file": "hiqlite/tests/cluster/type_conversions.rs"
-          }
-        ],
-        "ownership": true,
-        "sourceField": "establishes",
-        "unit": {
-          "kind": "file",
-          "path": "hiqlite/tests/cluster/type_conversions.rs"
+          "path": "spec-spine.toml"
         }
       },
       {
@@ -298,9 +266,9 @@
         }
       }
     ],
-    "specId": "012-cluster-integration-evidence",
+    "specId": "015-server-binary-and-proxy",
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "796ef3ca4b85ba81be3250f3adf17dd1f9a1399afa845522ebf292d2c5b55b55"
+  "shardHash": "70e37950393712eab9a72f907424d1f76485c83d6e164ff67bae9c1f9f18d1cc"
 }

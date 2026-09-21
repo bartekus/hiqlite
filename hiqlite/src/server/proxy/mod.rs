@@ -85,3 +85,33 @@ pub async fn start_proxy(config: Config) -> Result<(), Error> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::routing::get;
+
+    /// F-067. `start_proxy` above registers `/metrics/:raft_type`, which is
+    /// axum 0.7 path syntax. The pinned axum is 0.8, which rejects a segment
+    /// starting with `:` at router construction, so `start_proxy` panics on its
+    /// first route and never reaches the bind. This asserts the rejection
+    /// against the exact literal and the real handler that router uses.
+    #[test]
+    #[should_panic(expected = "Path segments must not start with `:`")]
+    fn the_proxy_metrics_route_is_rejected_by_the_pinned_axum() {
+        let _router: Router<Arc<AppStateProxy>> = Router::new().nest(
+            "/cluster",
+            Router::new().route("/metrics/:raft_type", get(handlers::metrics)),
+        );
+    }
+
+    /// The node registers the same capture with 0.8 syntax and is accepted,
+    /// which is what makes F-067 a divergence rather than a version gap.
+    #[test]
+    fn the_same_capture_in_zero_eight_syntax_is_accepted() {
+        let _router: Router<Arc<AppStateProxy>> = Router::new().nest(
+            "/cluster",
+            Router::new().route("/metrics/{raft_type}", get(handlers::metrics)),
+        );
+    }
+}
