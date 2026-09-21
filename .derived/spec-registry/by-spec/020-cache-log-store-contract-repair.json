@@ -1,0 +1,82 @@
+{
+  "record": {
+    "amends": [
+      "007-cache-log-store"
+    ],
+    "amendsSections": [
+      "3-behavior",
+      "4-evidence-and-its-limits",
+      "5-known-defects"
+    ],
+    "amendsVerification": [
+      "007-cache-log-store"
+    ],
+    "created": "2026-09-21",
+    "dependsOn": [
+      "000-hiqlite-ownership-bootstrap",
+      "006-cache-state-machine",
+      "007-cache-log-store"
+    ],
+    "extends": [
+      {
+        "nature": "superseding",
+        "spec": "007-cache-log-store",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/store/logs/"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "005-adoption-assessment-and-plan",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/findings-register.md"
+        }
+      },
+      {
+        "nature": "superseding",
+        "spec": "005-adoption-assessment-and-plan",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/cache-log-repair-proposal.md"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "005-adoption-assessment-and-plan",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/adoption-plan.md"
+        }
+      }
+    ],
+    "id": "020-cache-log-store-contract-repair",
+    "implementation": "complete",
+    "owner": "hiqlite maintainers",
+    "risk": "high",
+    "sectionHeadings": [
+      "020: Repair the cache log store against the locked OpenRaft log-storage contract",
+      "1. Purpose",
+      "2. Territory",
+      "3. Behavior",
+      "B-1. One lock order: `data`, then `logs`",
+      "B-2. `get_log_state` reports the real frontier, and falls back to the purge point",
+      "B-3. `purge` removes inclusively and records the frontier",
+      "B-4. `try_get_log_entries` tolerates a range the store does not hold",
+      "B-5. The debug assertions compare like with like",
+      "B-6. `append` is unchanged",
+      "4. Evidence and its limits",
+      "5. Known defects",
+      "6. Resolved decisions",
+      "7. Out of scope",
+      "Verification"
+    ],
+    "specPath": "specs/020-cache-log-store-contract-repair/spec.md",
+    "status": "draft",
+    "summary": "Repairs all six known defects of the cache Raft group's in-memory log store against the locked OpenRaft 0.9.24 log-storage traits: the last-log frontier and its empty-store fallback, inclusive purge with purge-frontier bookkeeping, tolerant range reads with clamping, and the debug assertions that compared an offset to an absolute index. Adopts one lock order, data then logs, held together across the purge update. Amends 007's behavior, evidence and known-defect sections and carries its acceptance.\n",
+    "title": "Repair the cache log store against the locked OpenRaft log-storage contract"
+  },
+  "shardHash": "dfc4dad6eaba3972fb7d27d6e16e13eabed32bd216e6e910ba731a9e1b2cff43",
+  "specVersion": "1.3.0"
+}

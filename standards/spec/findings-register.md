@@ -534,12 +534,16 @@ construction, so `None` is accidentally correct and the defect is latent there.
 Whether any path reaches it with a non-empty deque was **not** established.
 `007` KD-1.
 
+**Repaired 2026-09-21 by `020-cache-log-store-contract-repair`.** `get_log_state` now reads `logs.back()` and falls back to the purge frontier when the deque is empty (`020` B-2). The characterization test that pinned this was replaced, not extended.
+
 ### F-022 `defect`, confidence `high`
 
 **A `debug_assert!` in `truncate` compares an offset to an absolute index.**
 `memory.rs:186`. Equal only while the deque front is index 0, so it fires in a
 debug build on any truncate after a purge advanced the front. Untested: no test
 covers a non-zero front offset. `007` KD-2.
+
+**Repaired 2026-09-21 by `020-cache-log-store-contract-repair`.** The assertion now compares the entry at the computed offset against the log index the caller named, and tolerates the `None` that a truncate at one past the end produces (`020` B-5).
 
 ### F-023 `defect`, confidence `medium`
 
@@ -550,12 +554,16 @@ established**: whether OpenRaft requests `0..0` was not determined, which is why
 this is `medium` and why it is recorded as an arithmetic defect rather than a
 demonstrated failure. `007` KD-3.
 
+**Repaired 2026-09-21 by `020-cache-log-store-contract-repair`.** An exclusive end bound of zero returns no entries (`020` B-4).
+
 ### F-024 `defect`, confidence `high`
 
 **`purge` never updates `last_purged`.** `memory.rs:28` is returned by
 `get_log_state` but assigned only in `new()`. Consequence inferred:
 `last_purged_log_id` is under-reported, masked by the same emptiness that masks
 F-021. `007` KD-4.
+
+**Repaired 2026-09-21 by `020-cache-log-store-contract-repair`.** `purge` assigns `last_purged` under the same lock acquisition that drains the deque, and the frontier only moves forward (`020` B-3).
 
 ### F-025 `decision`, confidence `high`
 
@@ -636,7 +644,10 @@ adoption plan's current assignment table and is not done by this change.
 
 **Reconciled 2026-09-21.** `007` now records this as its KD-5, so the register
 and the spec no longer disagree. The register is no longer ahead of `007` here.
-Still not repaired: the reconciliation recorded the defect and changed no code.
+
+**Repaired 2026-09-21 by `020-cache-log-store-contract-repair`.** `purge` now
+calls `drain(..=purge_until)`, so the entry the purge names is removed (`020`
+B-3). `truncate` is deliberately unchanged, for the reason `020` B-3 states.
 
 ### F-030 `contradiction`, confidence `high`
 
@@ -1010,7 +1021,11 @@ and now omits two. Reconciling both into `007` is queued under W-04 and is not
 done by this change.
 
 **Reconciled 2026-09-21.** `007` now records this as its KD-6. Both omissions
-are closed; `007` records six known defects. Still not repaired.
+are closed; `007` records six known defects.
+
+**Repaired 2026-09-21 by `020-cache-log-store-contract-repair`.** An empty deque
+answers every range with no entries, and a partly overlapping range is clamped
+to the intersection rather than asserted to be fully held (`020` B-4).
 
 ### F-048 `evidence`, confidence `high`
 
