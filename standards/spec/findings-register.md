@@ -634,6 +634,10 @@ record this one, so the register is ahead of `007` here. `007` remains
 authoritative for its own territory: reconciling KD-5 into it is queued in the
 adoption plan's current assignment table and is not done by this change.
 
+**Reconciled 2026-09-21.** `007` now records this as its KD-5, so the register
+and the spec no longer disagree. The register is no longer ahead of `007` here.
+Still not repaired: the reconciliation recorded the defect and changed no code.
+
 ### F-030 `contradiction`, confidence `high`
 
 **`005`'s acceptance block asserted a phrase that had been removed from the
@@ -1004,6 +1008,9 @@ path that runs after that subtraction succeeds.
 spec in the same way F-029 was: `007-cache-log-store` records four known defects
 and now omits two. Reconciling both into `007` is queued under W-04 and is not
 done by this change.
+
+**Reconciled 2026-09-21.** `007` now records this as its KD-6. Both omissions
+are closed; `007` records six known defects. Still not repaired.
 
 ### F-048 `evidence`, confidence `high`
 
