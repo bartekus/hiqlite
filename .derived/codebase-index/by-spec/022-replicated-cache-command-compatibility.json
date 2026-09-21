@@ -1,28 +1,28 @@
 {
   "mapping": {
+    "amends": [
+      "006-cache-state-machine"
+    ],
     "dependsOn": [
       "000-hiqlite-ownership-bootstrap",
-      "006-cache-state-machine"
+      "006-cache-state-machine",
+      "007-cache-log-store"
     ],
     "implementingPaths": [
       {
-        "path": "hiqlite-derive",
+        "path": "hiqlite/src/app_state.rs",
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite-derive/src/from_row.rs",
+        "path": "hiqlite/src/client/",
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite-derive/src/into_cache_data.rs",
+        "path": "hiqlite/src/network/",
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite-derive/src/lib.rs",
-        "source": "spec-edge"
-      },
-      {
-        "path": "spec-spine.toml",
+        "path": "hiqlite/src/store/state_machine/memory/",
         "source": "spec-edge"
       },
       {
@@ -38,66 +38,53 @@
       {
         "locations": [
           {
-            "file": "hiqlite-derive"
+            "file": "hiqlite/src/client/"
           }
         ],
         "ownership": true,
-        "sourceField": "establishes",
+        "sourceField": "extends",
         "unit": {
-          "id": "hiqlite-derive",
-          "kind": "crate"
+          "kind": "directory",
+          "path": "hiqlite/src/client/"
         }
       },
       {
         "locations": [
           {
-            "file": "hiqlite-derive/src/from_row.rs"
+            "file": "hiqlite/src/network/"
           }
         ],
         "ownership": true,
-        "sourceField": "establishes",
+        "sourceField": "extends",
         "unit": {
-          "kind": "file",
-          "path": "hiqlite-derive/src/from_row.rs"
+          "kind": "directory",
+          "path": "hiqlite/src/network/"
         }
       },
       {
         "locations": [
           {
-            "file": "hiqlite-derive/src/into_cache_data.rs"
+            "file": "hiqlite/src/store/state_machine/memory/"
           }
         ],
         "ownership": true,
-        "sourceField": "establishes",
+        "sourceField": "extends",
         "unit": {
-          "kind": "file",
-          "path": "hiqlite-derive/src/into_cache_data.rs"
+          "kind": "directory",
+          "path": "hiqlite/src/store/state_machine/memory/"
         }
       },
       {
         "locations": [
           {
-            "file": "hiqlite-derive/src/lib.rs"
-          }
-        ],
-        "ownership": true,
-        "sourceField": "establishes",
-        "unit": {
-          "kind": "file",
-          "path": "hiqlite-derive/src/lib.rs"
-        }
-      },
-      {
-        "locations": [
-          {
-            "file": "spec-spine.toml"
+            "file": "hiqlite/src/app_state.rs"
           }
         ],
         "ownership": true,
         "sourceField": "extends",
         "unit": {
           "kind": "file",
-          "path": "spec-spine.toml"
+          "path": "hiqlite/src/app_state.rs"
         }
       },
       {
@@ -127,9 +114,9 @@
         }
       }
     ],
-    "specId": "016-derive-macros",
+    "specId": "022-replicated-cache-command-compatibility",
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "3504691b7a7df5823ccf76aaf43435cd735dd6971535d0f28200a86dbbf84078"
+  "shardHash": "f623005f92cfd95914bc6c7b95ffb60e877eaaec305744d7688cc9edaa222c9b"
 }

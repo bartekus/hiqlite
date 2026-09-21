@@ -778,23 +778,53 @@ async fn handle_socket_concurrent(
 
                 #[cfg(feature = "cache")]
                 ApiStreamRequestPayload::KVGet(cache_req) => {
-                    let (cache_idx, key) = match cache_req {
-                        CacheRequest::Get { cache_idx, key } => (cache_idx, key),
-                        _ => unreachable!(),
+                    let result = 'get: {
+                        let (cache_idx, key) = match cache_req {
+                            CacheRequest::Get { cache_idx, key } => (cache_idx, key),
+                            other => {
+                                break 'get Err(Error::BadRequest(
+                                    format!(
+                                        "a KVGet stream request must carry CacheRequest::Get, \
+                                         got {}",
+                                        other.variant_name_public()
+                                    )
+                                    .into(),
+                                ));
+                            }
+                        };
+
+                        // A remote read is refused for the same reason a local one is: this
+                        // node has stopped applying committed cache work, so answering would be
+                        // a read from a state machine that is knowingly behind.
+                        if let Err(err) = state.raft_cache.ensure_cache_compatible() {
+                            break 'get Err(err);
+                        }
+
+                        let Some(tx) = state.raft_cache.tx_caches.get(cache_idx) else {
+                            break 'get Err(Error::CacheIncompatible(
+                                format!(
+                                    "cache index {cache_idx} does not exist on this node, which \
+                                     has {} cache(s); the caller was built against a different \
+                                     cache definition",
+                                    state.raft_cache.tx_caches.len()
+                                )
+                                .into(),
+                            ));
+                        };
+
+                        let (ack, rx) = tokio::sync::oneshot::channel();
+                        if let Err(err) = tx.send(CacheRequestHandler::Get((key, ack))) {
+                            break 'get Err(Error::Channel(err.to_string()));
+                        }
+                        match rx.await {
+                            Ok(value) => Ok(CacheResponse::Value(value)),
+                            Err(err) => Err(Error::Channel(err.to_string())),
+                        }
                     };
 
-                    let (ack, rx) = tokio::sync::oneshot::channel();
-                    state
-                        .raft_cache
-                        .tx_caches
-                        .get(cache_idx)
-                        .unwrap()
-                        .send(CacheRequestHandler::Get((key, ack)))
-                        .expect("kv handler to always be running");
-                    let value = rx.await.expect("to always get an answer from kv handler");
                     ApiStreamResponse {
                         request_id,
-                        result: ApiStreamResponsePayload::KV(Ok(CacheResponse::Value(value))),
+                        result: ApiStreamResponsePayload::KV(result),
                     }
                 }
 

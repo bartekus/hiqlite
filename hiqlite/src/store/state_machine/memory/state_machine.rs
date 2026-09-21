@@ -21,12 +21,13 @@ use std::fmt::Debug;
 #[cfg(feature = "in-memory-snapshots")]
 use std::io::Cursor;
 use std::sync::Arc;
+use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::fs;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::{Mutex, RwLock, oneshot};
 use tokio::task;
-#[cfg(not(feature = "in-memory-snapshots"))]
+use tracing::error;
 use tracing::info;
 use tracing::warn;
 use uuid::Uuid;
@@ -125,6 +126,126 @@ pub enum CacheRequest {
     },
 }
 
+/// Why a replicated cache command could not be applied by this build.
+///
+/// Two causes, both of which mean the cluster is not running one cache definition: a
+/// `cache_idx` this node does not have, and a command variant this node's feature set cannot
+/// execute. Either way the node has been told to apply committed work it does not understand,
+/// which it must not skip (`006` KD-3 / F-027).
+#[derive(Debug, Clone)]
+pub struct CacheIncompatibility {
+    /// The log index of the entry that could not be applied. Application stopped *before* it,
+    /// so `last_applied_log_id` is the entry before this one.
+    pub log_index: u64,
+    /// The `CacheRequest` variant name, for the operator.
+    pub request: &'static str,
+    /// What specifically this build could not do.
+    pub reason: String,
+}
+
+impl CacheIncompatibility {
+    pub(crate) fn message(&self) -> String {
+        format!(
+            "this node cannot apply the replicated cache command `{}` at log index {}: {}. \
+             Applying committed cache work has stopped at that entry and this node's cache is \
+             out of service; a restart replays the same entry. Bring every node to one cache \
+             definition and feature set.",
+            self.request, self.log_index, self.reason
+        )
+    }
+}
+
+impl CacheRequest {
+    /// The cache index this command names, if it names one.
+    fn cache_idx(&self) -> Option<usize> {
+        match self {
+            CacheRequest::Get { cache_idx, .. }
+            | CacheRequest::Put { cache_idx, .. }
+            | CacheRequest::GetRemove { cache_idx, .. }
+            | CacheRequest::Replace { cache_idx, .. }
+            | CacheRequest::Delete { cache_idx, .. }
+            | CacheRequest::Clear { cache_idx }
+            | CacheRequest::ClearCounters { cache_idx }
+            | CacheRequest::CounterGet { cache_idx, .. }
+            | CacheRequest::CounterSet { cache_idx, .. }
+            | CacheRequest::CounterAdd { cache_idx, .. }
+            | CacheRequest::CounterDel { cache_idx, .. } => Some(*cache_idx),
+            CacheRequest::ClearAll
+            | CacheRequest::Notify(_)
+            | CacheRequest::Lock(_)
+            | CacheRequest::LockAwait(_)
+            | CacheRequest::LockRelease(_) => None,
+        }
+    }
+
+    /// The variant name, for error messages outside this module.
+    pub(crate) fn variant_name_public(&self) -> &'static str {
+        self.variant_name()
+    }
+
+    fn variant_name(&self) -> &'static str {
+        match self {
+            CacheRequest::Get { .. } => "Get",
+            CacheRequest::Put { .. } => "Put",
+            CacheRequest::GetRemove { .. } => "GetRemove",
+            CacheRequest::Replace { .. } => "Replace",
+            CacheRequest::Delete { .. } => "Delete",
+            CacheRequest::Clear { .. } => "Clear",
+            CacheRequest::ClearCounters { .. } => "ClearCounters",
+            CacheRequest::ClearAll => "ClearAll",
+            CacheRequest::Notify(_) => "Notify",
+            CacheRequest::Lock(_) => "Lock",
+            CacheRequest::LockAwait(_) => "LockAwait",
+            CacheRequest::LockRelease(_) => "LockRelease",
+            CacheRequest::CounterGet { .. } => "CounterGet",
+            CacheRequest::CounterSet { .. } => "CounterSet",
+            CacheRequest::CounterAdd { .. } => "CounterAdd",
+            CacheRequest::CounterDel { .. } => "CounterDel",
+        }
+    }
+
+    /// Why this build cannot execute this command at all, feature-wise or protocol-wise.
+    ///
+    /// The variant set is deliberately feature-independent, because the variant order is part
+    /// of the log format (see the comment on the enum). That means a node built without
+    /// `counters`, `dlock` or `listen_notify_local` can be handed a committed entry it has no
+    /// handler for, and the three read-only variants can be handed one that should never have
+    /// been replicated at all. Each of those used to be an `unreachable!`, which is a panic in
+    /// the raft apply path.
+    fn unsupported_reason(&self) -> Option<String> {
+        let feature = |name: &str| {
+            Some(format!(
+                "this build does not have the `{name}` feature, which is required to execute it"
+            ))
+        };
+        match self {
+            CacheRequest::Get { .. } | CacheRequest::CounterGet { .. } => Some(
+                "read-only cache commands are served locally and must never be replicated; \
+                 receiving one through the raft log means the sender is not this protocol"
+                    .to_string(),
+            ),
+            CacheRequest::LockAwait(_) => Some(
+                "lock awaits are served by the leader and must never be replicated; receiving \
+                 one through the raft log means the sender is not this protocol"
+                    .to_string(),
+            ),
+            #[cfg(not(feature = "counters"))]
+            CacheRequest::ClearCounters { .. }
+            | CacheRequest::CounterSet { .. }
+            | CacheRequest::CounterAdd { .. }
+            | CacheRequest::CounterDel { .. } => feature("counters"),
+            #[cfg(not(feature = "listen_notify_local"))]
+            CacheRequest::Notify(_) => feature("listen_notify_local"),
+            #[cfg(not(feature = "dlock"))]
+            CacheRequest::Lock(_) | CacheRequest::LockRelease(_) => feature("dlock"),
+            _ => {
+                let _ = &feature;
+                None
+            }
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub enum CacheResponse {
     Empty,
@@ -161,6 +282,12 @@ pub struct StateMachineMemory {
 
     pub(crate) tx_caches: Vec<flume::Sender<CacheRequestHandler>>,
     tx_ttls: Vec<flume::Sender<TtlRequest>>,
+
+    /// Set exactly once, when a replicated cache command could not be applied. Shared with
+    /// `StateRaftCache` so the local read and write paths can refuse rather than answer from
+    /// state that stopped advancing. A `OnceLock` because this is terminal: it is never
+    /// cleared, and a later entry cannot make an earlier incompatibility untrue.
+    pub(crate) incompatible: Arc<OnceLock<CacheIncompatibility>>,
 
     #[cfg(feature = "listen_notify_local")]
     pub(crate) tx_notify: flume::Sender<NotifyRequest>,
@@ -260,6 +387,7 @@ impl StateMachineMemory {
         let slf = Self {
             data: RwLock::new(StateMachineData::default()),
             path_snapshots,
+            incompatible: Arc::new(OnceLock::new()),
             #[cfg(feature = "in-memory-snapshots")]
             in_memory_only,
             #[cfg(feature = "in-memory-snapshots")]
@@ -615,6 +743,21 @@ impl RaftStateMachine<TypeConfigKV> for Arc<StateMachineMemory> {
         I: IntoIterator<Item = Entry> + OptionalSend,
         I::IntoIter: OptionalSend,
     {
+        // Terminal, and checked before anything else: once this node could not apply a
+        // committed cache command, it does not apply a later batch either. Without this a
+        // subsequent batch of otherwise-valid entries would be applied on top of a state
+        // machine that has a known hole in it.
+        if let Some(incompat) = self.incompatible.get() {
+            let last_applied = self.data.read().await.last_applied_log_id;
+            return Err(StorageError::IO {
+                source: StorageIOError::apply(
+                    last_applied
+                        .unwrap_or_else(|| LogId::new(openraft::CommittedLeaderId::new(0, 0), 0)),
+                    openraft::AnyError::error(incompat.message()),
+                ),
+            });
+        }
+
         let entries = entries.into_iter();
         let mut replies = Vec::with_capacity(entries.size_hint().0);
 
@@ -623,7 +766,36 @@ impl RaftStateMachine<TypeConfigKV> for Arc<StateMachineMemory> {
         let mut data = self.data.write().await;
 
         let mut last_applied_log_id = None;
+        // Set when an entry names something this build cannot apply. Application stops at that
+        // entry rather than skipping it, and `last_applied_log_id` is left at the entry before,
+        // so nothing claims the offending entry was applied.
+        let mut incompatible: Option<CacheIncompatibility> = None;
+
         for entry in entries {
+            // Validated before anything is done for this entry, which is also what makes the
+            // `.get(cache_idx).unwrap()`s below safe: an out-of-range index never reaches them.
+            if let EntryPayload::Normal(req) = &entry.payload {
+                let reason = if let Some(idx) = req.cache_idx()
+                    && idx >= self.tx_caches.len()
+                {
+                    Some(format!(
+                        "it names cache index {idx} and this node has {} cache(s)",
+                        self.tx_caches.len()
+                    ))
+                } else {
+                    req.unsupported_reason()
+                };
+
+                if let Some(reason) = reason {
+                    incompatible = Some(CacheIncompatibility {
+                        log_index: entry.log_id.index,
+                        request: req.variant_name(),
+                        reason,
+                    });
+                    break;
+                }
+            }
+
             last_applied_log_id = Some(entry.log_id);
 
             // we are using sync sends -> unbounded channels
@@ -902,6 +1074,27 @@ impl RaftStateMachine<TypeConfigKV> for Arc<StateMachineMemory> {
         }
 
         data.last_applied_log_id = last_applied_log_id;
+
+        if let Some(incompat) = incompatible {
+            let message = incompat.message();
+            // Set once. A second batch that reaches the same entry must not overwrite the
+            // first account of why this node stopped.
+            let _ = self.incompatible.set(incompat);
+            error!("{message}");
+            drop(data);
+
+            // Returning an error out of `apply` is what stops openraft applying the rest of
+            // the committed log on this node. The entries this batch did apply keep their
+            // effect and are recorded in `last_applied_log_id`; the offending entry and
+            // everything after it are not applied, and are not claimed to be.
+            return Err(StorageError::IO {
+                source: StorageIOError::apply(
+                    last_applied_log_id
+                        .unwrap_or_else(|| LogId::new(openraft::CommittedLeaderId::new(0, 0), 0)),
+                    openraft::AnyError::error(message),
+                ),
+            });
+        }
 
         Ok(replies)
     }
@@ -1238,6 +1431,216 @@ mod serialized_enum_order {
                 key: key()
             }),
             15
+        );
+    }
+}
+
+#[cfg(test)]
+mod cache_compatibility_tests {
+    use super::*;
+    use openraft::Entry;
+    use openraft::storage::RaftStateMachine;
+
+    /// Two caches, which is what a node built from a two-variant cache enum has.
+    #[derive(Debug)]
+    enum TwoCaches {
+        One,
+        Two,
+    }
+
+    impl CacheVariants for TwoCaches {
+        fn hiqlite_cache_index(&self) -> usize {
+            match self {
+                TwoCaches::One => 0,
+                TwoCaches::Two => 1,
+            }
+        }
+
+        fn hiqlite_cache_variants() -> &'static [(usize, &'static str)] {
+            &[(0, "One"), (1, "Two")]
+        }
+    }
+
+    async fn state_machine(name: &str) -> Arc<StateMachineMemory> {
+        let base = format!("../target/test_data/cache_compat/{name}");
+        let _ = fs::remove_dir_all(&base).await;
+        fs::create_dir_all(&base).await.unwrap();
+        Arc::new(
+            StateMachineMemory::new::<TwoCaches>(&base, false)
+                .await
+                .unwrap(),
+        )
+    }
+
+    fn entry(index: u64, req: CacheRequest) -> Entry<TypeConfigKV> {
+        Entry {
+            log_id: LogId::new(openraft::CommittedLeaderId::new(1, 1), index),
+            payload: EntryPayload::Normal(req),
+        }
+    }
+
+    fn put(cache_idx: usize, key: &str) -> CacheRequest {
+        CacheRequest::Put {
+            cache_idx,
+            key: Cow::Owned(key.to_string()),
+            value: b"v".to_vec(),
+            expires: None,
+        }
+    }
+
+    /// F-027 / `006` KD-3: `.get(cache_idx).unwrap()` panicked for an index this build does not
+    /// have, which under a release profile that aborts ends the process and under an unwinding
+    /// one kills the raft apply task silently. Neither is a reported failure, and neither is a
+    /// deterministic cluster-wide outcome.
+    ///
+    /// What must happen instead: the entries before it keep their effect, the offending entry
+    /// is **not** applied and is not claimed to be, application stops, and the failure is named.
+    #[tokio::test]
+    async fn an_out_of_range_cache_index_stops_application_at_that_entry() {
+        let mut sm = state_machine("out_of_range_index").await;
+
+        let err = sm
+            .apply(vec![
+                entry(1, put(0, "a")),
+                entry(2, put(1, "b")),
+                // this node has two caches, so index 2 does not exist
+                entry(3, put(2, "c")),
+                entry(4, put(0, "d")),
+            ])
+            .await
+            .expect_err("an unapplicable committed entry must not be reported as applied");
+
+        let text = err.to_string();
+        assert!(
+            text.contains("cache index 2") && text.contains("2 cache(s)"),
+            "the failure must name what could not be applied, got: {text}"
+        );
+
+        let (last_applied, _) = sm.applied_state().await.unwrap();
+        assert_eq!(
+            last_applied.map(|id| id.index),
+            Some(2),
+            "application stopped at the offending entry, so the frontier is the entry before it"
+        );
+
+        let incompat = sm
+            .incompatible
+            .get()
+            .expect("the incompatibility must be recorded for the read paths");
+        assert_eq!(incompat.log_index, 3);
+        assert_eq!(incompat.request, "Put");
+    }
+
+    /// The node does not quietly resume on the next batch. The offending entry is committed, so
+    /// there is no batch after it that is safe to apply: doing so would leave a hole.
+    #[tokio::test]
+    async fn a_later_batch_is_refused_once_the_node_is_incompatible() {
+        let mut sm = state_machine("later_batch_refused").await;
+
+        sm.apply(vec![entry(1, put(0, "a")), entry(2, put(5, "b"))])
+            .await
+            .expect_err("the first batch fails at the bad entry");
+
+        let err = sm
+            .apply(vec![entry(3, put(0, "c"))])
+            .await
+            .expect_err("a later batch of valid entries must still be refused");
+        assert!(err.to_string().contains("cache index 5"));
+
+        let (last_applied, _) = sm.applied_state().await.unwrap();
+        assert_eq!(
+            last_applied.map(|id| id.index),
+            Some(1),
+            "the frontier does not move for a refused batch"
+        );
+    }
+
+    /// A command variant this build has no handler for. The variant set is deliberately
+    /// feature-independent because the variant order is part of the log format, so a node
+    /// built without `dlock`, `counters` or `listen_notify_local` can be handed a committed
+    /// entry it cannot execute. Those arms used to be `unreachable!`.
+    ///
+    /// The three read-only variants are the case that holds under **every** feature set: they
+    /// are served locally and must never be replicated, so one arriving through the log is a
+    /// sender that is not speaking this protocol.
+    #[tokio::test]
+    async fn a_command_that_must_never_be_replicated_stops_application() {
+        let mut sm = state_machine("never_replicated").await;
+
+        let err = sm
+            .apply(vec![
+                entry(1, put(0, "a")),
+                entry(
+                    2,
+                    CacheRequest::Get {
+                        cache_idx: 0,
+                        key: "a".to_string(),
+                    },
+                ),
+            ])
+            .await
+            .expect_err("a read-only command in the log is not something to skip");
+
+        assert!(
+            err.to_string().contains("must never be replicated"),
+            "got: {err}"
+        );
+        assert_eq!(sm.incompatible.get().unwrap().request, "Get");
+        assert_eq!(
+            sm.applied_state().await.unwrap().0.map(|id| id.index),
+            Some(1)
+        );
+    }
+
+    /// What a caller observes. `StateRaftCache` holds the same `Arc<OnceLock<..>>`, so the
+    /// message the read and write paths refuse with is the one recorded here.
+    ///
+    /// The limit of this, stated rather than implied: no `AppState` is constructed, so what is
+    /// asserted is the shared value and the error it produces, not a served request. A served
+    /// request needs a running node, which is the cluster surface `012` owns.
+    #[tokio::test]
+    async fn the_recorded_failure_is_what_callers_are_refused_with() {
+        let mut sm = state_machine("caller_observes").await;
+
+        sm.apply(vec![entry(1, put(9, "a"))])
+            .await
+            .expect_err("index 9 does not exist");
+
+        let shared: Arc<OnceLock<CacheIncompatibility>> = sm.incompatible.clone();
+        let err = crate::Error::CacheIncompatible(shared.get().unwrap().message().into());
+
+        let text = err.to_string();
+        assert!(text.starts_with("CacheIncompatible: "), "got: {text}");
+        assert!(text.contains("log index 1"));
+        assert!(
+            text.contains("cache index 9"),
+            "the operator is told which index, got: {text}"
+        );
+        assert!(
+            text.contains("one cache definition"),
+            "the operator is told what to do about it, got: {text}"
+        );
+    }
+
+    /// Nothing about this repair changes a healthy apply.
+    #[tokio::test]
+    async fn a_compatible_batch_still_applies_completely() {
+        let mut sm = state_machine("healthy").await;
+
+        let replies = sm
+            .apply(vec![
+                entry(1, put(0, "a")),
+                entry(2, put(1, "b")),
+                entry(3, CacheRequest::ClearAll),
+            ])
+            .await
+            .unwrap();
+
+        assert_eq!(replies.len(), 3);
+        assert!(sm.incompatible.get().is_none());
+        assert_eq!(
+            sm.applied_state().await.unwrap().0.map(|id| id.index),
+            Some(3)
         );
     }
 }
