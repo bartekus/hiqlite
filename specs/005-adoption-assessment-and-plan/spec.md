@@ -16,18 +16,20 @@ establishes:
   - "standards/spec/adoption-plan.md"
   - "standards/spec/findings-register.md"
   - "standards/spec/wal-repair-proposal.md"
+  - "standards/spec/cache-log-repair-proposal.md"
 references:
   - unit: { kind: file, path: "standards/spec/constitution.md" }
     role: "context"
   - unit: { kind: file, path: "standards/spec/contract.md" }
     role: "context"
 summary: >
-  Owns the three assessment documents under standards/spec: a reconciled
+  Owns the four assessment documents under standards/spec: a reconciled
   whole-project inventory with a dependency-ordered adoption proposal and a
   current assignment table, a source-backed findings register with stable
-  identifiers, and the traced WAL repair proposal. Records what was measured and
-  what is proposed. It adopts nothing, schedules nothing, enables no gate, and
-  claims no territory outside those three documents.
+  identifiers, and the two traced repair proposals, for the WAL append contract
+  and for the cache log store. Records what was measured and what is proposed.
+  It adopts nothing, schedules nothing, enables no gate, and claims no territory
+  outside those four documents.
 ---
 
 # 005: Record the whole-project assessment and the proposed adoption plan
@@ -39,11 +41,11 @@ so. The owner's objective is now eventual whole-project adoption, with
 specifications that expose defects, missing evidence, and unclear contracts so
 they can be repaired in governed follow-up work.
 
-That objective needs three things written down before any of it can be
+That objective needs three kinds of thing written down before any of it can be
 scheduled: an honest inventory of what the repository actually contains against
 what the ledger currently sees, a register of what the assessment found, and the
-traced analysis the first repair was authorized against. This spec owns all
-three documents.
+traced analysis a repair is authorized against. This spec owns all four
+documents, the last kind having two instances.
 
 **It authorizes nothing; it records.** Nothing in
 `standards/spec/adoption-plan.md` is scheduled or approved **by that document**:
@@ -61,20 +63,30 @@ redo finished work. What B-1 forbids is a proposal presented as a decision.
 What B-1.1 requires is a decision taken elsewhere recorded as history.
 
 `implementation: complete` here means exactly what `000` section 10 says: the
-units this spec claims, the three documents, exist in the tree and its
+units this spec claims, the four documents, exist in the tree and its
 acceptance block passes. It is not a claim that the plan has been carried out.
 
 ## 2. Territory
 
-This spec **establishes** three units, none of which existed before this
-change:
+This spec **establishes** four units, none of which existed before it claimed
+them:
 
 - `standards/spec/adoption-plan.md`, the reconciled inventory, the wave
   proposal, the completion criteria, and the enforcement ladder;
 - `standards/spec/findings-register.md`, the findings with stable `F-NNN`
   identifiers;
 - `standards/spec/wal-repair-proposal.md`, the traced repair proposal for F-001
-  and F-002, which implements nothing and changes no runtime behavior.
+  and F-002, which implements nothing and changes no runtime behavior;
+- `standards/spec/cache-log-repair-proposal.md`, the traced repair proposal for
+  W-04 (F-021 to F-024, F-029 and F-047), added 2026-09-21, which likewise
+  implements nothing, authorizes nothing, and changes no runtime behavior.
+
+A repair proposal is territory of this spec rather than of the spec that owns
+the code it analyses, for the reason the WAL one set: it is assessment output,
+it is superseded by the repair spec when one is written (`008` took
+`wal-repair-proposal.md` by a `superseding` `extends` edge), and until then it
+must be editable as the analysis is corrected without touching the adopted
+contract it is about.
 
 `standards/spec/constitution.md` and `standards/spec/contract.md` are
 **referenced**, not claimed. `000` owns both, and `references` is non-owning.
@@ -84,7 +96,7 @@ govern later. Naming an area in a wave is not a claim on it. A wave becomes
 territory when its own spec declares its units and is reviewed, which is the
 point of proposing the waves separately rather than claiming them here.
 
-`standards/spec/**/*.md` is in `coverage.governed_scope`, so all three documents
+`standards/spec/**/*.md` is in `coverage.governed_scope`, so all four documents
 enter the coverage denominator; this spec's claims are what keep that scope at
 full coverage rather than adding unclaimed files to it.
 
@@ -163,7 +175,7 @@ provenance chain for any generated artifact it discusses.
 
 ## 4. Evidence and its limits
 
-The acceptance block asserts that all three documents exist; that the plan
+The acceptance block asserts that all four documents exist; that the plan
 states its proposed status, names all three milestones, carries its current
 assignment table, and records the WAL repair as delivered rather than as the
 next task; that the register carries its first and last finding identifiers and
@@ -210,7 +222,7 @@ Whether that should change is an optional owner decision, carried as W-24, and
 CI's abstention is a deliberate trust boundary (`000` section 15) rather than
 an oversight to correct.
 
-Otherwise none in this spec's own territory: the three documents were authored
+Otherwise none in this spec's own territory: the documents were authored
 by this change and describe themselves.
 
 The defects this spec's documents *record* belong to the specs that own the
@@ -355,6 +367,7 @@ as W-24. This change does not choose one.
 test -f standards/spec/adoption-plan.md
 test -f standards/spec/findings-register.md
 test -f standards/spec/wal-repair-proposal.md
+test -f standards/spec/cache-log-repair-proposal.md
 # was: grep -q 'changes no runtime behavior' ... - stale since PR #7 rewrote the
 # header this asserted. Replaced per D-7 with the statement the document must
 # carry now: which spec governs it. See F-030.
@@ -368,18 +381,23 @@ grep -q 'M3, enforcement enabled' standards/spec/adoption-plan.md
 grep -q 'F-001' standards/spec/findings-register.md
 grep -q 'F-020' standards/spec/findings-register.md
 grep -q 'F-029' standards/spec/findings-register.md
+grep -q 'F-047' standards/spec/findings-register.md
 grep -q 'record, not a mandate' standards/spec/findings-register.md
 grep -q '## 8. Current assignment table' standards/spec/adoption-plan.md
 sh -c '! grep -q "^Not started, and not authorized by this document" standards/spec/adoption-plan.md'
 grep -q 'Delivered 2026-09-19 as' standards/spec/adoption-plan.md
 grep -q 'The proposed spec ordinals below are vacated' standards/spec/adoption-plan.md
 grep -q 'are separate columns on purpose' standards/spec/adoption-plan.md
-sh -c '! grep -n "origin/main" standards/spec/adoption-plan.md standards/spec/findings-register.md standards/spec/wal-repair-proposal.md'
-sh -c '! grep -rl "$(printf "\342\200\224")" standards/spec/adoption-plan.md standards/spec/findings-register.md standards/spec/wal-repair-proposal.md'
+grep -q 'Status, 2026-09-21: proposed, not authorized' standards/spec/cache-log-repair-proposal.md
+grep -q 'openraft-0.9.24' standards/spec/cache-log-repair-proposal.md
+grep -q 'drain(..=purge_until)' standards/spec/cache-log-repair-proposal.md
+sh -c '! grep -n "origin/main" standards/spec/adoption-plan.md standards/spec/findings-register.md standards/spec/wal-repair-proposal.md standards/spec/cache-log-repair-proposal.md'
+sh -c '! grep -rl "$(printf "\342\200\224")" standards/spec/adoption-plan.md standards/spec/findings-register.md standards/spec/wal-repair-proposal.md standards/spec/cache-log-repair-proposal.md'
 spec-spine check --fail-on-unresolved --fail-on-warn
 spec-spine lint --fail-on-warn
 spec-spine index coverage
 sh -c 'spec-spine index owner standards/spec/adoption-plan.md | grep -q 005-adoption-assessment-and-plan'
 sh -c 'spec-spine index owner standards/spec/findings-register.md | grep -q 005-adoption-assessment-and-plan'
 sh -c 'spec-spine index owner standards/spec/wal-repair-proposal.md | grep -q 005-adoption-assessment-and-plan'
+sh -c 'spec-spine index owner standards/spec/cache-log-repair-proposal.md | grep -q 005-adoption-assessment-and-plan'
 ```

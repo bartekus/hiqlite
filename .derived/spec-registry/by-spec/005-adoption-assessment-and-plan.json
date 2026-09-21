@@ -17,6 +17,10 @@
       {
         "kind": "file",
         "path": "standards/spec/wal-repair-proposal.md"
+      },
+      {
+        "kind": "file",
+        "path": "standards/spec/cache-log-repair-proposal.md"
       }
     ],
     "id": "005-adoption-assessment-and-plan",
@@ -62,9 +66,9 @@
     ],
     "specPath": "specs/005-adoption-assessment-and-plan/spec.md",
     "status": "draft",
-    "summary": "Owns the three assessment documents under standards/spec: a reconciled whole-project inventory with a dependency-ordered adoption proposal and a current assignment table, a source-backed findings register with stable identifiers, and the traced WAL repair proposal. Records what was measured and what is proposed. It adopts nothing, schedules nothing, enables no gate, and claims no territory outside those three documents.\n",
+    "summary": "Owns the four assessment documents under standards/spec: a reconciled whole-project inventory with a dependency-ordered adoption proposal and a current assignment table, a source-backed findings register with stable identifiers, and the two traced repair proposals, for the WAL append contract and for the cache log store. Records what was measured and what is proposed. It adopts nothing, schedules nothing, enables no gate, and claims no territory outside those four documents.\n",
     "title": "Record the whole-project assessment and the proposed adoption plan"
   },
-  "shardHash": "63c43d3ebfb109448748150a01831cc4e1ef22709a915215c9476a845b351b6a",
+  "shardHash": "f56ce09a11fb3940926403b82a383721b39727af2258066412430cce053e508c",
   "specVersion": "1.3.0"
 }
