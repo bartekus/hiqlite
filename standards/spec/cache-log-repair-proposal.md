@@ -3,8 +3,14 @@
 A source-backed proposal for repairing F-021 through F-024, F-029, and F-047,
 the last of which this trace found and the register now carries.
 
-**Status, 2026-09-21: proposed, not authorized.** Nothing here is scheduled or
-implemented. `007-cache-log-store` is the current contract for
+**Status, 2026-09-21: delivered.** This document was written as a proposal and
+authorized nothing. It has since been acted on:
+`020-cache-log-store-contract-repair` implements sections 4.1 to 4.4 and the
+bounded strategy of 5.2, and the reconciliation of 4.5 landed first by its
+recommended route. The two design points section 7 left open are decided in
+`020` section 6, and `020` governs where the two differ. The text below is kept
+as the analysis the repair was reviewed against and is not rewritten to match
+what was built. `007-cache-log-store` is the current contract for
 `hiqlite/src/store/logs/` and remains authoritative until a repair spec
 supersedes or amends it. This document is the traced analysis a repair would be
 reviewed against, in the shape `standards/spec/wal-repair-proposal.md` used for
