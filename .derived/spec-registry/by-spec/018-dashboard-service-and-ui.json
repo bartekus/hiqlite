@@ -1,0 +1,150 @@
+{
+  "record": {
+    "created": "2026-09-21",
+    "dependsOn": [
+      "000-hiqlite-ownership-bootstrap",
+      "003-client-consistency-and-retry-outcomes",
+      "010-node-lifecycle-and-split-brain",
+      "011-transport-security-material",
+      "015-server-binary-and-proxy"
+    ],
+    "establishes": [
+      {
+        "kind": "file",
+        "path": "hiqlite/src/dashboard/mod.rs"
+      },
+      {
+        "kind": "file",
+        "path": "hiqlite/src/dashboard/handlers.rs"
+      },
+      {
+        "kind": "file",
+        "path": "hiqlite/src/dashboard/middleware.rs"
+      },
+      {
+        "kind": "file",
+        "path": "hiqlite/src/dashboard/password.rs"
+      },
+      {
+        "kind": "file",
+        "path": "hiqlite/src/dashboard/query.rs"
+      },
+      {
+        "kind": "file",
+        "path": "hiqlite/src/dashboard/session.rs"
+      },
+      {
+        "kind": "file",
+        "path": "hiqlite/src/dashboard/static_files.rs"
+      },
+      {
+        "kind": "file",
+        "path": "hiqlite/src/dashboard/table.rs"
+      },
+      {
+        "kind": "file",
+        "path": "dashboard/src/lib/utils/fetch.ts"
+      },
+      {
+        "kind": "file",
+        "path": "dashboard/src/lib/stores/session.ts"
+      },
+      {
+        "kind": "file",
+        "path": "dashboard/src/lib/types/session.ts"
+      },
+      {
+        "kind": "file",
+        "path": "dashboard/src/lib/types/error.ts"
+      },
+      {
+        "kind": "file",
+        "path": "dashboard/src/lib/types/query.ts"
+      },
+      {
+        "kind": "file",
+        "path": "dashboard/src/lib/types/query_results.ts"
+      },
+      {
+        "kind": "file",
+        "path": "dashboard/src/lib/types/raft_metrics.ts"
+      },
+      {
+        "kind": "file",
+        "path": "dashboard/src/lib/types/table.ts"
+      },
+      {
+        "kind": "file",
+        "path": "dashboard/src/lib/components/Login.svelte"
+      },
+      {
+        "kind": "file",
+        "path": "dashboard/src/routes/+page.svelte"
+      },
+      {
+        "kind": "file",
+        "path": "dashboard/tests/smoke.spec.ts"
+      }
+    ],
+    "extends": [
+      {
+        "nature": "additive",
+        "spec": "000-hiqlite-ownership-bootstrap",
+        "unit": {
+          "kind": "file",
+          "path": "spec-spine.toml"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "005-adoption-assessment-and-plan",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/findings-register.md"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "005-adoption-assessment-and-plan",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/adoption-plan.md"
+        }
+      }
+    ],
+    "id": "018-dashboard-service-and-ui",
+    "implementation": "complete",
+    "kind": "adoption",
+    "origin": {
+      "paths": [
+        "hiqlite/src/dashboard/"
+      ],
+      "retroactive": true
+    },
+    "owner": "hiqlite maintainers",
+    "risk": "critical",
+    "sectionHeadings": [
+      "018: Adopt the dashboard service and its UI contract",
+      "1. Purpose",
+      "2. Territory",
+      "3. Behavior",
+      "B-1. Six routes, one fallback, and what each requires",
+      "B-2. The session is an encrypted timestamp pair and nothing else",
+      "B-3. Login is cooldown, then optional proof-of-work, then argon2",
+      "B-4. Dashboard SQL is classified by the first seven bytes",
+      "B-5. The browser is the only client, and it holds no credential",
+      "4. Evidence and its limits",
+      "5. Known defects",
+      "6. Resolved decisions",
+      "7. The inventory declarations this spec requires",
+      "8. Out of scope",
+      "Verification"
+    ],
+    "specPath": "specs/018-dashboard-service-and-ui/spec.md",
+    "status": "draft",
+    "summary": "Adopts the dashboard's authorization boundary as one contract across both sides: the six API routes, the session cookie, the login cooldown and proof-of-work, the SQL guard, and the browser code that is the only client of any of it. Nine findings, five executed, including a single-flight lock that is dropped before it guards anything and an unauthenticated fallback that panics on a multi-byte path. Repairs no runtime behavior.\n",
+    "title": "Adopt the dashboard service and its UI contract"
+  },
+  "shardHash": "64ebabe4956667002a84a0438861062d80855561a2baa4793bbae98d555b7648",
+  "specVersion": "1.3.0"
+}

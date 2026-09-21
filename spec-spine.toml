@@ -69,6 +69,9 @@ extra_hashed_inputs = [
   "hiqlite/src/client/**/*.rs",
   "hiqlite/src/network/**/*.rs",
   "hiqlite/src/server/proxy/stream.rs",
+  # The dashboard service, claimed by 018. Its browser-side counterpart needs no
+  # entry: the dashboard/src globs below already hash and count it.
+  "hiqlite/src/dashboard/**/*.rs",
   # The server binary and the proxy, claimed by 015. The subtree glob subsumes
   # the proxy/stream.rs entry above, which is kept because it is 000's
   # statement about 003's territory and 015 does not own that statement.

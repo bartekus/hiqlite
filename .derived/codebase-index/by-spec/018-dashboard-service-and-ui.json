@@ -1,0 +1,393 @@
+{
+  "mapping": {
+    "dependsOn": [
+      "000-hiqlite-ownership-bootstrap",
+      "003-client-consistency-and-retry-outcomes",
+      "010-node-lifecycle-and-split-brain",
+      "011-transport-security-material",
+      "015-server-binary-and-proxy"
+    ],
+    "implementingPaths": [
+      {
+        "path": "dashboard/src/lib/components/Login.svelte",
+        "source": "spec-edge"
+      },
+      {
+        "path": "dashboard/src/lib/stores/session.ts",
+        "source": "spec-edge"
+      },
+      {
+        "path": "dashboard/src/lib/types/error.ts",
+        "source": "spec-edge"
+      },
+      {
+        "path": "dashboard/src/lib/types/query.ts",
+        "source": "spec-edge"
+      },
+      {
+        "path": "dashboard/src/lib/types/query_results.ts",
+        "source": "spec-edge"
+      },
+      {
+        "path": "dashboard/src/lib/types/raft_metrics.ts",
+        "source": "spec-edge"
+      },
+      {
+        "path": "dashboard/src/lib/types/session.ts",
+        "source": "spec-edge"
+      },
+      {
+        "path": "dashboard/src/lib/types/table.ts",
+        "source": "spec-edge"
+      },
+      {
+        "path": "dashboard/src/lib/utils/fetch.ts",
+        "source": "spec-edge"
+      },
+      {
+        "path": "dashboard/src/routes/+page.svelte",
+        "source": "spec-edge"
+      },
+      {
+        "path": "dashboard/tests/smoke.spec.ts",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/dashboard/handlers.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/dashboard/middleware.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/dashboard/mod.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/dashboard/password.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/dashboard/query.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/dashboard/session.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/dashboard/static_files.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/dashboard/table.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "spec-spine.toml",
+        "source": "spec-edge"
+      },
+      {
+        "path": "standards/spec/adoption-plan.md",
+        "source": "spec-edge"
+      },
+      {
+        "path": "standards/spec/findings-register.md",
+        "source": "spec-edge"
+      }
+    ],
+    "resolvedUnits": [
+      {
+        "locations": [
+          {
+            "file": "dashboard/src/lib/components/Login.svelte"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "dashboard/src/lib/components/Login.svelte"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "dashboard/src/lib/stores/session.ts"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "dashboard/src/lib/stores/session.ts"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "dashboard/src/lib/types/error.ts"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "dashboard/src/lib/types/error.ts"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "dashboard/src/lib/types/query.ts"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "dashboard/src/lib/types/query.ts"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "dashboard/src/lib/types/query_results.ts"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "dashboard/src/lib/types/query_results.ts"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "dashboard/src/lib/types/raft_metrics.ts"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "dashboard/src/lib/types/raft_metrics.ts"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "dashboard/src/lib/types/session.ts"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "dashboard/src/lib/types/session.ts"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "dashboard/src/lib/types/table.ts"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "dashboard/src/lib/types/table.ts"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "dashboard/src/lib/utils/fetch.ts"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "dashboard/src/lib/utils/fetch.ts"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "dashboard/src/routes/+page.svelte"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "dashboard/src/routes/+page.svelte"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "dashboard/tests/smoke.spec.ts"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "dashboard/tests/smoke.spec.ts"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/dashboard/handlers.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/dashboard/handlers.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/dashboard/middleware.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/dashboard/middleware.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/dashboard/mod.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/dashboard/mod.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/dashboard/password.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/dashboard/password.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/dashboard/query.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/dashboard/query.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/dashboard/session.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/dashboard/session.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/dashboard/static_files.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/dashboard/static_files.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/dashboard/table.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/dashboard/table.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "spec-spine.toml"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "spec-spine.toml"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "standards/spec/adoption-plan.md"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/adoption-plan.md"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "standards/spec/findings-register.md"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/findings-register.md"
+        }
+      }
+    ],
+    "specId": "018-dashboard-service-and-ui",
+    "specStatus": "draft"
+  },
+  "schemaVersion": "1.1.0",
+  "shardHash": "667b06832be7a619808b0269e6f6384bfcfe8601a2f8cf9fe41878b02867fb0f"
+}
