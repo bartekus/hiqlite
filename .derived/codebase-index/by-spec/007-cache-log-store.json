@@ -9,6 +9,10 @@
       {
         "path": "hiqlite/src/store/logs/",
         "source": "spec-edge"
+      },
+      {
+        "path": "standards/spec/findings-register.md",
+        "source": "spec-edge"
       }
     ],
     "resolvedUnits": [
@@ -23,6 +27,19 @@
         "unit": {
           "kind": "directory",
           "path": "hiqlite/src/store/logs/"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "standards/spec/findings-register.md"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/findings-register.md"
         }
       },
       {
@@ -56,5 +73,5 @@
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "7e1aafde5899d02f48caef025b5249b4a68fbc6c306bde010f64e518910e697a"
+  "shardHash": "d72ec7fca861a5e211ee5b7feb1726e595cfa26a3fcd3dbdef3bff3e62a54361"
 }
