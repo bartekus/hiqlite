@@ -335,6 +335,37 @@ enforcement setting changed: the `spec-spine.toml` edit `009` required is a
 freshness and denominator declaration, which constitution XII keeps separate
 from enforcement.
 
+**D-9 (2026-09-21, the inventory table is reconciled against eight delivered
+waves).** B-1.1 requires this document's plan to describe delivered work as
+delivered. Section 8's assignment table was kept current as each wave landed;
+section 2.2's **current owner** column was not, and had gone stale for ten rows:
+A8 and A9 when `010` and `011` were merged, and A10 to A14, A16, A17, A19 and
+A20 across the eight waves that followed. Each still read **none** for territory
+a merged spec establishes.
+
+That is the same defect section 8's closing note names, in a different column,
+and it is worse there: section 8 is explicitly the queue, while 2.2 is the
+inventory a reader consults to find out who is responsible for a path. Ten rows
+answering "nobody" about paths with an owning spec is a false statement about
+the ledger, not merely a stale recommendation.
+
+Each row is rewritten as history rather than deleted, per B-3: the owning spec
+and its date, the evidence it has, the findings it produced, and what the
+delivery did **not** close. The last of those is the part that keeps the table a
+queue: A9 has nothing tested on a wire, A12 has no reconnect or shutdown
+evidence because F-067 means the proxy does not run, A13 served no route end to
+end, A14's presentational components are deliberately unclaimed, and A16 records
+its owner as "none, deliberately" with `019` D-2 as the reason.
+
+**No new finding, and nothing else changes.** No spec is ratified, no
+enforcement setting moves, no source or configuration is touched, and coverage
+is unchanged at 149/236: this decision claims nothing. The edit you are reading
+is also the mechanism working as designed. `C-001` refuses a change to
+`standards/spec/adoption-plan.md` that carries no authoring edit to an owning
+spec, so reconciling the plan is not something that can be done quietly beside
+it; the decision has to be written down here first. A first attempt at this
+change omitted that and the gate rejected it.
+
 **D-7 (2026-09-20, a stale acceptance assertion is replaced, and the class of
 defect is recorded).** Running this spec's acceptance block found it failing at
 command 4, and it fails identically at the unmodified integration head
