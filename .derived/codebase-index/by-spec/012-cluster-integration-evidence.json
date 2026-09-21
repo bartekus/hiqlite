@@ -1,0 +1,306 @@
+{
+  "mapping": {
+    "dependsOn": [
+      "000-hiqlite-ownership-bootstrap",
+      "002-snapshot-publication-and-recovery",
+      "003-client-consistency-and-retry-outcomes"
+    ],
+    "implementingPaths": [
+      {
+        "path": "hiqlite/tests/cluster/backup.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/tests/cluster/backup_restore.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/tests/cluster/batch.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/tests/cluster/cache.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/tests/cluster/check.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/tests/cluster/dlock.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/tests/cluster/execute_query.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/tests/cluster/learner_only.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/tests/cluster/listen_notify.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/tests/cluster/main.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/tests/cluster/migration.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/tests/cluster/remote_only.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/tests/cluster/start.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/tests/cluster/transaction.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/tests/cluster/type_conversions.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "standards/spec/adoption-plan.md",
+        "source": "spec-edge"
+      },
+      {
+        "path": "standards/spec/findings-register.md",
+        "source": "spec-edge"
+      }
+    ],
+    "resolvedUnits": [
+      {
+        "locations": [
+          {
+            "file": "hiqlite/tests/cluster/backup.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/tests/cluster/backup.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/tests/cluster/backup_restore.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/tests/cluster/backup_restore.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/tests/cluster/batch.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/tests/cluster/batch.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/tests/cluster/cache.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/tests/cluster/cache.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/tests/cluster/check.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/tests/cluster/check.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/tests/cluster/dlock.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/tests/cluster/dlock.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/tests/cluster/execute_query.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/tests/cluster/execute_query.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/tests/cluster/learner_only.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/tests/cluster/learner_only.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/tests/cluster/listen_notify.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/tests/cluster/listen_notify.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/tests/cluster/main.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/tests/cluster/main.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/tests/cluster/migration.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/tests/cluster/migration.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/tests/cluster/remote_only.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/tests/cluster/remote_only.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/tests/cluster/start.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/tests/cluster/start.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/tests/cluster/transaction.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/tests/cluster/transaction.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/tests/cluster/type_conversions.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/tests/cluster/type_conversions.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "standards/spec/adoption-plan.md"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/adoption-plan.md"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "standards/spec/findings-register.md"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/findings-register.md"
+        }
+      }
+    ],
+    "specId": "012-cluster-integration-evidence",
+    "specStatus": "draft"
+  },
+  "schemaVersion": "1.1.0",
+  "shardHash": "80975c0a37aa818efd39b09a4aaf7461aff4a6ba2a98ce5a67bfc41420a7b201"
+}
