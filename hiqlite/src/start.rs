@@ -332,3 +332,46 @@ fn build_listen_addr(listen_addr: &str, node_addr: &str, tls: bool) -> String {
 async fn shutdown_signal(mut rx: tokio::sync::watch::Receiver<bool>) {
     let _ = rx.changed().await;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `build_listen_addr` takes the port from the advertised address and the
+    /// host from the listen address. 010 B-2.
+    #[test]
+    fn listen_port_comes_from_the_advertised_address() {
+        assert_eq!(
+            build_listen_addr("0.0.0.0", "node1.cluster:8100", false),
+            "0.0.0.0:8100"
+        );
+        assert_eq!(
+            build_listen_addr("127.0.0.1", "node1.cluster:8200", true),
+            "127.0.0.1:8200"
+        );
+    }
+
+    /// With no port on the advertised address the scheme default is used, and
+    /// it is the only place TLS changes the listen address. 010 B-2.
+    #[test]
+    fn missing_advertised_port_falls_back_to_the_scheme_default() {
+        assert_eq!(build_listen_addr("0.0.0.0", "node1", true), "0.0.0.0:443");
+        assert_eq!(build_listen_addr("0.0.0.0", "node1", false), "0.0.0.0:80");
+    }
+
+    /// 010 KD-1. `split_once(':')` splits a bracketed IPv6 advertised address at
+    /// the first colon inside the brackets, so the "port" carries the rest of
+    /// the address and the result is not a socket address at all. The caller
+    /// then `expect`s it inside a detached task, so the node keeps running with
+    /// no listener on that address.
+    #[test]
+    fn ipv6_advertised_address_produces_an_unparsable_listen_address() {
+        let addr = build_listen_addr("::", "[fd00::1]:8100", false);
+        assert_eq!(addr, "::::1]:8100");
+        assert!(SocketAddr::from_str(&addr).is_err());
+
+        let no_port = build_listen_addr("::", "[fd00::1]", false);
+        assert_eq!(no_port, "::::1]");
+        assert!(SocketAddr::from_str(&no_port).is_err());
+    }
+}

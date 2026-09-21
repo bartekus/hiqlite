@@ -1,20 +1,29 @@
 {
   "mapping": {
+    "dependsOn": [
+      "000-hiqlite-ownership-bootstrap",
+      "003-client-consistency-and-retry-outcomes",
+      "009-configuration-contract"
+    ],
     "implementingPaths": [
       {
-        "path": ".github/workflows/spec-spine.yaml",
+        "path": "hiqlite.env",
         "source": "spec-edge"
       },
       {
-        "path": ".gitignore",
+        "path": "hiqlite/src/app_state.rs",
         "source": "spec-edge"
       },
       {
-        "path": "ARCHITECTURE.md",
+        "path": "hiqlite/src/init.rs",
         "source": "spec-edge"
       },
       {
-        "path": "justfile",
+        "path": "hiqlite/src/split_brain_check.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/start.rs",
         "source": "spec-edge"
       },
       {
@@ -22,15 +31,11 @@
         "source": "spec-edge"
       },
       {
-        "path": "standards/spec/constitution.md",
+        "path": "standards/spec/adoption-plan.md",
         "source": "spec-edge"
       },
       {
-        "path": "standards/spec/contract.md",
-        "source": "spec-edge"
-      },
-      {
-        "path": "standards/spec/templates/",
+        "path": "standards/spec/findings-register.md",
         "source": "spec-edge"
       }
     ],
@@ -38,53 +43,66 @@
       {
         "locations": [
           {
-            "file": ".github/workflows/spec-spine.yaml"
+            "file": "hiqlite/src/app_state.rs"
           }
         ],
         "ownership": true,
         "sourceField": "establishes",
         "unit": {
           "kind": "file",
-          "path": ".github/workflows/spec-spine.yaml"
+          "path": "hiqlite/src/app_state.rs"
         }
       },
       {
         "locations": [
           {
-            "file": ".gitignore"
+            "file": "hiqlite/src/init.rs"
           }
         ],
         "ownership": true,
         "sourceField": "establishes",
         "unit": {
           "kind": "file",
-          "path": ".gitignore"
+          "path": "hiqlite/src/init.rs"
         }
       },
       {
         "locations": [
           {
-            "file": "ARCHITECTURE.md"
+            "file": "hiqlite/src/split_brain_check.rs"
           }
         ],
         "ownership": true,
         "sourceField": "establishes",
         "unit": {
           "kind": "file",
-          "path": "ARCHITECTURE.md"
+          "path": "hiqlite/src/split_brain_check.rs"
         }
       },
       {
         "locations": [
           {
-            "file": "justfile"
+            "file": "hiqlite/src/start.rs"
           }
         ],
         "ownership": true,
         "sourceField": "establishes",
         "unit": {
           "kind": "file",
-          "path": "justfile"
+          "path": "hiqlite/src/start.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite.env"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite.env"
         }
       },
       {
@@ -94,7 +112,7 @@
           }
         ],
         "ownership": true,
-        "sourceField": "establishes",
+        "sourceField": "extends",
         "unit": {
           "kind": "file",
           "path": "spec-spine.toml"
@@ -103,46 +121,33 @@
       {
         "locations": [
           {
-            "file": "standards/spec/constitution.md"
+            "file": "standards/spec/adoption-plan.md"
           }
         ],
         "ownership": true,
-        "sourceField": "establishes",
+        "sourceField": "extends",
         "unit": {
           "kind": "file",
-          "path": "standards/spec/constitution.md"
+          "path": "standards/spec/adoption-plan.md"
         }
       },
       {
         "locations": [
           {
-            "file": "standards/spec/contract.md"
+            "file": "standards/spec/findings-register.md"
           }
         ],
         "ownership": true,
-        "sourceField": "establishes",
+        "sourceField": "extends",
         "unit": {
           "kind": "file",
-          "path": "standards/spec/contract.md"
-        }
-      },
-      {
-        "locations": [
-          {
-            "file": "standards/spec/templates/"
-          }
-        ],
-        "ownership": true,
-        "sourceField": "establishes",
-        "unit": {
-          "kind": "file",
-          "path": "standards/spec/templates/"
+          "path": "standards/spec/findings-register.md"
         }
       }
     ],
-    "specId": "000-hiqlite-ownership-bootstrap",
+    "specId": "010-node-lifecycle-and-split-brain",
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "a59a4a0fe9f6b16d16d6135903ae0f569d41dcd5883925eb699a6016ca73fddd"
+  "shardHash": "4b15fb6450e4f8209e789506714d8b6ee6347f3d176acf7140834f183d5145ce"
 }

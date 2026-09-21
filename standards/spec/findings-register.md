@@ -262,6 +262,13 @@ variables checked (`HQL_BACKUP_CRON`, `HQL_BACKUP_SKIP_VALIDATION`,
 both). Consequence: an operator cannot discover a knob that, per F-009, aborts
 the process when set wrongly.
 
+**Closed 2026-09-21 by `010` section 5.** `hiqlite.env` now documents the
+variable, its default of 60, what the check does and does not do, and its parse
+failure mode. It is documented there only: `config_toml.rs` has no corresponding
+key, so a `hiqlite.toml` entry would describe a setting that does not exist. The
+entry is retained as the record of the gap. F-009, which is about the parse
+`expect` itself, stays open.
+
 ### F-012 `evidence`, confidence `high`
 
 **Committed generated assets have no drift check.** `hiqlite/static` is build
@@ -719,6 +726,87 @@ source, not executed. `009` KD-5's sibling, recorded at `009` B-5.
 `expect("Cannot parse HQL_LOG_STATEMENTS as u64")`. Operator-visible and
 trivially wrong. Untested. `009` KD-5.
 
+### F-037 `defect`, confidence `high`
+
+**A bracketed IPv6 advertised address produces an unparsable listen address.**
+`hiqlite/src/start.rs:321-330` (`build_listen_addr`) derives the socket a node
+binds by taking the host from `listen_addr_api` / `listen_addr_raft` and the port
+from the advertised `addr_api` / `addr_raft`, split with
+`str::split_once(':')`. For `[fd00::1]:8100` that first colon is inside the
+brackets, so the "port" is `:1]:8100` and the result is `::::1]:8100`.
+`SocketAddr::from_str` rejects it at `start.rs:142` and `:228`.
+
+**Observed by execution.** `start::tests::ipv6_advertised_address_produces_an_unparsable_listen_address`
+asserts both the exact string and its rejection.
+
+Consequence: the rejection happens inside a task whose `JoinHandle` was dropped
+(F-040), so under an unwinding profile the node starts, reports success, and has
+no listener on that address; under `panic = "abort"` it ends the process.
+`NodeConfig::is_valid` (`config.rs:420-480`) validates no address at all, so
+nothing rejects the configuration earlier. `010` KD-1.
+
+### F-038 `defect`, confidence `high`
+
+**`node_id` names a position in one file and an id in another.**
+`hiqlite/src/start.rs:65-68` picks the addresses this node binds by indexing
+`nodes[node_id - 1]`. `hiqlite/src/init.rs:138-148` (`get_this_node`) picks the
+identity this node registers with the cluster by searching `nodes` for
+`id == node_id`. `NodeConfig::is_valid` (`config.rs:429-431`) bounds `node_id`
+against `nodes.len()` and never inspects the ids in it. `Node`'s doc comment
+(`lib.rs:131-133`) requires an `id == 1` to exist and states nothing about the
+rest, so nothing authored requires the ids to be `1..=n` in order.
+
+**Observed by execution**, in three parts:
+`init::tests::node_identity_is_resolved_by_id_here_and_by_position_in_start`
+(with ids `2,3,4` and `node_id = 3` the two routes name different nodes),
+`init::tests::is_valid_accepts_a_nodes_list_whose_ids_are_not_positions` (that
+shape is accepted as valid), and
+`init::tests::get_this_node_panics_when_the_id_is_absent`.
+
+Consequence: a `nodes` list whose ids are not their positions either binds one
+node's ports while joining as another, or panics on the join path instead of
+returning a configuration error. `010` KD-2.
+
+### F-039 `defect`, confidence `high`
+
+**A node with TLS on both endpoints cannot be shut down without a panic, and no
+TLS listener is ever shut down gracefully.** `hiqlite/src/start.rs:125` creates
+the `tx_shutdown` watch channel. Exactly two receivers are created, the
+`shutdown_signal` future at `:138` and `rx_shutdown` at `:242`, and each is moved
+into a task only on the **plaintext** branch of its server. On the TLS branch the
+`axum_server` task is spawned with no shutdown future, which the `TODO` comments
+at `:143-144` and `:229-230` acknowledge. `.subscribe()` is called nowhere in
+`hiqlite/src`.
+
+With `tls_raft` and `tls_api` both set, neither plaintext branch runs, both
+receivers drop when `start_node_inner` returns, and
+`hiqlite/src/client/mgmt.rs:374-376` then calls `tx.send(true)` on a channel with
+no receivers and `expect`s it, with the message "The global Hiqlite shutdown
+handler to always listen". With exactly one endpoint on TLS the send succeeds,
+but the surviving receiver belongs to the plaintext server, so the TLS listener
+keeps accepting until the process exits either way.
+
+**Source-established, not executed.** Reproducing it needs a node with real TLS
+material and a real shutdown; `010` section 4 states that limit and its
+acceptance block pins the source shape instead. The fault is caused in `010`'s
+unit and observed in `003`'s. `010` KD-3.
+
+### F-040 `defect`, confidence `high`
+
+**A listener that cannot bind does not fail startup.** The socket-address parse
+(`hiqlite/src/start.rs:142`, `:228`), the TCP bind (`:152-154`, `:238-240`) and
+`serve(...)` in all four branches express failure as `expect` or `unwrap`, inside
+tasks whose `JoinHandle`s are dropped at `:141`, `:151`, `:227` and `:237`. Six
+tasks are spawned during startup and only the two join tasks are ever awaited.
+
+Consequence, and it is the profile split again: under an unwinding profile the
+panic stays in its task, `start_node_inner` returns `Ok`, and the node is
+reported started with an endpoint that does not exist; under this repository's
+`panic = "abort"` (`Cargo.toml:15`) the same failure ends the process. Neither is
+a startup error, and for an embedded node the profile is the **consumer's**, as
+F-014 records for the same reason. Source-established. Same class as F-025.
+`010` KD-4.
+
 ## Summary by class
 
 Class is what a finding **is**. State is what has **happened** to it. They are
@@ -728,38 +816,38 @@ record.
 
 | class | ids | count |
 |---|---|---|
-| `defect` | F-001 to F-006, F-009, F-021 to F-024, F-027 to F-029, F-031, F-036 | 16 |
+| `defect` | F-001 to F-006, F-009, F-021 to F-024, F-027 to F-029, F-031, F-036 to F-040 | 20 |
 | `contradiction` | F-018, F-030, F-032 to F-034 | 5 |
 | `gap` | F-010, F-013 | 2 |
 | `evidence` | F-011, F-012, F-017, F-019 | 4 |
 | `limit` | F-007, F-008, F-015, F-016, F-026, F-035 | 6 |
 | `decision` | F-014, F-020, F-025 | 3 |
 
-### Summary by state (2026-09-20)
+### Summary by state (2026-09-21)
 
 | state | ids | count |
 |---|---|---|
 | repaired | F-001, F-002, F-030 | 3 |
-| closed at M1, entry retained | F-013 | 1 |
-| open | everything else: F-003 to F-012, F-014 to F-029, F-031 to F-036 | 32 |
+| closed, entry retained | F-013 (at M1, by wave 1), F-011 (2026-09-21, by `010`) | 2 |
+| open | everything else: F-003 to F-010, F-012, F-014 to F-029, F-031 to F-040 | 35 |
 
 A finding's state answers whether the thing it records is still in the tree, and
 nothing else. F-030 is repaired because its contradiction is gone; the optional
 process decision it surfaced is W-24's, and a work item's being undecided has
 never been a reason to hold a finding open.
 
-Thirty-two open, of which four carry a dated disposition appended on
+Thirty-five open, of which three carry a dated disposition appended on
 2026-09-20 recording what has moved since they were written: F-015 (examples
 now visible, still unclaimed), F-016 (dashboard now visible, the generated and
 vendored
 denominator problem unresolved), F-018 (the `AGENTS.md` half resolved, the
 three-way naming collision unchanged). A disposition narrows an entry; it does
-not close it.
+not close it. An earlier revision said four and listed three.
 
 Open **defects**, which is the subset a repair workstream draws from:
 F-003, F-004, F-005, F-006, F-009, F-021, F-022, F-023, F-024, F-027, F-028,
-F-029, F-031, F-036. Fourteen of the sixteen defects; F-001 and F-002 are the
-two repaired.
+F-029, F-031, F-036, F-037, F-038, F-039, F-040. Eighteen of the twenty
+defects; F-001 and F-002 are the two repaired.
 
 **Reclassified on 2026-09-19**, after each class test was applied rather than
 assumed: F-007 and F-008 from `defect` to `limit`, because a stated contract with
@@ -769,13 +857,14 @@ migration state rather than faults; and the consequences of F-001, F-002, and
 F-014 rewritten against traced source, with three earlier claims withdrawn in
 place.
 
-Sixteen defects: six from the pilot specs, F-009 from the whole-project pass,
+Twenty defects: six from the pilot specs, F-009 from the whole-project pass,
 five (F-021 to F-024, F-027) found by wave 1, F-028 found while tracing the
-`008` repair, and F-029 found on 2026-09-20 while re-reading the memory log
-store against the locked trait, and F-031 and F-036 found by the configuration
-adoption on 2026-09-20. F-013 is closed at M1 by wave 1 and is retained
-as a record rather than deleted. No finding in this register authorizes a
-repair; each repair is a separate governed change with its own spec and
+`008` repair, F-029 found on 2026-09-20 while re-reading the memory log store
+against the locked trait, F-031 and F-036 found by the configuration adoption on
+2026-09-20, and F-037 to F-040 found by the node-lifecycle adoption on
+2026-09-21. F-013 is closed at M1 by wave 1 and F-011 by `010`; both are
+retained as records rather than deleted. No finding in this register authorizes
+a repair; each repair is a separate governed change with its own spec and
 evidence.
 
 **Repaired so far.** F-001 and F-002, by
@@ -784,8 +873,10 @@ on 2026-09-20. A repaired entry is annotated in place and keeps its identifier,
 its class, and its original text, so the baseline a repair was reviewed against
 stays readable.
 
-**Twelve defects are open**: F-003 to F-006, F-009, F-021 to F-024, F-027,
-F-028, F-029. An earlier revision said ten, which did not match its own class
-table; the arithmetic is fourteen recorded minus the two repaired. F-021 through
-F-024 and F-029 are a separate cache-log repair that was deliberately not
-bundled into `008`.
+**Eighteen defects are open**: F-003 to F-006, F-009, F-021 to F-024, F-027
+to F-029, F-031, F-036 to F-040. Two earlier revisions of this paragraph were
+stale: one said ten against a table of fourteen, and the next said twelve after
+`009` had already added F-031 and F-036. The arithmetic is twenty recorded minus
+the two repaired, and this paragraph is the one that has to be recomputed
+whenever the class table changes. F-021 through F-024 and F-029 are a separate
+cache-log repair that was deliberately not bundled into `008`.

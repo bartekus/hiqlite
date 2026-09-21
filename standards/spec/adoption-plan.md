@@ -275,6 +275,11 @@ is the natural first expansion.
 
 ### Wave 2: the configuration contract, node lifecycle, and transport security
 
+**Status on 2026-09-21: two thirds delivered.** W-01 as `009` on 2026-09-20 and
+W-02 as `010` on 2026-09-21. W-03 is the remaining third. The scope and review
+text below is kept as written, because it is the standard each delivered spec
+was reviewed against; section 8 is the queue.
+
 **Scope.** A5, A8, A9, A22 (the config reference half).
 **Proposed specs:** one for the configuration contract (W-01), one for node
 lifecycle and split-brain (W-02), one for transport security material (W-03).
@@ -294,8 +299,12 @@ intent ruling.
 **Acceptance boundary.** A test per validation rule for the variables the spec
 claims, plus a documentation assertion that every claimed variable appears in
 `hiqlite.toml` or `hiqlite.env`.
-**Known defects retained.** F-009 and F-011 are recorded, not fixed here.
-**Owner decisions.** OD-3 (F-014 intent).
+**Known defects retained.** F-009 is recorded, not fixed. F-011 was closed by
+`010` section 5 instead of retained: documenting a variable is an addition to a
+reference file, not a change to behavior, and `009` section 7 had already
+assigned it here by name.
+**Owner decisions.** OD-3 (F-014 intent), honoured by `010` D-1: the watchdog is
+described in full and left exactly as found.
 
 ### Wave 3: durability services
 
@@ -704,7 +713,7 @@ acceptance and say that it supersedes that line.
 
 ---
 
-## 8. Current assignment table (2026-09-20)
+## 8. Current assignment table (2026-09-21)
 
 **This is the queue.** Sections 3 and 7 are the reasoning and the history;
 this table is what is actually outstanding. A work identifier `W-nn` is stable
@@ -719,7 +728,7 @@ scheduled, authorized, or approved by this document.
 | id | subject | owning spec today | implementation | evidence | owner decision | depends on | closes when |
 |---|---|---|---|---|---|---|---|
 | W-01 | configuration contract: `config.rs`, `config_toml.rs`, `hiqlite.toml`, `hiqlite.env` (A5, A22) | **`009-configuration-contract`**, 2026-09-20 | **delivered at M1**: `009` establishes `config_toml.rs`, `hiqlite.toml` and `hiqlite.env` and `extends` `001` on `config.rs`; `spec-spine.toml` gained the freshness and denominator declarations | M2 partly: four characterization tests pin the contract, and `009` section 4 states what they do not reach, notably every environment-route claim, which is source-read only | none outstanding | none | closed at M1. The remaining evidence gap is the environment route, which cannot be tested without process-wide mutation (`009` D-3), and the per-variable validation assertions for the variables other specs will claim |
-| W-02 | node lifecycle and split-brain: `init.rs`, `start.rs`, `app_state.rs`, `split_brain_check.rs` (A8) | none | not started | none focused | OD-3 decided: preserve behavior | W-01 | startup, join, reset, shutdown and task-ownership contracts are stated, with source-described behavior separated from executed evidence |
+| W-02 | node lifecycle and split-brain: `init.rs`, `start.rs`, `app_state.rs`, `split_brain_check.rs` (A8) | **`010-node-lifecycle-and-split-brain`**, 2026-09-21 | **delivered at M1**: `010` establishes all four files; `spec-spine.toml` gained their freshness declarations | M2 partly: six characterization tests pin the listen-address and node-identity contracts, and `010` section 4 states what they do not reach, which is everything needing a running node or cluster (B-1, B-4 to B-8) and both source-established defects | OD-3 honoured: the watchdog is described, not changed (`010` D-1) | none | closed at M1. Four new defects recorded (F-037 to F-040), F-009 and F-014 retained, F-011 closed by documenting `HQL_SPLIT_BRAIN_INTERVAL`. The remaining evidence gap is the join and shutdown sequences, which need the cluster surface W-15 owns |
 | W-03 | transport security material: `tls.rs` (A9) | none | not started | none focused | none outstanding | W-01 | material loading, trust validation and each `DANGER_*` override are specified and tested in every claimed configuration |
 | W-04 | cache log store contract repair: F-021 to F-024 and F-029, and reconciling F-029 into `007` as a KD entry | `007` | not started | two characterization tests, which pin the current behavior including the exclusive purge | none outstanding for the trait mismatch itself | none | the contract matches the locked trait, the replaced acceptance is carried through the governed mechanism rather than left asserting the old outcome, and `007` records or closes the fifth defect |
 | W-05 | `006` evidence gaps: counter and Notify semantics, dead-handler behavior, cache-index validation, cross-node convergence, clock-dependent lock limits | `006` | delivered at M1 | narrow; `006` section 4 states the limits | some gaps need W-08 and a lock policy decision first | W-08 | each gap is either evidenced or restated as a declared limit with its consequence |
@@ -739,7 +748,7 @@ scheduled, authorized, or approved by this document.
 | W-19 | build, release, packaging and CI (A21) | `000` owns the `justfile` and the spec-spine workflow | not started | CI is the only evidence | none outstanding | none | the supported feature and MSRV matrix, packaging contents and an external-consumer install are validated |
 | W-20 | internal SQLite snapshot publication and installation: F-003, F-004, F-006 | `002` | not started | focused storage tests | **required**: atomicity and durability, failed-install rollback versus poison, corrupt-newest handling | none | deterministic failure injection shows incomplete staging is never selectable and a failed install never becomes a restart candidate |
 | W-21 | internal exclusive access: F-005 | `002` | not started | none | **required**: supported systems, lock lifetime, storage identity | none | two real processes cannot own the same storage, a rejected contender does not mutate it, and exit or crash releases ownership |
-| W-22 | startup-error and background-task lifecycle policy: F-009, F-014, F-025 | none; W-01 and W-02 describe the behavior first | not started | none | **required**: what failed background work does | W-01, W-02 | the selected policy is externally observable and characterized under both abort and unwind profiles |
+| W-22 | startup-error and background-task lifecycle policy: F-009, F-014, F-025, and F-039 and F-040 added by `010` | none; `009` and `010` now describe the behavior | not started | none focused; `010` B-7 and section 4 state the abort-versus-unwind split and why no test reaches it | **required**: what failed background work does, and whether a listener that cannot bind is a startup error | W-01 and W-02, both delivered | the selected policy is externally observable and characterized under both abort and unwind profiles |
 | W-23 | enforcement rungs 1 to 4 | `000` owns the configuration | not enabled | rung-0 probe recorded | **required**: the distinct enforcement decision | W-14, and M1 across the adopted scope | each enabled refusal is demonstrated against the exact pin and candidate workflow |
 | W-24 | whether acceptance blocks should be executed by an automated control, given that CI deliberately abstains. Surfaced by F-030, which is itself repaired | `004` states the CI trust boundary; `000` section 15 states the rule | no process changed, and none is required to change | `just spine-verify` is a documented manual step and was run by hand for `000`, `004` and `005` in this pass, all passing; nothing runs it automatically | **optional**: whether the manual run stays the accepted control, or an automated one is added on a trusted tree. The manual control stands unless the owner asks otherwise | none | the corpus records the chosen control, and any control added is demonstrated; closing it unchanged is a valid outcome |
 
