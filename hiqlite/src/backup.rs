@@ -277,6 +277,54 @@ fn dt_from_backup_name(name: &str) -> Option<DateTime<Utc>> {
     }
 }
 
+/// Remove everything in the data directory except the storage owner lock.
+///
+/// See the call site for why the exception exists. Failures are returned rather than discarded:
+/// a node that could not clean up its own directory must not proceed into a cluster join with a
+/// half-removed one.
+#[cfg(feature = "sqlite")]
+async fn remove_data_dir_contents(data_dir: &str) -> Result<(), Error> {
+    let mut entries = match fs::read_dir(data_dir).await {
+        Ok(entries) => entries,
+        // Nothing to clean up.
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(err) => {
+            return Err(Error::Error(
+                format!("cannot read the data directory {data_dir}: {err}").into(),
+            ));
+        }
+    };
+
+    while let Some(entry) = entries.next_entry().await.map_err(|err| {
+        Error::Error(format!("cannot list the data directory {data_dir}: {err}").into())
+    })? {
+        let path = entry.path();
+        if crate::storage_lock::StorageOwnership::is_owner_lock_file(&path) {
+            continue;
+        }
+
+        let res = if entry
+            .file_type()
+            .await
+            .map(|t| t.is_dir())
+            .unwrap_or(false)
+        {
+            fs::remove_dir_all(&path).await
+        } else {
+            fs::remove_file(&path).await
+        };
+        if let Err(err) = res
+            && err.kind() != std::io::ErrorKind::NotFound
+        {
+            return Err(Error::Error(
+                format!("cannot remove {} while preparing a restore: {err}", path.display()).into(),
+            ));
+        }
+    }
+
+    Ok(())
+}
+
 /// Check if the env var `HQL_BACKUP_RESTORE` is set and restores the given backup if so.
 /// Returns `Ok(true)` if backup has been applied.
 /// This will only run if the current node ID is `1`.
@@ -289,7 +337,12 @@ pub(crate) async fn restore_backup_start(node_config: &NodeConfig) -> Result<boo
             return Ok(true);
         } else {
             warn!("Cleaning up existing files and start restore cluster join");
-            let _ = fs::remove_dir_all(node_config.data_dir.as_ref()).await;
+            // Not `remove_dir_all(data_dir)`: the storage owner lock lives at the data
+            // directory root and unlinking it while this process holds it would leave the
+            // holder locking an inode nobody can reach, so the next process would create a
+            // different file and both would believe they owned the storage. The entries are
+            // removed individually and that one file is kept.
+            remove_data_dir_contents(node_config.data_dir.as_ref()).await?;
         }
     }
 

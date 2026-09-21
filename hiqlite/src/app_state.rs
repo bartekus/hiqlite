@@ -54,6 +54,14 @@ impl RaftType {
 // Representation of an application state. This struct can be shared around to share
 // instances of raft, store and more.
 pub(crate) struct AppState {
+    /// Exclusive ownership of `data_dir`.
+    ///
+    /// `None` only for a node that keeps nothing on disk. Held here rather than in a local so
+    /// its lifetime is the node's, and released explicitly by `release_storage_ownership` at
+    /// the end of shutdown, once every task and handle that can touch storage has stopped. If
+    /// that never runs, dropping this state releases it anyway: there is no cleanup step that
+    /// has to succeed.
+    pub(crate) storage_ownership: std::sync::Mutex<Option<crate::storage_lock::StorageOwnership>>,
     pub app_start: chrono::DateTime<Utc>,
     pub is_shutting_down: AtomicBool,
     #[cfg(feature = "backup")]
@@ -86,6 +94,26 @@ impl AppState {
     #[inline(always)]
     pub fn new_request_id(&self) -> usize {
         self.client_request_id.fetch_add(1, Ordering::Relaxed)
+    }
+}
+
+impl AppState {
+    /// Give up exclusive ownership of the data directory.
+    ///
+    /// Called at the end of shutdown, **after** the raft groups, the WAL writer and the SQLite
+    /// writer have all stopped, which is the point at which nothing in this process can still
+    /// touch the storage. Doing it earlier would let a second node take the directory while
+    /// this one was still writing to it; doing it only on drop would keep a restarted node in
+    /// the same process out until the last `Arc` happened to go away.
+    pub(crate) fn release_storage_ownership(&self) {
+        let taken = self
+            .storage_ownership
+            .lock()
+            .map(|mut guard| guard.take())
+            .unwrap_or(None);
+        if taken.is_some() {
+            tracing::info!("Exclusive storage ownership released");
+        }
     }
 }
 

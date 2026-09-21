@@ -107,6 +107,7 @@ __cluster = [
     "dep:cryptr",
     "dep:dotenvy",
     "dep:fastwebsockets",
+    "dep:fs4",
     "dep:getrandom",
     "dep:hex",
     "dep:hiqlite-wal",

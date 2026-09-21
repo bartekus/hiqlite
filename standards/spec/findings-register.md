@@ -166,6 +166,29 @@ unintentional, the timing was not arranged, and a single occurrence establishes
 neither reproducibility nor the general behavior. W-21 is where that would be
 established, and it is undecided.
 
+**Repaired 2026-09-21 by `024-exclusive-storage-ownership`.** A node now takes
+an exclusive `fs4` advisory lock on `{data_dir}/hiqlite-owner.lock` before the
+restore, before the reset check and before either state machine is constructed,
+and releases it at the end of shutdown, after both raft groups, the WAL writer
+and the SQLite writer have stopped. A contender is refused with
+`Error::StorageInUse` having opened, created and removed nothing; a filesystem
+that rejects the lock is refused just as explicitly rather than treated as
+probably fine.
+
+Demonstrated with **two real processes**, four cases: refusal without data
+mutation, refusal while a child holds it, release on orderly shutdown, and
+release after the owner calls `abort()`, which is the property the marker file
+could never have because there is no cleanup step that has to run. Four further
+tests cover the identity questions a path-based or pid-based implementation
+would fail: a second node in the same process, and an aliased path through a
+symlink.
+
+Not established, and stated in `024` section 5: network filesystems, which
+remain an unsupported storage arrangement (KD-1); a plain `fork` child, which
+inherits the lock (KD-2); and anything about a running node, since the tests
+drive the module directly. The old `state_machine/lock` marker is unchanged and
+keeps answering the different question `auto-heal` reads it for.
+
 ### F-006 `defect`, confidence `high`
 
 **Startup does not fall back to an older valid snapshot.** It selects the

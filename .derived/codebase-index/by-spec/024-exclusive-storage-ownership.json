@@ -1,32 +1,37 @@
 {
   "mapping": {
+    "amends": [
+      "002-snapshot-publication-and-recovery"
+    ],
     "dependsOn": [
       "000-hiqlite-ownership-bootstrap",
-      "018-dashboard-service-and-ui"
+      "002-snapshot-publication-and-recovery",
+      "010-node-lifecycle-and-split-brain",
+      "013-backup-retention-and-object-storage"
     ],
     "implementingPaths": [
       {
-        "path": "dashboard/package.json",
+        "path": "hiqlite/src/app_state.rs",
         "source": "spec-edge"
       },
       {
-        "path": "dashboard/playwright.config.ts",
+        "path": "hiqlite/src/backup.rs",
         "source": "spec-edge"
       },
       {
-        "path": "dashboard/svelte.config.js",
+        "path": "hiqlite/src/client/",
         "source": "spec-edge"
       },
       {
-        "path": "dashboard/tsconfig.json",
+        "path": "hiqlite/src/start.rs",
         "source": "spec-edge"
       },
       {
-        "path": "dashboard/vite.config.ts",
+        "path": "hiqlite/src/storage_lock.rs",
         "source": "spec-edge"
       },
       {
-        "path": "justfile",
+        "path": "spec-spine.toml",
         "source": "spec-edge"
       },
       {
@@ -42,79 +47,79 @@
       {
         "locations": [
           {
-            "file": "dashboard/package.json"
+            "file": "hiqlite/src/storage_lock.rs"
           }
         ],
         "ownership": true,
         "sourceField": "establishes",
         "unit": {
           "kind": "file",
-          "path": "dashboard/package.json"
+          "path": "hiqlite/src/storage_lock.rs"
         }
       },
       {
         "locations": [
           {
-            "file": "dashboard/playwright.config.ts"
+            "file": "hiqlite/src/client/"
           }
         ],
         "ownership": true,
-        "sourceField": "establishes",
+        "sourceField": "extends",
         "unit": {
-          "kind": "file",
-          "path": "dashboard/playwright.config.ts"
+          "kind": "directory",
+          "path": "hiqlite/src/client/"
         }
       },
       {
         "locations": [
           {
-            "file": "dashboard/svelte.config.js"
-          }
-        ],
-        "ownership": true,
-        "sourceField": "establishes",
-        "unit": {
-          "kind": "file",
-          "path": "dashboard/svelte.config.js"
-        }
-      },
-      {
-        "locations": [
-          {
-            "file": "dashboard/tsconfig.json"
-          }
-        ],
-        "ownership": true,
-        "sourceField": "establishes",
-        "unit": {
-          "kind": "file",
-          "path": "dashboard/tsconfig.json"
-        }
-      },
-      {
-        "locations": [
-          {
-            "file": "dashboard/vite.config.ts"
-          }
-        ],
-        "ownership": true,
-        "sourceField": "establishes",
-        "unit": {
-          "kind": "file",
-          "path": "dashboard/vite.config.ts"
-        }
-      },
-      {
-        "locations": [
-          {
-            "file": "justfile"
+            "file": "hiqlite/src/app_state.rs"
           }
         ],
         "ownership": true,
         "sourceField": "extends",
         "unit": {
           "kind": "file",
-          "path": "justfile"
+          "path": "hiqlite/src/app_state.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/backup.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/backup.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/start.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/start.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "spec-spine.toml"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "spec-spine.toml"
         }
       },
       {
@@ -144,9 +149,9 @@
         }
       }
     ],
-    "specId": "019-dashboard-build-contract",
+    "specId": "024-exclusive-storage-ownership",
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "af149ea76a3a6eb00d15dc311719f0aeb20b03c1faeb0c9505f84d69d231fb9d"
+  "shardHash": "86e15d5fe6520f3aa9f358d9d43acfa422317821ede03779b7859b492d4ace5f"
 }

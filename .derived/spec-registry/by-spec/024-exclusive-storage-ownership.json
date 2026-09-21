@@ -1,0 +1,112 @@
+{
+  "record": {
+    "amends": [
+      "002-snapshot-publication-and-recovery"
+    ],
+    "amendsSections": [
+      "5-internal-startup-and-exclusive-ownership",
+      "7-known-defects"
+    ],
+    "amendsVerification": [
+      "002-snapshot-publication-and-recovery"
+    ],
+    "created": "2026-09-21",
+    "dependsOn": [
+      "000-hiqlite-ownership-bootstrap",
+      "002-snapshot-publication-and-recovery",
+      "010-node-lifecycle-and-split-brain",
+      "013-backup-retention-and-object-storage"
+    ],
+    "establishes": [
+      {
+        "kind": "file",
+        "path": "hiqlite/src/storage_lock.rs"
+      }
+    ],
+    "extends": [
+      {
+        "nature": "additive",
+        "spec": "000-hiqlite-ownership-bootstrap",
+        "unit": {
+          "kind": "file",
+          "path": "spec-spine.toml"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "010-node-lifecycle-and-split-brain",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/start.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "010-node-lifecycle-and-split-brain",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/app_state.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "013-backup-retention-and-object-storage",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/backup.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "003-client-consistency-and-retry-outcomes",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/client/"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "005-adoption-assessment-and-plan",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/findings-register.md"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "005-adoption-assessment-and-plan",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/adoption-plan.md"
+        }
+      }
+    ],
+    "id": "024-exclusive-storage-ownership",
+    "implementation": "complete",
+    "owner": "hiqlite maintainers",
+    "risk": "critical",
+    "sectionHeadings": [
+      "024: Take an OS advisory lock on the data directory before anything touches it",
+      "1. Purpose",
+      "2. Territory",
+      "3. Behavior",
+      "B-1. Ownership is taken before anything touches storage",
+      "B-2. The lock is an OS advisory lock on a file at the data directory root",
+      "B-3. A refusal changes nothing, and says so",
+      "B-4. Ownership is released when nothing can write any more",
+      "B-5. The restore sweep keeps the lock file",
+      "B-6. The old marker keeps its job",
+      "4. Evidence and its limits",
+      "5. Known defects",
+      "6. Resolved decisions",
+      "7. Out of scope",
+      "Verification"
+    ],
+    "specPath": "specs/024-exclusive-storage-ownership/spec.md",
+    "status": "draft",
+    "summary": "Repairs F-005. A node now takes an exclusive OS advisory lock on its data directory before the restore, the state machines, or anything else touches it, and holds it until every task that can write storage has stopped. A contender is refused without mutating anything, a crash releases ownership with no cleanup step, and the lock file is the one thing a restore sweep may not delete.\n",
+    "title": "Take an OS advisory lock on the data directory before anything touches it"
+  },
+  "shardHash": "9a89012d83fec904e3569b78437abdfc860fedb08f36aa0e86b6ca61750b7472",
+  "specVersion": "1.3.0"
+}
