@@ -1,21 +1,17 @@
 {
   "mapping": {
+    "amends": [
+      "001-wal-durability-and-completion",
+      "008-wal-append-completion-notification"
+    ],
     "dependsOn": [
       "000-hiqlite-ownership-bootstrap",
-      "002-snapshot-publication-and-recovery",
-      "012-cluster-integration-evidence"
+      "001-wal-durability-and-completion",
+      "008-wal-append-completion-notification"
     ],
     "implementingPaths": [
       {
-        "path": "hiqlite/src/migration.rs",
-        "source": "spec-edge"
-      },
-      {
-        "path": "hiqlite/tests/cluster/migrations/",
-        "source": "spec-edge"
-      },
-      {
-        "path": "spec-spine.toml",
+        "path": "hiqlite-wal/src/",
         "source": "spec-edge"
       },
       {
@@ -31,40 +27,14 @@
       {
         "locations": [
           {
-            "file": "hiqlite/src/migration.rs"
-          }
-        ],
-        "ownership": true,
-        "sourceField": "establishes",
-        "unit": {
-          "kind": "file",
-          "path": "hiqlite/src/migration.rs"
-        }
-      },
-      {
-        "locations": [
-          {
-            "file": "hiqlite/tests/cluster/migrations/"
-          }
-        ],
-        "ownership": true,
-        "sourceField": "establishes",
-        "unit": {
-          "kind": "file",
-          "path": "hiqlite/tests/cluster/migrations/"
-        }
-      },
-      {
-        "locations": [
-          {
-            "file": "spec-spine.toml"
+            "file": "hiqlite-wal/src/"
           }
         ],
         "ownership": true,
         "sourceField": "extends",
         "unit": {
-          "kind": "file",
-          "path": "spec-spine.toml"
+          "kind": "directory",
+          "path": "hiqlite-wal/src/"
         }
       },
       {
@@ -94,9 +64,9 @@
         }
       }
     ],
-    "specId": "014-schema-migration-contract",
+    "specId": "021-wal-append-stream-integrity",
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "978b9d3955709dd056d753cd256d34948f667ddca0a8d2b7c4ab40a5bbd69ae2"
+  "shardHash": "0097861b4a2d970335b64809b9d06a10b51bf1ae0c774c100f68952a37b1d9c9"
 }

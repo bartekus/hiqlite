@@ -605,6 +605,18 @@ for the `008` repair and deliberately left unrepaired there, because it is a
 different defect from F-001 and F-002 and its fix changes what the writer does
 with a partial append. Recorded at `008` KD-2. Untested.
 
+**Repaired 2026-09-21 by `021-wal-append-stream-integrity`.** The collection
+loop is now an explicit three-way `match`: `Ok(Some(..))` collects,
+`Ok(None)` is the end-of-stream marker, and `Err` is the dropped sender, which
+sets the new `Error::IncompleteAppend`. A truncated append acknowledges that
+error, notifies exactly one failure carrying the same cause, and ends the
+writer, for the reason `021` B-3 gives: the writer holds a prefix of a batch
+whose extent it cannot know. No longer untested: six cases, two disconnection
+points across all three `LogSync` modes, observed failing against the
+unrepaired loop. A clean empty batch is separately pinned as a success (`021`
+B-4), and the persisted prefix is read back through the adapter after a fresh
+open, across a WAL file boundary (`021` section 4).
+
 ### F-029 `defect`, confidence `high`
 
 **`purge` removes exclusively where the trait requires inclusive removal.**

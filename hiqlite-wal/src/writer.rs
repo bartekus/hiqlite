@@ -5,6 +5,7 @@ use crate::metadata::Metadata;
 use crate::reader::LogReadMemo;
 use crate::wal::WalFileSet;
 use openraft::{LeaderId, LogId};
+use std::borrow::Cow;
 use std::fmt::{Debug, Formatter};
 use std::io;
 use std::sync::{Arc, RwLock};
@@ -294,6 +295,12 @@ pub(crate) mod fault {
 /// notification does not by itself imply stable storage.
 fn complete_append<F>(
     append_result: Result<(), Error>,
+    // `Some` only when the failure is one the writer cannot keep serving past: today that is a
+    // truncated entry stream, where the writer holds a prefix of a batch whose extent it does
+    // not know, so a later append could be a continuation of a batch that never fully arrived.
+    // An ordinary rejection stays `None` and leaves the writer running, which is the policy
+    // `008` section 3.1 recorded.
+    terminal: Option<Error>,
     ack: oneshot::Sender<Result<(), Error>>,
     callback: AppendCompletion,
     persist: F,
@@ -318,8 +325,13 @@ where
         (Some(err), persisted) => {
             callback(Err(err));
             // A rejected append is not by itself a writer failure, so the writer keeps serving
-            // unless the persistence step also failed, which still ends it.
-            persisted
+            // unless the rejection is terminal, or the persistence step also failed, either of
+            // which still ends it. The terminal reason wins, because it is the more specific
+            // account of why this writer must stop.
+            match terminal {
+                Some(reason) => Err(reason),
+                None => persisted,
+            }
         }
         (None, Ok(())) => {
             callback(Ok(()));
@@ -376,10 +388,39 @@ fn run(
             Action::Append { rx, callback, ack } => {
                 debug!("WAL Writer - Action::Append");
 
-                let mut res = Ok(());
+                let mut res: Result<(), Error> = Ok(());
+                let mut terminal: Option<Error> = None;
+                let mut received: u64 = 0;
+                let mut appended: u64 = 0;
                 {
                     let mut active = wal.active();
-                    while let Ok(Some((id, bytes))) = rx.recv() {
+                    loop {
+                        // Three cases, not two. `Ok(None)` is the producer's explicit
+                        // end-of-stream marker and means the batch is complete. `Err` is the
+                        // entry sender having been dropped, which means it is not, and the two
+                        // used to be indistinguishable: both ended a `while let Ok(Some(..))`
+                        // with the result still `Ok`, so a truncated append was acknowledged
+                        // and notified as a success (F-028).
+                        let (id, bytes) = match rx.recv() {
+                            Ok(Some(entry)) => entry,
+                            Ok(None) => break,
+                            Err(_) => {
+                                let msg: Cow<'static, str> = format!(
+                                    "the entry stream for this append disconnected after \
+                                     {received} entr{} without its end-of-stream marker, so the \
+                                     batch is incomplete and its extent is unknown; \
+                                     {appended} entr{} already persisted",
+                                    if received == 1 { "y" } else { "ies" },
+                                    if appended == 1 { "y is" } else { "ies are" },
+                                )
+                                .into();
+                                res = Err(Error::IncompleteAppend(msg.clone()));
+                                terminal = Some(Error::IncompleteAppend(msg));
+                                break;
+                            }
+                        };
+                        received += 1;
+
                         if bytes.len() > data_len_limit {
                             // A single raft entry cannot span WAL files. By default an
                             // oversized entry is a non-recoverable setup issue (it needs a
@@ -428,6 +469,7 @@ fn run(
                             res = Err(err);
                             break;
                         }
+                        appended += 1;
                         debug_assert_eq!(
                             active.id_until, id,
                             "active.id_until and id don't match: {} != {id}",
@@ -445,8 +487,16 @@ fn run(
                 // The WAL now holds bytes that are not known to be on disk, and only a
                 // blocking flush can clear that state again. `flush_async` merely starts the
                 // writeback, which is why `Action::Remove` and `Action::Vote` below still flush.
-                is_dirty = true;
-                complete_append(res, ack, callback, || {
+                //
+                // Conditional, unlike before: a clean empty batch, and a stream that
+                // disconnected before its first entry, write nothing, so there is nothing to
+                // mark dirty and nothing for the persistence step to flush. Both still get
+                // exactly one acknowledgement and exactly one completion, a success for the
+                // first and a failure for the second.
+                if appended > 0 {
+                    is_dirty = true;
+                }
+                complete_append(res, terminal, ack, callback, || {
                     #[cfg(test)]
                     if fault::take_persistence_failure(&wal.base_path) {
                         return Err(Error::IO(io::Error::other("injected persistence failure")));
@@ -685,6 +735,62 @@ mod tests {
         (ack_rx, note_rx)
     }
 
+    /// One dispatched append whose entry stream is **truncated**: `entries` are sent and then
+    /// the entry sender is dropped without the `None` end-of-stream marker, which is exactly
+    /// what the adapter does when a send fails partway through a batch or a serialization
+    /// panic unwinds past it.
+    #[allow(clippy::type_complexity)]
+    fn dispatch_truncated_append(
+        tx: &flume::Sender<Action>,
+        entries: Vec<(u64, Vec<u8>)>,
+    ) -> (
+        oneshot::Receiver<Result<(), Error>>,
+        std::sync::mpsc::Receiver<Result<(), io::Error>>,
+    ) {
+        let (ack_tx, ack_rx) = oneshot::channel();
+        let (entry_tx, entry_rx) = flume::bounded(1);
+        let (note_tx, note_rx) = std::sync::mpsc::channel();
+
+        let _ = tx.send(Action::Append {
+            rx: entry_rx,
+            callback: Box::new(move |res| {
+                let _ = note_tx.send(res);
+            }),
+            ack: ack_tx,
+        });
+        for entry in entries {
+            let _ = entry_tx.send(Some(entry));
+        }
+        // No `None`. This is the whole point of the helper.
+        drop(entry_tx);
+
+        (ack_rx, note_rx)
+    }
+
+    /// One dispatched append with **no entries at all** and a clean end-of-stream marker.
+    #[allow(clippy::type_complexity)]
+    fn dispatch_empty_append(
+        tx: &flume::Sender<Action>,
+    ) -> (
+        oneshot::Receiver<Result<(), Error>>,
+        std::sync::mpsc::Receiver<Result<(), io::Error>>,
+    ) {
+        let (ack_tx, ack_rx) = oneshot::channel();
+        let (entry_tx, entry_rx) = flume::bounded(1);
+        let (note_tx, note_rx) = std::sync::mpsc::channel();
+
+        let _ = tx.send(Action::Append {
+            rx: entry_rx,
+            callback: Box::new(move |res| {
+                let _ = note_tx.send(res);
+            }),
+            ack: ack_tx,
+        });
+        let _ = entry_tx.send(None);
+
+        (ack_rx, note_rx)
+    }
+
     fn start_writer(base: &str, sync: LogSync) -> flume::Sender<Action> {
         let _ = std::fs::remove_dir_all(base);
         std::fs::create_dir_all(base).unwrap();
@@ -778,6 +884,7 @@ mod tests {
 
         complete_append(
             Ok(()),
+            None,
             ack_tx,
             Box::new(move |res| callback_tx.send(res).unwrap()),
             || {
@@ -801,6 +908,7 @@ mod tests {
 
         complete_append(
             Err(Error::IO(std::io::Error::other("injected append failure"))),
+            None,
             ack_tx,
             Box::new(move |res| callback_tx.send(res).unwrap()),
             || Ok(()),
@@ -834,6 +942,7 @@ mod tests {
 
         let err = complete_append(
             Ok(()),
+            None,
             ack_tx,
             Box::new(move |res| callback_tx.send(res).unwrap()),
             || Err(Error::IO(std::io::Error::other("injected sync failure"))),
@@ -867,6 +976,7 @@ mod tests {
 
         let err = complete_append(
             Err(Error::IO(std::io::Error::other("injected append failure"))),
+            None,
             ack_tx,
             Box::new(move |res| callback_tx.send(res).unwrap()),
             || Err(Error::IO(std::io::Error::other("injected sync failure"))),
@@ -882,6 +992,116 @@ mod tests {
             "the rejection is the notified cause, got: {notified}"
         );
         assert!(callback_rx.try_recv().is_err());
+    }
+
+
+    /// F-028: a truncated entry stream was acknowledged and notified as a **successful**
+    /// append, because `while let Ok(Some(..)) = rx.recv()` ends the same way for the `None`
+    /// that marks a healthy end of stream and for the `Err` that a dropped sender produces.
+    ///
+    /// Both disconnection points are covered, before the first entry and after a prefix, and
+    /// every supported `LogSync` mode is swept, because the defect is in the collection loop
+    /// that runs before any mode-specific persistence step and W-07's bar names all three.
+    ///
+    /// What is asserted, per case: the acknowledgement carries `Error::IncompleteAppend` rather
+    /// than success, exactly one completion notification arrives and it is an error naming the
+    /// truncation, and the writer has ended. The last one is the adopted policy: the writer
+    /// holds a prefix of a batch whose extent it cannot know, so it must not serve a later
+    /// append that could be a continuation of a batch that never fully arrived.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_truncated_entry_stream_never_reports_success_in_any_log_sync_mode() {
+        for (mode, label) in [
+            (LogSync::Immediate, "immediate"),
+            (LogSync::ImmediateAsync, "immediate_async"),
+            (LogSync::IntervalMillis(50), "interval"),
+        ] {
+            for (prefix, case) in [(0usize, "before the first entry"), (2, "after a prefix")] {
+                let base = format!("test_data/truncated_{label}_{prefix}");
+                let tx = start_writer(&base, mode.clone());
+
+                let entries: Vec<(u64, Vec<u8>)> = (1..=prefix as u64)
+                    .map(|id| (id, format!("entry {id}").into_bytes()))
+                    .collect();
+                let (ack_rx, note_rx) = dispatch_truncated_append(&tx, entries);
+
+                let ack = ack_rx
+                    .await
+                    .unwrap_or_else(|_| panic!("{label} / {case}: the append must be acknowledged, not left pending"));
+                let err = ack.expect_err(&format!(
+                    "{label} / {case}: a truncated append must never be acknowledged as a success"
+                ));
+                assert!(
+                    matches!(err, Error::IncompleteAppend(_)),
+                    "{label} / {case}: the acknowledgement must name the truncation, got: {err}"
+                );
+
+                let notified = note_rx
+                    .recv_timeout(Duration::from_secs(5))
+                    .unwrap_or_else(|_| panic!("{label} / {case}: exactly one completion must arrive"));
+                let notified = notified.expect_err(&format!(
+                    "{label} / {case}: a truncated append must never notify success"
+                ));
+                assert!(
+                    notified.to_string().contains("IncompleteAppend"),
+                    "{label} / {case}: the completion must carry the truncation cause, got: {notified}"
+                );
+                assert!(
+                    note_rx.recv_timeout(Duration::from_millis(50)).is_err(),
+                    "{label} / {case}: exactly one completion per dispatched append"
+                );
+
+                assert!(
+                    eventually(|| tx.is_disconnected()),
+                    "{label} / {case}: the writer must end after a truncated append"
+                );
+            }
+        }
+    }
+
+    /// A clean batch with no entries is a success, not a failure and not a silent nothing. It
+    /// is the one case that ends the collection loop on its first iteration with `Ok(None)`,
+    /// and it must be distinguishable from a stream that disconnected before its first entry,
+    /// which is the other way to end that loop having received nothing.
+    ///
+    /// It also writes nothing, so nothing is marked dirty and the persistence step has nothing
+    /// to flush. That is stated here because the old code forced `is_dirty` unconditionally and
+    /// performed a full flush for a batch that had appended no bytes.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_clean_empty_batch_succeeds_and_notifies_once() {
+        for (mode, label) in [
+            (LogSync::Immediate, "immediate"),
+            (LogSync::ImmediateAsync, "immediate_async"),
+            (LogSync::IntervalMillis(50), "interval"),
+        ] {
+            let base = format!("test_data/empty_batch_{label}");
+            let tx = start_writer(&base, mode.clone());
+
+            let (ack_rx, note_rx) = dispatch_empty_append(&tx);
+
+            assert!(
+                matches!(ack_rx.await, Ok(Ok(()))),
+                "{label}: a clean empty batch is acknowledged as a success"
+            );
+            let notified = note_rx
+                .recv_timeout(Duration::from_secs(5))
+                .unwrap_or_else(|_| panic!("{label}: an empty batch must still notify"));
+            assert!(
+                notified.is_ok(),
+                "{label}: an empty batch notifies success, got: {notified:?}"
+            );
+            assert!(
+                note_rx.recv_timeout(Duration::from_millis(50)).is_err(),
+                "{label}: exactly one completion"
+            );
+
+            assert!(
+                !tx.is_disconnected(),
+                "{label}: an empty batch is not a failure and must not end the writer"
+            );
+
+            let (ack, _) = oneshot::channel();
+            let _ = tx.send(Action::Shutdown(ack));
+        }
     }
 
     /// Every supported `LogSync` mode reports exactly one success through a live writer, in the
