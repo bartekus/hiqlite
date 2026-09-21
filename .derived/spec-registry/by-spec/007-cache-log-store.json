@@ -12,6 +12,16 @@
         "path": "hiqlite/src/store/logs/"
       }
     ],
+    "extends": [
+      {
+        "nature": "additive",
+        "spec": "005-adoption-assessment-and-plan",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/findings-register.md"
+        }
+      }
+    ],
     "id": "007-cache-log-store",
     "implementation": "complete",
     "origin": {
@@ -56,9 +66,9 @@
     ],
     "specPath": "specs/007-cache-log-store/spec.md",
     "status": "draft",
-    "summary": "Records the existing non-durable in-memory log store that backs the cache Raft group: its RaftLogReader and RaftLogStorage implementation, the deliberate absence of persistence, the immediate completion callback, the truncate and purge index arithmetic, and the data-directory helpers. Adopts as found and records a confirmed off-by-one in get_log_state.\n",
+    "summary": "Records the existing non-durable in-memory log store that backs the cache Raft group: its RaftLogReader and RaftLogStorage implementation, the deliberate absence of persistence, the immediate completion callback, the truncate and purge index arithmetic, and the data-directory helpers. Adopts as found and records six known defects, one of them a confirmed off-by-one in get_log_state.\n",
     "title": "Define the in-memory log store for the cache Raft group"
   },
-  "shardHash": "9c7a67912d2201dffb88900d3a94d4f03a51036f6723aba84cea7e98f7c72011",
+  "shardHash": "d9a972919f7b664880d7dc02298f0876f83d45db93cec960526221924b894c0d",
   "specVersion": "1.3.0"
 }
