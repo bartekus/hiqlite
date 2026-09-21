@@ -55,12 +55,49 @@ pub struct LockQueue {
 }
 
 pub fn spawn() -> flume::Sender<LockRequest> {
+    spawn_with_lease(LOCK_VALID_SECONDS)
+}
+
+/// Same handler with an explicit lease length, in seconds.
+///
+/// This exists so the lease *expiry* paths can be tested without waiting out the production
+/// constant. It is **not** a configuration knob and it is not a repair: a longer or tunable
+/// lease does not make a dead holder detectable any sooner than its own deadline, and `006`
+/// KD-2 stays exactly as recorded. `spawn` is the only caller outside tests.
+pub(crate) fn spawn_with_lease(lease_seconds: i64) -> flume::Sender<LockRequest> {
     let (tx, rx) = flume::unbounded();
-    task::spawn(handler(rx));
+    task::spawn(handler(rx, lease_seconds));
     tx
 }
 
-async fn handler(rx: flume::Receiver<LockRequest>) {
+/// Send a lock state to a waiting client, reporting rather than panicking if it has gone away.
+///
+/// Every one of these was an `ack.send(..).unwrap()`. The receiver lives in the caller's
+/// future for a leader-local await, so a cancelled `lock()` future (a timeout, a `select!`, an
+/// aborted task) drops it, and the handler died with it. That takes every lock on the node
+/// with it, which is the failure upstream PR #352 repaired for the release path and left
+/// standing on every other path.
+///
+/// Returns whether the client actually received it.
+fn answer(
+    key: &str,
+    id: u64,
+    ack: oneshot::Sender<LockState>,
+    state: LockState,
+) -> bool {
+    match ack.send(state) {
+        Ok(()) => true,
+        Err(state) => {
+            debug!(
+                "Lock client for {key} / {id} has gone away before receiving {state:?}; \
+                 the handler keeps running"
+            );
+            false
+        }
+    }
+}
+
+async fn handler(rx: flume::Receiver<LockRequest>, lease_seconds: i64) {
     // Lease timing (`exp`) intentionally uses this node's wall clock. All lock decisions are made
     // by the Raft leader's handler, so they are always consistent with the leader's clock. The
     // per-node `exp` copies in the state machine diverge by clock skew, but that is benign: Raft
@@ -89,7 +126,7 @@ async fn handler(rx: flume::Receiver<LockRequest>) {
                                 && let Some(pos) = acks.iter().position(|(i, _)| *i == ticket)
                             {
                                 let (_, ack) = acks.swap_remove(pos);
-                                let _ = ack.send(LockState::Released);
+                                answer(&key, ticket, ack, LockState::Released);
                             }
                         }
                     }
@@ -100,57 +137,72 @@ async fn handler(rx: flume::Receiver<LockRequest>) {
                             if *ticket == log_id {
                                 lock.queue.pop_front();
                                 lock.current_ticket = Some(log_id);
-                                lock.exp = now + LOCK_VALID_SECONDS;
-                                ack.send(LockState::Locked(log_id)).unwrap();
+                                lock.exp = now + lease_seconds;
+                                if !answer(&key, log_id, ack, LockState::Locked(log_id)) {
+                                    // Granted to a client that is no longer there. Hand it on
+                                    // now instead of holding it for a full lease window.
+                                    lock.current_ticket = None;
+                                    lock.exp = now + lease_seconds;
+                                }
                             } else {
                                 lock.queue.push_back(log_id);
-                                ack.send(LockState::Queued(log_id)).unwrap();
+                                answer(&key, log_id, ack, LockState::Queued(log_id));
                             }
                         } else {
                             lock.current_ticket = Some(log_id);
-                            lock.exp = now + LOCK_VALID_SECONDS;
-                            ack.send(LockState::Locked(log_id)).unwrap();
+                            lock.exp = now + lease_seconds;
+                            if !answer(&key, log_id, ack, LockState::Locked(log_id)) {
+                                lock.current_ticket = None;
+                            }
                         }
                     } else {
                         lock.queue.push_back(log_id);
-                        ack.send(LockState::Queued(log_id)).unwrap();
+                        answer(&key, log_id, ack, LockState::Queued(log_id));
                     }
                 } else {
                     locks.insert(
                         key.to_string(),
                         LockQueue {
                             current_ticket: Some(log_id),
-                            exp: now + LOCK_VALID_SECONDS,
+                            exp: now + lease_seconds,
                             queue: Default::default(),
                         },
                     );
-                    ack.send(LockState::Locked(log_id)).unwrap();
+                    if !answer(&key, log_id, ack, LockState::Locked(log_id)) {
+                        locks.remove(key.as_ref());
+                    }
                 }
             }
 
             LockRequest::Acquire(LockRequestPayload { key, log_id, ack }) => {
+                let now = Utc::now().timestamp();
                 if let Some(lock) = locks.get_mut(key.as_ref()) {
                     if lock.current_ticket.is_some() {
                         // Someone else holds the lock (e.g. our lease expired and the lock was
                         // re-granted). Re-queue and report back so the client can wait again.
                         lock.queue.push_back(log_id);
-                        ack.send(LockState::Queued(log_id)).unwrap();
+                        answer(&key, log_id, ack, LockState::Queued(log_id));
                     } else if let Some(first) = lock.queue.front() {
                         if *first == log_id {
                             lock.queue.pop_front();
                             lock.current_ticket = Some(log_id);
-                            lock.exp = Utc::now().timestamp() + LOCK_VALID_SECONDS;
-                            ack.send(LockState::Locked(log_id)).unwrap();
+                            lock.exp = now + lease_seconds;
+                            if !answer(&key, log_id, ack, LockState::Locked(log_id)) {
+                                lock.current_ticket = None;
+                                lock.exp = now + lease_seconds;
+                            }
                         } else {
                             // Our ticket is not the promoted one anymore -> re-queue.
                             lock.queue.push_back(log_id);
-                            ack.send(LockState::Queued(log_id)).unwrap();
+                            answer(&key, log_id, ack, LockState::Queued(log_id));
                         }
                     } else {
                         // Nobody is queued and nobody holds the lock -> take it directly.
                         lock.current_ticket = Some(log_id);
-                        lock.exp = Utc::now().timestamp() + LOCK_VALID_SECONDS;
-                        ack.send(LockState::Locked(log_id)).unwrap();
+                        lock.exp = now + lease_seconds;
+                        if !answer(&key, log_id, ack, LockState::Locked(log_id)) {
+                            lock.current_ticket = None;
+                        }
                     }
                 } else {
                     // The lock was fully removed while this request was in flight. Grant a fresh
@@ -159,36 +211,63 @@ async fn handler(rx: flume::Receiver<LockRequest>) {
                         key.to_string(),
                         LockQueue {
                             current_ticket: Some(log_id),
-                            exp: Utc::now().timestamp() + LOCK_VALID_SECONDS,
+                            exp: now + lease_seconds,
                             queue: Default::default(),
                         },
                     );
-                    ack.send(LockState::Locked(log_id)).unwrap();
+                    if !answer(&key, log_id, ack, LockState::Locked(log_id)) {
+                        locks.remove(key.as_ref());
+                    }
                 }
             }
 
             LockRequest::Release(LockReleasePayload { key, id }) => {
+                let now = Utc::now().timestamp();
                 let mut full_remove = false;
 
                 if let Some(lock) = locks.get_mut(key.as_ref()) {
                     if lock.current_ticket == Some(id) {
                         lock.current_ticket = None;
 
-                        if let Some(first) = lock.queue.front() {
-                            if let Some(acks) = queues.get_mut(key.as_ref()) {
-                                let pos_opt = acks.iter().position(|(i, _)| i == first);
-                                if let Some(pos) = pos_opt
-                                    && let Err(err) =
-                                        acks.swap_remove(pos).1.send(LockState::Released)
-                                {
-                                    // The client may have disconnected - this is not fatal.
-                                    warn!(
-                                        "Error sending lock await response for lock {key}: {err:?}"
-                                    );
-                                }
+                        // Wake the front of the queue so it can acquire. A front ticket whose
+                        // client is provably gone (the send fails, or it never registered an
+                        // await) must not sit there holding up everyone behind it.
+                        //
+                        // `exp` is refreshed here, and that is the load-bearing part. It is the
+                        // deadline by which the *promoted* ticket has to act, and the eviction
+                        // loops in `Lock` and `Await` are keyed on `exp < now`. Before this,
+                        // `exp` still belonged to the holder that just released, so a promoted
+                        // ticket whose client had gone away was never evicted while that stale
+                        // deadline was in the future, and a third client asking for the same
+                        // lock was queued behind a ticket that would never move.
+                        lock.exp = now + lease_seconds;
+
+                        loop {
+                            let Some(&first) = lock.queue.front() else {
+                                full_remove = true;
+                                break;
+                            };
+
+                            let delivered = match queues.get_mut(key.as_ref()) {
+                                Some(acks) => match acks.iter().position(|(i, _)| *i == first) {
+                                    Some(pos) => {
+                                        let (_, ack) = acks.swap_remove(pos);
+                                        answer(&key, first, ack, LockState::Released)
+                                    }
+                                    // No registered await for the promoted ticket. It may not
+                                    // have got round to awaiting yet, so it keeps its place and
+                                    // the refreshed deadline bounds how long that can last.
+                                    None => true,
+                                },
+                                None => true,
+                            };
+
+                            if delivered {
+                                break;
                             }
-                        } else {
-                            full_remove = true;
+                            // The client behind the promoted ticket is gone. Drop it now rather
+                            // than making the next one wait out a whole lease window.
+                            lock.queue.pop_front();
                         }
                     } else {
                         // The lease expired and the lock was granted to another ticket, or this
@@ -204,6 +283,13 @@ async fn handler(rx: flume::Receiver<LockRequest>) {
 
                 if full_remove {
                     locks.remove(key.as_ref());
+                    // Nothing is queued, so nothing is waiting: wake any straggler that is and
+                    // drop the entry, which used to accumulate for the life of the process.
+                    if let Some(acks) = queues.remove(key.as_ref()) {
+                        for (waiter, ack) in acks {
+                            answer(&key, waiter, ack, LockState::Released);
+                        }
+                    }
                 }
             }
 
@@ -221,7 +307,7 @@ async fn handler(rx: flume::Receiver<LockRequest>) {
                                 && let Some(pos) = acks.iter().position(|(i, _)| *i == ticket)
                             {
                                 let (_, ack) = acks.swap_remove(pos);
-                                let _ = ack.send(LockState::Released);
+                                answer(&key, ticket, ack, LockState::Released);
                             }
                         }
                     }
@@ -232,40 +318,64 @@ async fn handler(rx: flume::Receiver<LockRequest>) {
                             if *ticket == id {
                                 lock.queue.pop_front();
                                 lock.current_ticket = Some(id);
-                                lock.exp = now + LOCK_VALID_SECONDS;
-                                ack.send(LockState::Locked(id)).unwrap();
-                            } else if let Some(queue) = queues.get_mut(key.as_ref()) {
-                                queue.push((id, ack));
+                                lock.exp = now + lease_seconds;
+                                if !answer(&key, id, ack, LockState::Locked(id)) {
+                                    lock.current_ticket = None;
+                                    lock.exp = now + lease_seconds;
+                                }
                             } else {
-                                queues.insert(key.to_string(), vec![(id, ack)]);
+                                queues.entry(key.to_string()).or_default().push((id, ack));
                             }
                         } else {
                             // Nothing to wait for: no current holder and no queued ticket. Let the
                             // client re-request, it will get a fresh grant.
-                            ack.send(LockState::Released).unwrap();
+                            answer(&key, id, ack, LockState::Released);
                         }
-                    } else if let Some(queue) = queues.get_mut(key.as_ref()) {
-                        queue.push((id, ack));
                     } else {
-                        queues.insert(key.to_string(), vec![(id, ack)]);
+                        queues.entry(key.to_string()).or_default().push((id, ack));
                     }
                 } else {
                     // The lock was released and fully removed while this await was in flight.
                     // Let the client re-request, it will get a fresh grant.
-                    ack.send(LockState::Released).unwrap();
+                    answer(&key, id, ack, LockState::Released);
                 }
             }
 
-            LockRequest::SnapshotBuild(ack) => ack.send(locks.clone()).unwrap(),
+            LockRequest::SnapshotBuild(ack) => {
+                if ack.send(locks.clone()).is_err() {
+                    warn!("Snapshot build requester for the dlock handler has gone away");
+                }
+            }
 
             LockRequest::SnapshotInstall((data, ack)) => {
                 locks = data;
-                ack.send(()).unwrap()
+                // Installed state has no waiters: the awaiters registered on this node belong
+                // to the state that was just replaced, so anything still parked is woken and
+                // told to re-request rather than left waiting on a queue that no longer exists.
+                for (key, acks) in queues.drain() {
+                    for (waiter, waiter_ack) in acks {
+                        answer(&key, waiter, waiter_ack, LockState::Released);
+                    }
+                }
+                if ack.send(()).is_err() {
+                    warn!("Snapshot install requester for the dlock handler has gone away");
+                }
             }
         }
+
+        // `queues` only ever shrank element by element, so an emptied vector stayed in the map
+        // for the life of the process, once per key that was ever awaited.
+        queues.retain(|_, acks| !acks.is_empty());
     }
 
     debug!("DLock handler exiting");
+
+    // Nothing else will ever answer these.
+    for (key, acks) in queues.drain() {
+        for (waiter, ack) in acks {
+            answer(&key, waiter, ack, LockState::Released);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -274,11 +384,11 @@ mod tests {
     use std::borrow::Cow;
     use tokio::sync::oneshot;
 
-    fn send(tx: &flume::Sender<LockRequest>, req: LockRequest) {
+    pub(super) fn send(tx: &flume::Sender<LockRequest>, req: LockRequest) {
         tx.send(req).expect("handler to be running");
     }
 
-    async fn lock(tx: &flume::Sender<LockRequest>, key: &str, log_id: u64) -> LockState {
+    pub(super) async fn lock(tx: &flume::Sender<LockRequest>, key: &str, log_id: u64) -> LockState {
         let (ack, rx) = oneshot::channel();
         send(
             tx,
@@ -291,7 +401,7 @@ mod tests {
         rx.await.unwrap()
     }
 
-    async fn acquire(tx: &flume::Sender<LockRequest>, key: &str, log_id: u64) -> LockState {
+    pub(super) async fn acquire(tx: &flume::Sender<LockRequest>, key: &str, log_id: u64) -> LockState {
         let (ack, rx) = oneshot::channel();
         send(
             tx,
@@ -304,7 +414,7 @@ mod tests {
         rx.await.unwrap()
     }
 
-    async fn await_lock(tx: &flume::Sender<LockRequest>, key: &str, id: u64) -> LockState {
+    pub(super) async fn await_lock(tx: &flume::Sender<LockRequest>, key: &str, id: u64) -> LockState {
         let (ack, rx) = oneshot::channel();
         send(
             tx,
@@ -317,7 +427,7 @@ mod tests {
         rx.await.unwrap()
     }
 
-    fn release(tx: &flume::Sender<LockRequest>, key: &str, id: u64) {
+    pub(super) fn release(tx: &flume::Sender<LockRequest>, key: &str, id: u64) {
         send(
             tx,
             LockRequest::Release(LockReleasePayload {
@@ -390,5 +500,293 @@ mod tests {
         // ticket 2 still holds the lock and can release it normally
         release(&tx, "k", 2);
         assert_eq!(lock(&tx, "k", 3).await, LockState::Locked(3));
+    }
+}
+
+#[cfg(test)]
+mod lease_tests {
+    use super::tests::{release, send};
+    use super::*;
+    use std::borrow::Cow;
+    use std::time::Duration;
+    use tokio::sync::oneshot;
+
+    /// A lease short enough to wait out. `exp` is a Unix second, so this is the smallest value
+    /// that can be exceeded by waiting, and the test waits past it rather than up to it.
+    const SHORT_LEASE: i64 = 1;
+
+    async fn wait_out_the_lease() {
+        // One second of lease plus the sub-second remainder of the current wall-clock second.
+        tokio::time::sleep(Duration::from_millis(2_100)).await;
+    }
+
+    /// A `lock` that fails the test rather than hanging when the handler is not there.
+    ///
+    /// The helpers in the parent module `.expect(..)` on the send and `.unwrap()` on the
+    /// receive, both of which depend on how promptly a panicked task's channel ends are
+    /// dropped. Bounding it here makes "the handler died" a failed assertion instead of a
+    /// hung test, which is what lets these tests be run against the unrepaired handler at all.
+    async fn lock_bounded(tx: &flume::Sender<LockRequest>, key: &str, log_id: u64) -> LockState {
+        let (ack, rx) = oneshot::channel();
+        tx.send(LockRequest::Lock(LockRequestPayload {
+            key: Cow::Owned(key.to_string()),
+            log_id,
+            ack,
+        }))
+        .expect("the handler must still be accepting requests");
+
+        tokio::time::timeout(Duration::from_secs(5), rx)
+            .await
+            .expect("the handler must answer within five seconds")
+            .expect("the handler must not drop the answer channel")
+    }
+
+    /// Register an await and then drop the receiver, which is what a cancelled `lock()` future
+    /// does: a timeout, a `select!` arm losing, or an aborted task.
+    fn await_then_abandon(tx: &flume::Sender<LockRequest>, key: &str, id: u64) {
+        let (ack, rx) = oneshot::channel();
+        send(
+            tx,
+            LockRequest::Await(LockAwaitPayload {
+                key: Cow::Owned(key.to_string()),
+                id,
+                ack,
+            }),
+        );
+        drop(rx);
+    }
+
+    /// Upstream PR #352 stopped a stale release from panicking the handler. The rest of the
+    /// arms kept their `ack.send(..).unwrap()`, so a client that goes away between sending a
+    /// request and receiving its answer still killed the handler, and with it every lock on
+    /// the node.
+    ///
+    /// The reachable case is a leader-local await, whose receiver lives in the caller's future:
+    /// a cancelled `lock()` drops it. This drives that directly, then asserts the handler is
+    /// still serving an unrelated key.
+    #[tokio::test]
+    async fn an_abandoned_waiter_never_kills_the_handler() {
+        let tx = spawn_with_lease(SHORT_LEASE);
+
+        assert_eq!(lock_bounded(&tx, "k", 1).await, LockState::Locked(1));
+        assert_eq!(lock_bounded(&tx, "k", 2).await, LockState::Queued(2));
+        await_then_abandon(&tx, "k", 2);
+
+        // The release wakes the abandoned waiter. Before this repair the send failure was
+        // handled here and nowhere else; the other arms panicked.
+        release(&tx, "k", 1);
+
+        assert_eq!(
+            lock_bounded(&tx, "unrelated", 10).await,
+            LockState::Locked(10),
+            "the handler must still be serving other keys"
+        );
+        assert!(!tx.is_disconnected(), "the handler task must still be alive");
+    }
+
+    /// A grant that nobody received is not a held lock.
+    ///
+    /// The `Lock` arm sets `current_ticket` and *then* answers. If the answer cannot be
+    /// delivered, the ticket belongs to a client that will never release it, so the lock was
+    /// held for a whole lease window by nobody. It is now handed straight on.
+    #[tokio::test]
+    async fn a_grant_that_was_never_received_does_not_hold_the_lock() {
+        let tx = spawn_with_lease(SHORT_LEASE);
+
+        let (ack, rx) = oneshot::channel();
+        send(
+            &tx,
+            LockRequest::Lock(LockRequestPayload {
+                key: Cow::Owned("k".to_string()),
+                log_id: 1,
+                ack,
+            }),
+        );
+        drop(rx);
+
+        // Synchronized on the handler having processed the first request: this second one is
+        // answered only after it, because the handler is a single loop over one channel.
+        assert_eq!(
+            lock_bounded(&tx, "k", 2).await,
+            LockState::Locked(2),
+            "an undelivered grant must not make the next caller wait out a lease"
+        );
+    }
+
+    /// The liveness hole PR #352 left standing.
+    ///
+    /// `Release` used to set `current_ticket = None`, wake the front of the queue, and leave
+    /// `exp` belonging to the holder that had just released. The eviction loops in `Lock` and
+    /// `Await` are keyed on `exp < now`, so while that stale deadline was still in the future
+    /// a promoted ticket whose client had gone away was never evicted, and a third client
+    /// asking for the same lock was queued behind a ticket that would never move.
+    ///
+    /// Here the promoted waiter has been abandoned, so the release drops it immediately and
+    /// the third client gets the lock without waiting for anything.
+    #[tokio::test]
+    async fn a_dead_promoted_ticket_does_not_block_the_next_caller() {
+        let tx = spawn_with_lease(SHORT_LEASE);
+
+        assert_eq!(lock_bounded(&tx, "k", 1).await, LockState::Locked(1));
+        assert_eq!(lock_bounded(&tx, "k", 2).await, LockState::Queued(2));
+        await_then_abandon(&tx, "k", 2);
+
+        release(&tx, "k", 1);
+
+        assert_eq!(
+            lock_bounded(&tx, "k", 3).await,
+            LockState::Locked(3),
+            "ticket 2's client is gone, so ticket 3 must not be queued behind it"
+        );
+    }
+
+    /// A TTL takeover followed by the old holder's release must leave the lock usable.
+    ///
+    /// This is the sequence Rahi pinned an unreleased upstream commit for. The release half is
+    /// PR #352's; what is added here is that the takeover, the stale release, and an unrelated
+    /// key are all asserted in one run, so "does not kill the handler" and "does not block
+    /// unrelated acquisitions" are both demonstrated rather than argued.
+    #[tokio::test]
+    async fn a_stale_release_after_takeover_blocks_nothing() {
+        let tx = spawn_with_lease(SHORT_LEASE);
+
+        assert_eq!(lock_bounded(&tx, "k", 1).await, LockState::Locked(1));
+        assert_eq!(lock_bounded(&tx, "other", 100).await, LockState::Locked(100));
+
+        wait_out_the_lease().await;
+
+        // Ticket 1's lease has expired, so ticket 2 takes over.
+        assert_eq!(lock_bounded(&tx, "k", 2).await, LockState::Locked(2));
+
+        // The old holder finally releases. It is not the current holder any more.
+        release(&tx, "k", 1);
+
+        // The taker still holds it.
+        assert_eq!(
+            lock_bounded(&tx, "k", 3).await,
+            LockState::Queued(3),
+            "the stale release must not have freed the lock ticket 2 holds"
+        );
+        // An unrelated key is untouched throughout.
+        release(&tx, "other", 100);
+        assert_eq!(lock_bounded(&tx, "other", 101).await, LockState::Locked(101));
+        assert!(!tx.is_disconnected());
+    }
+
+    /// Node restart, interrupted operation: the holder died with the node without releasing.
+    ///
+    /// What survives a restart is the snapshot, whose `exp` is an absolute Unix second and is
+    /// therefore already in the past by the time it is installed. Reacquisition is bounded by
+    /// that: the first requester after the install takes over, with no wait.
+    ///
+    /// Stated rather than implied: this is the *snapshot* path. The log-replay path is the
+    /// next test, and it behaves differently, which is the point of having both.
+    #[tokio::test]
+    async fn an_interrupted_lease_is_reacquired_immediately_from_a_snapshot() {
+        let before = spawn_with_lease(SHORT_LEASE);
+        assert_eq!(lock_bounded(&before, "k", 1).await, LockState::Locked(1));
+
+        let (ack, rx) = oneshot::channel();
+        send(&before, LockRequest::SnapshotBuild(ack));
+        let snapshot = rx.await.unwrap();
+        assert!(snapshot.contains_key("k"), "the held lock is in the snapshot");
+
+        // The node goes away without ticket 1 ever releasing.
+        drop(before);
+
+        let after = spawn_with_lease(SHORT_LEASE);
+        let (ack, rx) = oneshot::channel();
+        send(&after, LockRequest::SnapshotInstall((snapshot, ack)));
+        rx.await.unwrap();
+
+        wait_out_the_lease().await;
+
+        assert_eq!(
+            lock_bounded(&after, "k", 2).await,
+            LockState::Locked(2),
+            "a lease whose deadline has passed is reacquirable by the next caller"
+        );
+    }
+
+    /// Node restart, completed operation: the holder released before the node went away.
+    ///
+    /// Both entries are in the log, so both are replayed, and the lock is free the moment
+    /// replay finishes. No lease window is waited out at all.
+    #[tokio::test]
+    async fn a_completed_operation_leaves_nothing_to_wait_for_after_a_restart() {
+        let after = spawn_with_lease(SHORT_LEASE);
+
+        // Replay of the committed entries, in log order.
+        assert_eq!(lock_bounded(&after, "k", 1).await, LockState::Locked(1));
+        release(&after, "k", 1);
+
+        assert_eq!(
+            lock_bounded(&after, "k", 2).await,
+            LockState::Locked(2),
+            "a released lease is free immediately after replay"
+        );
+    }
+
+    /// Replay of an interrupted operation re-grants the lease with a deadline computed at
+    /// replay time, not at the time the entry was written.
+    ///
+    /// So the bound on reacquiring a lease whose owner died with the node is **one lease
+    /// window measured from the restart**, not from the original acquisition. That is a real
+    /// limitation and it is recorded here as executed behavior rather than described.
+    #[tokio::test]
+    async fn replaying_an_unreleased_lock_re_grants_it_for_one_more_lease_window() {
+        let after = spawn_with_lease(SHORT_LEASE);
+
+        // Replay: the `Lock` entry is in the log and its `LockRelease` is not.
+        assert_eq!(lock_bounded(&after, "k", 1).await, LockState::Locked(1));
+
+        assert_eq!(
+            lock_bounded(&after, "k", 2).await,
+            LockState::Queued(2),
+            "replay re-grants the lease to a ticket whose client no longer exists"
+        );
+
+        wait_out_the_lease().await;
+
+        assert_eq!(
+            lock_bounded(&after, "k", 3).await,
+            LockState::Locked(3),
+            "and it is reacquirable after exactly one lease window from the restart"
+        );
+    }
+
+    /// The awaiter map used to grow: entries were removed element by element and an emptied
+    /// vector stayed for the life of the process, once per key ever awaited.
+    ///
+    /// Asserted through behavior rather than by reaching into the map, because the map is a
+    /// local of the handler task: a fully released lock is removed outright, and a waiter
+    /// registered against it is woken rather than left parked.
+    #[tokio::test]
+    async fn a_fully_released_lock_wakes_its_stragglers() {
+        let tx = spawn_with_lease(SHORT_LEASE);
+
+        assert_eq!(lock_bounded(&tx, "k", 1).await, LockState::Locked(1));
+
+        // A waiter that registered against a ticket which is not in the queue at all.
+        let (ack, rx) = oneshot::channel();
+        send(
+            &tx,
+            LockRequest::Await(LockAwaitPayload {
+                key: Cow::Owned("k".to_string()),
+                id: 99,
+                ack,
+            }),
+        );
+
+        release(&tx, "k", 1);
+
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(5), rx)
+                .await
+                .expect("a straggler must be woken within five seconds")
+                .expect("the handler must not drop the answer channel"),
+            LockState::Released,
+            "a straggler on a removed lock is told to re-request, not left waiting"
+        );
     }
 }
