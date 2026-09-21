@@ -51,6 +51,16 @@ extra_hashed_inputs = [
   "hiqlite/src/tls.rs",
   "hiqlite/src/http_client.rs",
   "hiqlite/tests/tls_env.rs",
+  # Backup, retention and object storage, claimed by 013, and the schema
+  # migration builder claimed by 014 together with the fixture set its tests
+  # embed. All three .rs files live at the crate root, which no other glob here
+  # reaches; the hiqlite package walk already counts them in the coverage
+  # denominator, so only the freshness hash needs them. The .sql fixtures are in
+  # neither, so they need this entry for both.
+  "hiqlite/src/backup.rs",
+  "hiqlite/src/s3.rs",
+  "hiqlite/src/migration.rs",
+  "hiqlite/tests/cluster/migrations/**/*.sql",
   "hiqlite/src/query/**/*.rs",
   "hiqlite/src/client/**/*.rs",
   "hiqlite/src/network/**/*.rs",
@@ -140,6 +150,10 @@ governed_scope = [
   # here as well would be redundant.
   "examples/*/migrations/*.sql",
   "examples/*/Cargo.toml",
+  # The migration fixture set 014 claims. These are .sql files inside the
+  # hiqlite package, which the Rust package walk does not discover, so without
+  # this entry they would be owned but absent from the denominator.
+  "hiqlite/tests/cluster/migrations/**/*.sql",
 ]
 governed_scope_exclusions = []
 

@@ -1,19 +1,22 @@
 {
   "mapping": {
-    "amends": [
-      "001-wal-durability-and-completion"
-    ],
     "dependsOn": [
       "000-hiqlite-ownership-bootstrap",
-      "001-wal-durability-and-completion"
+      "002-snapshot-publication-and-recovery",
+      "009-configuration-contract",
+      "012-cluster-integration-evidence"
     ],
     "implementingPaths": [
       {
-        "path": "hiqlite-wal/src/",
+        "path": "hiqlite/src/backup.rs",
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite/src/store/state_machine/sqlite/",
+        "path": "hiqlite/src/s3.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "spec-spine.toml",
         "source": "spec-edge"
       },
       {
@@ -23,37 +26,46 @@
       {
         "path": "standards/spec/findings-register.md",
         "source": "spec-edge"
-      },
-      {
-        "path": "standards/spec/wal-repair-proposal.md",
-        "source": "spec-edge"
       }
     ],
     "resolvedUnits": [
       {
         "locations": [
           {
-            "file": "hiqlite-wal/src/"
+            "file": "hiqlite/src/backup.rs"
           }
         ],
         "ownership": true,
-        "sourceField": "extends",
+        "sourceField": "establishes",
         "unit": {
-          "kind": "directory",
-          "path": "hiqlite-wal/src/"
+          "kind": "file",
+          "path": "hiqlite/src/backup.rs"
         }
       },
       {
         "locations": [
           {
-            "file": "hiqlite/src/store/state_machine/sqlite/"
+            "file": "hiqlite/src/s3.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/s3.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "spec-spine.toml"
           }
         ],
         "ownership": true,
         "sourceField": "extends",
         "unit": {
-          "kind": "directory",
-          "path": "hiqlite/src/store/state_machine/sqlite/"
+          "kind": "file",
+          "path": "spec-spine.toml"
         }
       },
       {
@@ -81,24 +93,11 @@
           "kind": "file",
           "path": "standards/spec/findings-register.md"
         }
-      },
-      {
-        "locations": [
-          {
-            "file": "standards/spec/wal-repair-proposal.md"
-          }
-        ],
-        "ownership": true,
-        "sourceField": "extends",
-        "unit": {
-          "kind": "file",
-          "path": "standards/spec/wal-repair-proposal.md"
-        }
       }
     ],
-    "specId": "008-wal-append-completion-notification",
+    "specId": "013-backup-retention-and-object-storage",
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "954041a33245081a1dbe3d800fad738ef65b6e15fb0c294262785ddd006e7c56"
+  "shardHash": "89d90435b30205da825cda4588b43ab1cd8cd3d59b1b00a5d33787eb4ceb999a"
 }

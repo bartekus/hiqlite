@@ -480,3 +480,88 @@ pub async fn restore_backup_finish(state: &Arc<AppState>) {
 
     info!("restore_backup_finish task successful");
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Characterizes `BackupConfig::new`: the cron string is the only validated
+    /// input, and `keep_days` is accepted as given.
+    #[test]
+    fn backup_config_validates_only_the_cron_expression() {
+        let ok = BackupConfig::new("0 30 2 * * * *", 30).unwrap();
+        assert_eq!(ok.keep_days, 30);
+
+        assert!(BackupConfig::new("not a cron", 30).is_err());
+
+        // keep_days is never range-checked, not even against zero
+        assert_eq!(BackupConfig::new("0 30 2 * * * *", 0).unwrap().keep_days, 0);
+    }
+
+    /// Characterizes the S3 retention filter. Every rejection is silent and
+    /// returns `None`; only the exact documented shape is recognised.
+    #[test]
+    fn the_remote_retention_filter_accepts_only_the_documented_name_shape() {
+        assert_eq!(
+            dt_from_backup_name("backup_node_1_1704067200.sqlite"),
+            DateTime::from_timestamp(1704067200, 0)
+        );
+
+        // wrong prefix
+        assert!(dt_from_backup_name("node_1_1704067200.sqlite").is_none());
+        // no second underscore after the prefix
+        assert!(dt_from_backup_name("backup_node_1.sqlite").is_none());
+        // missing suffix
+        assert!(dt_from_backup_name("backup_node_1_1704067200").is_none());
+        // unparsable timestamp
+        assert!(dt_from_backup_name("backup_node_1_never.sqlite").is_none());
+    }
+
+    /// Characterizes `backup_local_cleanup`, including the defect the register
+    /// records as F-056: the name guard is `!prefix && !suffix`, so a file that
+    /// matches *either* half reaches the timestamp parse and can be deleted.
+    /// `Client::backup_list_local` filters the same directory on the prefix
+    /// alone, so the two disagree about what a backup file is.
+    #[tokio::test]
+    async fn local_cleanup_deletes_files_that_are_not_backups() {
+        let dir = std::env::temp_dir().join(format!(
+            "hiqlite-backup-cleanup-{}",
+            Utc::now().timestamp_nanos_opt().unwrap()
+        ));
+        fs::create_dir_all(&dir).await.unwrap();
+        let base = dir.to_str().unwrap().to_string();
+
+        // 2024-01-02, older than the retention window below
+        let old_ts = 1704153600i64;
+        let recent_ts = Utc::now().timestamp();
+
+        let expired_backup = format!("backup_node_1_{old_ts}.sqlite");
+        let fresh_backup = format!("backup_node_1_{recent_ts}.sqlite");
+        // matches the suffix half of the guard only, and is not a backup
+        let unrelated = format!("someone_elses_{old_ts}.sqlite");
+        // matches neither half, so it is skipped before the parse
+        let untouched = "notes.txt".to_string();
+
+        for name in [&expired_backup, &fresh_backup, &unrelated, &untouched] {
+            fs::write(format!("{base}/{name}"), b"x").await.unwrap();
+        }
+
+        backup_local_cleanup(base.clone(), 1).await.unwrap();
+
+        let exists = |name: &str| Path::new(&format!("{base}/{name}")).exists();
+
+        assert!(!exists(&expired_backup), "an expired backup is deleted");
+        assert!(exists(&fresh_backup), "a backup inside the window stays");
+        assert!(
+            !exists(&unrelated),
+            "F-056: a non-backup file ending in .sqlite with a parsable trailing \
+             timestamp is deleted by the retention sweep"
+        );
+        assert!(
+            exists(&untouched),
+            "a file matching neither half of the guard is skipped"
+        );
+
+        fs::remove_dir_all(&dir).await.unwrap();
+    }
+}

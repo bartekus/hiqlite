@@ -1087,6 +1087,17 @@ file needs a leading integer index and that the sequence must start at 1, have
 fixtures, a disabled test and no evidence. Only `bad_3`, the SQL-syntax case, is
 exercised. W-10 owns the closure. Source-established. `012` KD-5.
 
+**Closed 2026-09-21 by `014-schema-migration-contract`.** Both fixtures are now
+executed, as ordinary `#[test]` functions against `Migrations::build` rather
+than through `Client::migrate`:
+`a_name_without_a_numeric_index_panics_with_the_other_rules_message` and
+`an_index_set_that_does_not_start_at_one_panics`. That is the layer where
+`#[should_panic]` works, which is what `hiqlite/tests/cluster/migration.rs:29-31`
+could not reach. Running `bad_1` surfaced F-064. The entry is retained as the
+record of the gap; `014` section 4 states what is still unevidenced, which is
+the `.sql` suffix rule, the gap rule and the duplicate-index case, none of which
+ever had a fixture.
+
 ### F-053 `limit`, confidence `high`
 
 **No cluster test has ever run with TLS enabled.**
@@ -1133,6 +1144,180 @@ window is narrow in practice, because `learner_only` finishes early and the
 restore phases are late. **Not observed**; recorded because the ordering that
 makes it safe is incidental and undeclared. `012` KD-8.
 
+### F-056 `defect`, confidence `high`
+
+**The local backup retention guard is inverted and deletes files that are not
+backups.** `hiqlite/src/backup.rs:221-223`:
+
+```rust
+if !s.starts_with("backup_node_") && !s.ends_with(".sqlite") {
+    continue;
+}
+```
+
+A file is skipped only when it matches **neither** half, where the intent is to
+skip unless it matches both. Consequence: any file in the backups directory whose
+name ends in `.sqlite` and whose text after the last `_` parses as a plausible
+Unix timestamp reaches the deletion branch, and so does any file whose name
+starts with `backup_node_` regardless of suffix. `Client::backup_list_local`
+(`hiqlite/src/client/backup.rs:148-151`) filters the same directory on the prefix
+alone, and `dt_from_backup_name` (`backup.rs:248-278`) requires prefix, a second
+underscore, the suffix and a parsable `i64`. Three predicates over one naming
+convention, no two the same.
+
+**Observed by execution.** `backup::tests::local_cleanup_deletes_files_that_are_not_backups`
+writes `someone_elses_1704153600.sqlite` into a temporary directory and the sweep
+deletes it. Latent rather than an incident, because the directory is hiqlite's
+own; nothing prevents an operator from putting a file there, and
+`HQL_BACKUP_RESTORE=file:` invites it by naming a path the restore then copies
+into `backups/`. `013` KD-1.
+
+### F-057 `defect`, confidence `high`
+
+**A restore removes the live database before the replacement is in place.**
+`hiqlite/src/backup.rs:354-368`. `restore_backup` validates the staged backup,
+then `remove_dir_all`s the database, snapshot, lock-file and log directories,
+then recreates the database directory, then `fs::copy`s the backup into it. A
+failure of the copy, or of the `create_dir_all` or `set_path_access` between
+them, leaves the node with neither its previous state nor the backup, and there
+is no rollback. The copied file is never `sync_data`ed before the node starts on
+it, so a crash between the copy and the writeback can leave a short image that
+the next start accepts.
+
+Same family as F-003 and F-004, in a different file: `002` records the
+non-atomic publication of snapshots, this is the non-atomic publication of a
+restored database. Source-established. `013` KD-2.
+
+### F-058 `defect`, confidence `high`
+
+**Every node that is not node 1 deletes its data directory before any restore has
+succeeded.** `hiqlite/src/backup.rs:287-293`. Whenever `HQL_BACKUP_RESTORE`
+parses to a known prefix, `restore_backup_start` on nodes 2 and 3 runs
+`let _ = fs::remove_dir_all(node_config.data_dir.as_ref()).await` and returns
+`Ok(false)`, so the node proceeds into a normal cluster join. This happens before
+node 1 has pulled, validated or copied anything, and the two are not coordinated.
+
+Consequence: a restore that fails on node 1, for instance because the `file:`
+path does not exist or the object is not in the bucket, has already destroyed the
+other nodes' state, so the cluster cannot fall back to what it had. The discarded
+`Result` also makes a failed deletion invisible, and the node then joins with a
+half-removed directory. Source-established. `013` KD-3.
+
+### F-059 `defect`, confidence `high`
+
+**Backup validation is one query, and a corrupt payload panics rather than
+failing validation.** `hiqlite/src/backup.rs:379-398`. `is_metadata_ok` opens the
+candidate, selects `data FROM _metadata WHERE key = 'meta'` and runs
+`deserialize(&bytes).unwrap()` at `:391`, inside `spawn_blocking`. A `_metadata`
+row that exists but does not decode as `StateMachineData` therefore panics the
+blocking task and the caller sees a join error rather than "this backup is not
+valid".
+
+The validation itself checks only that the row exists and decodes: not the
+schema, not the row counts, and not which cluster produced the image, which the
+authored `TODO` at `:393` acknowledges. `HQL_BACKUP_SKIP_VALIDATION` disables
+even that, comparing against the exact string `"true"`, so `"TRUE"` validates;
+that direction is fail-closed. Source-established. `013` KD-4.
+
+### F-060 `defect`, confidence `high`
+
+**The post-restore log purge retries forever with no delay.**
+`hiqlite/src/backup.rs:477-479`:
+`while let Err(err) = state.raft_db.raft.trigger().purge_log(last_log).await { error!(...) }`.
+No sleep, no attempt bound, no exit. Consequence: a purge that keeps failing, for
+example because the Raft is shutting down, spins the task at full CPU while
+emitting an error line per iteration. Every other loop in the same function
+sleeps between 50 ms and 100 ms, and the snapshot trigger twelve lines above was
+deliberately changed to bail out rather than loop. Source-established.
+`013` KD-5.
+
+### F-061 `defect`, confidence `high`
+
+**The S3 configuration panics on a missing variable and validates no
+credential.** `hiqlite/src/s3.rs:45-76`. Reading `HQL_S3_URL` successfully
+commits `try_from_env` to five further `expect`s, a `parse().expect` for
+`HQL_S3_PATH_STYLE`, and `Bucket::new(...).unwrap()` at `:70`, on the authored
+assumption at `:47` that all values exist together. A single missing or
+misspelled variable ends the process at configuration time, while the same
+`Bucket::new` failure in `S3Config::new` (`:37-38`) is a returned `Error::S3`.
+
+Separately, the `TODO` at `:40` records that no path checks the credentials, so a
+wrong key is first discovered by the detached upload task in `create_backup`
+(`store/state_machine/sqlite/writer.rs:817-842`), after the backup has been
+acknowledged, as an error log. Same class as F-009 and F-042.
+Source-established. `013` KD-6.
+
+### F-062 `contradiction`, confidence `high`
+
+**The backup cron failure message counts retries that were not attempted.**
+`hiqlite/src/backup.rs:121-155`. The loop is `for _ in 0..retries` with
+`retries = 5`, but only a forward-to-leader error sleeps and retries; every other
+error logs and `break`s on the first attempt with `success` still false. The
+message that then runs is `"Backup task failed after {} retries"` with the
+literal 5. Consequence: an operator reading the log believes five backup attempts
+were made and all failed, when one was. Classed as a contradiction between
+authored text and behavior, not a defect. Source-established. `013` KD-7.
+
+### F-063 `contradiction`, confidence `high`
+
+**The local retention floor constant is an hour earlier than its comment.**
+`hiqlite/src/backup.rs:196-197`: `let ts_min = 1704063600;` annotated
+`// 2024/01/01 00:00:00`. That value is `2023-12-31T23:00:00Z`, which is that
+midnight in CET; `1704067200` is the UTC one. Every timestamp it is compared
+against comes from `Utc::now()`.
+
+Nothing observable follows, because the constant's purpose is to be far in the
+past as a guard against a trailing token that happens to parse as a small
+integer. Recorded because the constant guards a deletion and its stated meaning
+is what a reader would check it against. Source-established. `013` KD-8.
+
+### F-064 `contradiction`, confidence `high`
+
+**The panic for a malformed migration name names the wrong rule.**
+`hiqlite/src/migration.rs:11-17`. The `split_once('_')` expect says names must
+start with `<integer>_<migration_name>`; the `parse::<u32>()` expect says they
+must start with an increasing integer with no gaps starting at index 1. For any
+name that contains an underscore but whose first token is not a number, which is
+the ordinary malformed case and exactly what the repository's own
+`tests/cluster/migrations/bad_1/no_leading_index.sql` fixture is, the **second**
+message fires. An operator whose file is named `create_users.sql` is told about
+gaps and start indices, and the message stating the actual rule is reachable only
+for a name with no underscore at all.
+
+**Observed by execution.**
+`migration::tests::a_name_without_a_numeric_index_panics_with_the_other_rules_message`
+asserts the message that fires. `014` KD-1.
+
+### F-065 `defect`, confidence `high`
+
+**A duplicate migration index is reported as a gap.**
+`hiqlite/src/migration.rs:52-59`. The check is
+`migration.id != res[len - 1].id + 1`, which a second file carrying an
+already-seen id fails, so `1_a.sql` and `1_b.sql` panic with
+`"Migration index has a gap: 1 does not follow 1"`. A gap and a duplicate are
+different deployment mistakes with different fixes, and the message describes the
+one that did not happen. Source-established; no fixture reaches it, and `014` D-2
+records why none was added. `014` KD-2.
+
+### F-066 `defect`, confidence `high`
+
+**Every migration validation failure is a panic, and the signature cannot carry
+an error.** `Migrations::build` (`hiqlite/src/migration.rs:8-65`) returns
+`Vec<Migration>` and enforces all four file-name rules with `expect` and
+`panic!` (`:13`, `:16`, `:30`, `:42`, `:54`). It is called from `Client::migrate`
+(`hiqlite/src/client/migrate.rs:32`, `:81`), which returns `Result<(), Error>`,
+so a caller that handles migration errors correctly still cannot handle a
+malformed migration set: the process ends instead.
+
+Consequence, and the reason this is recorded rather than filed as a style note:
+it is why the repository's own bad-fixture assertions were commented out.
+`hiqlite/tests/cluster/migration.rs:29-31` states that `#[should_panic]` does not
+work in that context, which is true of an async helper, and the underlying cause
+is that the failure is a panic rather than the `Err` the surrounding test already
+knows how to assert. Same class as F-009 and F-042, and also a public-API
+question, which is W-17's. Source-established, with three of the five panic sites
+executed. `014` KD-3.
+
 ## Summary by class
 
 Class is what a finding **is**. State is what has **happened** to it. They are
@@ -1142,8 +1327,8 @@ record.
 
 | class | ids | count |
 |---|---|---|
-| `defect` | F-001 to F-006, F-009, F-021 to F-024, F-027 to F-029, F-031, F-036 to F-044, F-047, F-049 to F-051, F-054, F-055 | 30 |
-| `contradiction` | F-018, F-030, F-032 to F-034, F-045 | 6 |
+| `defect` | F-001 to F-006, F-009, F-021 to F-024, F-027 to F-029, F-031, F-036 to F-044, F-047, F-049 to F-051, F-054 to F-061, F-065, F-066 | 38 |
+| `contradiction` | F-018, F-030, F-032 to F-034, F-045, F-062 to F-064 | 9 |
 | `gap` | F-010, F-013 | 2 |
 | `evidence` | F-011, F-012, F-017, F-019, F-046, F-048, F-052 | 7 |
 | `limit` | F-007, F-008, F-015, F-016, F-026, F-035, F-053 | 7 |
@@ -1154,15 +1339,15 @@ record.
 | state | ids | count |
 |---|---|---|
 | repaired | F-001, F-002, F-030 | 3 |
-| closed, entry retained | F-013 (at M1, by wave 1), F-011 and F-046 (2026-09-21, by `010` and `011`) | 3 |
-| open | everything else: F-003 to F-010, F-012, F-014 to F-029, F-031 to F-045, F-047 to F-055 | 49 |
+| closed, entry retained | F-013 (at M1, by wave 1), F-011 and F-046 (2026-09-21, by `010` and `011`), F-052 (2026-09-21, by `014`) | 4 |
+| open | everything else: F-003 to F-010, F-012, F-014 to F-029, F-031 to F-045, F-047 to F-051, F-053 to F-066 | 59 |
 
 A finding's state answers whether the thing it records is still in the tree, and
 nothing else. F-030 is repaired because its contradiction is gone; the optional
 process decision it surfaced is W-24's, and a work item's being undecided has
 never been a reason to hold a finding open.
 
-Forty-nine open, of which four carry a dated disposition recording what has
+Fifty-nine open, of which four carry a dated disposition recording what has
 moved since they were written. Three were appended on 2026-09-20: F-015
 (examples now visible, still unclaimed), F-016 (dashboard now visible, the
 generated and vendored denominator problem unresolved), F-018 (the `AGENTS.md`
@@ -1173,8 +1358,9 @@ tree. A disposition narrows an entry; it does not close it.
 
 Open **defects**, which is the subset a repair workstream draws from:
 F-003, F-004, F-005, F-006, F-009, F-021, F-022, F-023, F-024, F-027, F-028,
-F-029, F-031, F-036 to F-044, F-047, F-049, F-050, F-051, F-054, F-055.
-Twenty-eight of the thirty defects; F-001 and F-002 are the two repaired.
+F-029, F-031, F-036 to F-044, F-047, F-049 to F-051, F-054 to F-061, F-065,
+F-066. Thirty-six of the thirty-eight defects; F-001 and F-002 are the two
+repaired.
 
 **Reclassified on 2026-09-19**, after each class test was applied rather than
 assumed: F-007 and F-008 from `defect` to `limit`, because a stated contract with
@@ -1191,9 +1377,11 @@ against the locked trait, F-031 and F-036 found by the configuration adoption on
 2026-09-20, F-037 to F-040 found by the node-lifecycle adoption on 2026-09-21,
 F-041 to F-044 found by the transport-security adoption on the same day,
 F-047 found on 2026-09-21 while tracing the cache log store against the locked
-trait for the W-04 proposal, and F-049 to F-051, F-054 and F-055 found on
+trait for the W-04 proposal, F-049 to F-051, F-054 and F-055 found on
 2026-09-21 by the cluster integration adoption, three of them by running the
-suite rather than by reading it.
+suite rather than by reading it, F-056 to F-061 found on the same day by the
+backup and object-storage adoption, and F-065 and F-066 by the schema migration
+adoption.
 F-013 is closed at M1 by wave 1, F-011 by `010`, and F-046 by `011` in the same
 change that recorded it; all three are retained as records rather than deleted. No finding in this register authorizes
 a repair; each repair is a separate governed change with its own spec and
@@ -1205,11 +1393,11 @@ on 2026-09-20. A repaired entry is annotated in place and keeps its identifier,
 its class, and its original text, so the baseline a repair was reviewed against
 stays readable.
 
-**Twenty-eight defects are open**: F-003 to F-006, F-009, F-021 to F-024,
-F-027 to F-029, F-031, F-036 to F-044, F-047, F-049 to F-051, F-054, F-055.
-Two earlier revisions of this paragraph were
+**Thirty-six defects are open**: F-003 to F-006, F-009, F-021 to F-024,
+F-027 to F-029, F-031, F-036 to F-044, F-047, F-049 to F-051, F-054 to F-061,
+F-065, F-066. Two earlier revisions of this paragraph were
 stale: one said ten against a table of fourteen, and the next said twelve after
-`009` had already added F-031 and F-036. The arithmetic is thirty recorded
+`009` had already added F-031 and F-036. The arithmetic is thirty-eight recorded
 minus the two repaired, and this paragraph is the one that has to be recomputed
 whenever the class table changes. F-021 through F-024 and F-029 are a separate
 cache-log repair that was deliberately not bundled into `008`.
