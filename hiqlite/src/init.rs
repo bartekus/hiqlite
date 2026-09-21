@@ -905,3 +905,62 @@ fn log_no_membership_error() {
 "#
     );
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::NodeConfig;
+
+    fn node(id: u64) -> Node {
+        Node {
+            id,
+            addr_raft: format!("n{id}:8100"),
+            addr_api: format!("n{id}:8200"),
+        }
+    }
+
+    /// 010 KD-2, first half. This module resolves "this node" by matching `id`;
+    /// `start.rs:65-68` resolves it by indexing `nodes[node_id - 1]`. The two
+    /// agree only when the ids are exactly `1..=n` in order, which nothing
+    /// validates. With ids `2,3,4` the same `node_id` names two different nodes.
+    #[test]
+    fn node_identity_is_resolved_by_id_here_and_by_position_in_start() {
+        let nodes = vec![node(2), node(3), node(4)];
+
+        assert_eq!(get_this_node(3, &nodes).id, 3);
+        assert_eq!(nodes.get(3_usize - 1).expect("index in range").id, 4);
+    }
+
+    /// 010 KD-2, second half. `NodeConfig::is_valid` bounds `node_id` against
+    /// the *length* of `nodes`, never against the ids in it, so the diverging
+    /// shape above is accepted as valid configuration.
+    #[test]
+    fn is_valid_accepts_a_nodes_list_whose_ids_are_not_positions() {
+        let config = NodeConfig {
+            node_id: 3,
+            nodes: vec![node(2), node(3), node(4)],
+            secret_raft: "a".repeat(16),
+            secret_api: "b".repeat(16),
+            #[cfg(any(feature = "dashboard", feature = "s3"))]
+            enc_keys: cryptr::EncKeys {
+                enc_key_active: "test".to_string(),
+                enc_keys: vec![("test".to_string(), vec![0_u8; 32])],
+            },
+            #[cfg(feature = "dashboard")]
+            password_dashboard: None,
+            ..Default::default()
+        };
+
+        assert!(config.is_valid().is_ok());
+    }
+
+    /// 010 KD-2, third part: when the two routes disagree badly enough that the
+    /// id is absent entirely, the join path panics rather than returning a
+    /// configuration error.
+    #[test]
+    #[should_panic(expected = "this node to always exist in all nodes")]
+    fn get_this_node_panics_when_the_id_is_absent() {
+        let nodes = vec![node(2), node(3)];
+        let _ = get_this_node(1, &nodes);
+    }
+}

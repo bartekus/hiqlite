@@ -38,6 +38,13 @@ extra_hashed_inputs = [
   "hiqlite/src/config_toml.rs",
   "hiqlite.toml",
   "hiqlite.env",
+  # The node lifecycle, claimed by 010. These four live at the crate root, which
+  # no other glob here reaches; the hiqlite package walk already counts them in
+  # the coverage denominator, so only the freshness hash needs them.
+  "hiqlite/src/start.rs",
+  "hiqlite/src/init.rs",
+  "hiqlite/src/app_state.rs",
+  "hiqlite/src/split_brain_check.rs",
   "hiqlite/src/query/**/*.rs",
   "hiqlite/src/client/**/*.rs",
   "hiqlite/src/network/**/*.rs",
