@@ -20,6 +20,39 @@ use crate::backup;
 #[cfg(feature = "dashboard")]
 use crate::dashboard;
 
+
+/// Whether this node keeps anything on disk that another process could corrupt.
+///
+/// The one configuration that does not is a cache-only node with
+/// `cache_storage_disk = false` built with `in-memory-snapshots`: it never touches `data_dir`
+/// at all, and taking a lock there would create a directory the node has deliberately been
+/// configured not to need. Every other combination writes a database, a WAL, or a snapshot.
+#[allow(unused_variables)]
+fn storage_ownership_required(node_config: &NodeConfig) -> bool {
+    #[cfg(feature = "sqlite")]
+    {
+        true
+    }
+    #[cfg(all(not(feature = "sqlite"), feature = "cache", feature = "in-memory-snapshots"))]
+    {
+        node_config.cache_storage_disk
+    }
+    #[cfg(all(
+        not(feature = "sqlite"),
+        feature = "cache",
+        not(feature = "in-memory-snapshots")
+    ))]
+    {
+        // Without `in-memory-snapshots` the cache state machine persists its snapshots, so it
+        // needs `data_dir` whatever `cache_storage_disk` says.
+        true
+    }
+    #[cfg(all(not(feature = "sqlite"), not(feature = "cache")))]
+    {
+        false
+    }
+}
+
 #[allow(clippy::extra_unused_type_parameters)]
 pub async fn start_node_inner<C>(node_config: Box<NodeConfig>) -> Result<Client, Error>
 where
@@ -41,6 +74,18 @@ where
         .as_ref()
         .map(|c| c.danger_tls_no_verify())
         .unwrap_or(false);
+
+    // Exclusive storage ownership, before anything touches the data directory. The restore
+    // below deletes things, the state machines below that rebuild things, and a second process
+    // doing either to the same directory is F-005. Held in `AppState` from here on.
+    let storage_ownership = if storage_ownership_required(&node_config) {
+        Some(crate::storage_lock::StorageOwnership::acquire(
+            &node_config.data_dir,
+        )?)
+    } else {
+        debug!("This node keeps no state on disk, so no storage ownership is taken");
+        None
+    };
 
     #[cfg(any(feature = "s3", feature = "dashboard"))]
     node_config.init_enc_keys();
@@ -82,6 +127,7 @@ where
 
     let state = Arc::new(AppState {
         app_start: Utc::now(),
+        storage_ownership: std::sync::Mutex::new(storage_ownership),
         is_shutting_down: AtomicBool::new(false),
         #[cfg(feature = "backup")]
         backups_dir: format!("{}/state_machine/backups", node_config.data_dir),

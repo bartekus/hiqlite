@@ -79,6 +79,9 @@ mod init;
 mod network;
 #[cfg(any(feature = "sqlite", feature = "cache"))]
 mod start;
+
+#[cfg(any(feature = "sqlite", feature = "cache"))]
+mod storage_lock;
 #[cfg(any(feature = "sqlite", feature = "cache"))]
 mod store;
 
