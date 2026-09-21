@@ -150,6 +150,10 @@ where
     };
 
     let tx_caches = state_machine_store.tx_caches.clone();
+    // Shared with the state machine so the local read and write paths can refuse once a
+    // replicated cache command could not be applied. Cloned before the store is moved into
+    // `Raft::new`.
+    let cache_incompatible = state_machine_store.incompatible.clone();
     #[cfg(feature = "listen_notify")]
     let tx_notify = state_machine_store.tx_notify.clone();
     #[cfg(feature = "listen_notify_local")]
@@ -210,6 +214,7 @@ where
     Ok(StateRaftCache {
         raft,
         tx_caches,
+        cache_incompatible,
         #[cfg(feature = "listen_notify")]
         tx_notify,
         #[cfg(feature = "listen_notify_local")]

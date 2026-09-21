@@ -590,6 +590,24 @@ range. In-range-ness holds only while client and server are built from the same
 generated cache enum; a log entry from a build with more cache variants would
 panic every node applying it. Untested. `006` KD-3.
 
+**Repaired 2026-09-21 by `022-replicated-cache-command-compatibility`, and
+widened on the way.** Tracing the index found the same shape on a second axis:
+the `CacheRequest` variant set is feature-independent by design, because the
+variant order is part of the log format, so a node built without `counters`,
+`dlock` or `listen_notify_local` can be handed a committed entry it has no
+handler for, and three read-only variants can be handed one that should never
+have been replicated at all. Every one of those arms was an `unreachable!`.
+
+Both axes are now classified before an entry is executed. An entry that cannot
+be applied stops application at that point, is not counted as applied, and sets
+a terminal failure that refuses every later apply, every cache read, and every
+cache write on the node, named as `Error::CacheIncompatible` and mapped to
+`503`. No longer untested: five tests, four of which fail against the
+unrepaired implementation and three of those by the panic this entry describes.
+Not established, and stated in `022` section 4: no cluster diverges in a test,
+no served request is refused in a test, and the feature-gap half is compiled out
+of the test build.
+
 ### F-028 `defect`, confidence `high`
 
 **A truncated entry stream is acknowledged and notified as a successful
