@@ -18,6 +18,12 @@ pub enum Error {
     Encode(String),
     #[error("FileCorrupted: {0}")]
     FileCorrupted(Cow<'static, str>),
+    /// The entry stream for an append ended without its end-of-stream marker, so the writer
+    /// received a prefix of a batch whose extent it cannot know. Distinct from an IO failure:
+    /// the bytes that were received are on their way to disk, and it is the *batch* that is
+    /// incomplete.
+    #[error("IncompleteAppend: {0}")]
+    IncompleteAppend(Cow<'static, str>),
     #[error("Integrity: {0}")]
     Integrity(Cow<'static, str>),
     #[error("Internal: {0}")]
