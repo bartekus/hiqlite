@@ -1,13 +1,24 @@
 {
   "mapping": {
+    "amends": [
+      "007-cache-log-store"
+    ],
     "dependsOn": [
       "000-hiqlite-ownership-bootstrap",
-      "001-wal-durability-and-completion",
-      "006-cache-state-machine"
+      "006-cache-state-machine",
+      "007-cache-log-store"
     ],
     "implementingPaths": [
       {
         "path": "hiqlite/src/store/logs/",
+        "source": "spec-edge"
+      },
+      {
+        "path": "standards/spec/adoption-plan.md",
+        "source": "spec-edge"
+      },
+      {
+        "path": "standards/spec/cache-log-repair-proposal.md",
         "source": "spec-edge"
       },
       {
@@ -23,10 +34,36 @@
           }
         ],
         "ownership": true,
-        "sourceField": "establishes",
+        "sourceField": "extends",
         "unit": {
           "kind": "directory",
           "path": "hiqlite/src/store/logs/"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "standards/spec/adoption-plan.md"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/adoption-plan.md"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "standards/spec/cache-log-repair-proposal.md"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/cache-log-repair-proposal.md"
         }
       },
       {
@@ -41,37 +78,11 @@
           "kind": "file",
           "path": "standards/spec/findings-register.md"
         }
-      },
-      {
-        "locations": [
-          {
-            "file": "hiqlite-wal/src/"
-          }
-        ],
-        "ownership": false,
-        "sourceField": "references",
-        "unit": {
-          "kind": "directory",
-          "path": "hiqlite-wal/src/"
-        }
-      },
-      {
-        "locations": [
-          {
-            "file": "hiqlite/src/store/state_machine/memory/"
-          }
-        ],
-        "ownership": false,
-        "sourceField": "references",
-        "unit": {
-          "kind": "directory",
-          "path": "hiqlite/src/store/state_machine/memory/"
-        }
       }
     ],
-    "specId": "007-cache-log-store",
+    "specId": "020-cache-log-store-contract-repair",
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "2b2ed8c6cb969449305e03701f0c0fbccee2db3f7ee2222586ac40fff102e5b2"
+  "shardHash": "cffaf382edd6b4ac4582aa857afd8a3c1318702c381756bbda44bd819e8c5088"
 }
