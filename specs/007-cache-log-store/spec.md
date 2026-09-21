@@ -15,6 +15,13 @@ origin:
   paths: ["hiqlite/src/store/logs/"]
 establishes:
   - { kind: directory, path: "hiqlite/src/store/logs/" }
+# The 2026-09-21 reconciliation annotated F-029 and F-047 in the register to say
+# they are no longer ahead of this spec. That is an edit to a unit `005` owns, so
+# the edge is declared rather than the ownership duplicated.
+extends:
+  - spec: "005-adoption-assessment-and-plan"
+    unit: { kind: file, path: "standards/spec/findings-register.md" }
+    nature: additive
 references:
   - unit: { kind: directory, path: "hiqlite-wal/src/" }
     role: "the durable log store this one is the non-durable counterpart to"
@@ -25,7 +32,8 @@ summary: >
   Raft group: its RaftLogReader and RaftLogStorage implementation, the
   deliberate absence of persistence, the immediate completion callback, the
   truncate and purge index arithmetic, and the data-directory helpers. Adopts
-  as found and records a confirmed off-by-one in get_log_state.
+  as found and records six known defects, one of them a confirmed off-by-one
+  in get_log_state.
 ---
 
 # 007: Define the in-memory log store for the cache Raft group
@@ -41,6 +49,14 @@ and what durability they deliberately do not provide**. It is the log-storage
 counterpart to `006`'s state machine.
 
 The spec is `draft`. It repairs nothing, including the defect at KD-1.
+
+**Reconciled on 2026-09-21.** Section 5 recorded four known defects when this
+spec was written and the findings register later carried two more in the same
+unit, F-029 and F-047. They are now KD-5 and KD-6 here, so the register and this
+spec stop disagreeing. This reconciliation adds no repair and changes no code;
+it is the first of the two steps
+`standards/spec/cache-log-repair-proposal.md` section 4.5 describes, and it is
+the route that document recommends.
 
 ## 2. Territory
 
@@ -195,6 +211,56 @@ empty deque. Whether OpenRaft ever requests `0..0` was not established, so the
 reachability is unknown and this is recorded as a defect in the arithmetic
 rather than as a demonstrated runtime failure.
 
+**KD-5. `purge` removes exclusively where the trait requires inclusive
+removal.** `memory.rs:210` computes `purge_until = log_id.index - first_offset`
+and `memory.rs:218` calls `logs.drain(..purge_until)`, an exclusive range, so
+the entry at `log_id.index` survives the purge that named it. OpenRaft 0.9.24
+states the opposite requirement on the trait method: "Purge logs upto `log_id`,
+inclusive" (`openraft-0.9.24/src/storage/v2.rs:138`, read from the locked crate
+in the local registry checkout).
+
+The arithmetic is identical to `truncate`'s and there it is correct, because
+`VecDeque::truncate(n)` *keeps* `n` elements while `drain(..n)` *removes* `n`.
+One expression, two standard-library methods, opposite meanings at the boundary.
+B-4 describes both as "offset arithmetic over the deque", which is true and is
+why the difference is easy to miss.
+
+`purge_removes_entries_below_the_given_index` (`memory.rs:269-287`) pins this
+behavior as expected, and its doc comment states the exclusive rule as if it
+were the contract, so a repair must replace that expectation rather than add a
+case beside it.
+
+**Recorded here on 2026-09-21, after the register.** This defect was first
+written down as F-029 on 2026-09-20 and traced again by
+`standards/spec/cache-log-repair-proposal.md` section 2.2. Until this
+reconciliation the register carried it and this spec did not. Consequence: not
+established. Nothing was executed for it beyond reading the two sources.
+
+**KD-6. `try_get_log_entries` panics on an empty store instead of returning
+nothing.** `memory.rs:76-78` calls
+`logs.front().expect("to have at least 1 entry in logs as long as end > 0")`
+after the `end < start` early return, so a request for any range with a non-zero
+end bound against an empty deque panics rather than returning an empty `Vec`.
+OpenRaft 0.9.24 states the opposite requirement on the trait method: "Entry that
+is not found is allowed" (`openraft-0.9.24/src/storage/mod.rs:162-167`).
+
+Distinct from KD-3, which is the `*i - 1` underflow at an exclusive end bound of
+zero; this is the empty-store path that runs after that subtraction succeeds.
+Source-established; reachability not established, for the same reason KD-3's is
+not.
+
+**Recorded here on 2026-09-21, after the register**, as F-047, found by the
+repair proposal's section 2.5 on the same day.
+
+**A seventh divergence, recorded without its own identifier.** The trait says
+that when there are no entries, `last_log_id` must equal `last_purged_log_id`
+rather than `None` (`openraft-0.9.24/src/storage/mod.rs:146-148`). `memory.rs`
+returns `None` for the empty case, and because `last_purged` is never assigned
+(KD-4) the two happen to agree today. It is not a separate defect so much as the
+reason KD-1 and KD-4 cannot be repaired apart: fixing the
+`logs.get(logs.len())` expression alone leaves the empty case wrong the moment
+KD-4 is also fixed. Carried here so a repair cannot take one without the other.
+
 **KD-4. `purge` never updates `last_purged`.** `LogData::last_purged`
 (`memory.rs:28`) is returned by `get_log_state` but is never assigned outside
 `new()`, so it stays `None` for the life of the store even after `purge`
@@ -208,7 +274,7 @@ it.
 - **`hiqlite-wal`,** its durability contract, and the F-001 and F-002 repair.
   `001`, and `standards/spec/wal-repair-proposal.md`.
 - **Membership, leases, and live peer recovery.**
-- **Every repair for KD-1 to KD-4**, including the one-line `get_log_state` fix.
+- **Every repair for KD-1 to KD-6**, including the one-line `get_log_state` fix.
 - The cluster tests that exercise the cache group end to end. Wave 6.
 
 ## 7. Resolved decisions
