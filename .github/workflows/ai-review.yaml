@@ -63,6 +63,15 @@ jobs:
                what `0.14.0` exposed. Spec 027 B-7 states what this release intends to freeze.
             5. **Consumer behavior.** The feature sets in spec 029 section 4. Is anything
                excluded there actually reachable under them?
+            6. **The repairs this candidate made last, which have had the least review.**
+               `hiqlite/src/client/listen_notify.rs`, `hiqlite/src/client/create.rs` and
+               `hiqlite/src/network/api.rs` (spec 032: does an open SSE stream actually imply
+               a registered subscriber, and can the readiness wait deadlock or leak a task?);
+               `hiqlite/src/backup.rs` (F-100: after the staged copy, the removals and the
+               rename, is there a crash point that leaves the final name holding a database
+               with a foreign write-ahead log, or removes something the rollback needed?);
+               `hiqlite/src/lifecycle.rs` and `hiqlite/src/client/mgmt.rs` (F-101: can
+               `begin_shutdown` hide a real failure that a caller needed to see?).
 
             Say what you verified and what you could not. Do not repeat a specification's own
             claims back as findings.
