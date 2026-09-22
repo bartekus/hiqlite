@@ -1327,6 +1327,12 @@ own; nothing prevents an operator from putting a file there, and
 `HQL_BACKUP_RESTORE=file:` invites it by naming a path the restore then copies
 into `backups/`. `013` KD-1.
 
+**Repaired 2026-09-21 by `026-backup-and-restore-integrity`.** `dt_from_backup_name`
+is now the single definition of the naming convention and is used by all three
+callers: the local sweep, the S3 filter and `Client::backup_list_local`. It also
+checks that the node id parses. The executed proof was replaced rather than
+extended, because it asserted the deletion as expected behavior.
+
 ### F-057 `defect`, confidence `high`
 
 **A restore removes the live database before the replacement is in place.**
@@ -1343,6 +1349,14 @@ Same family as F-003 and F-004, in a different file: `002` records the
 non-atomic publication of snapshots, this is the non-atomic publication of a
 restored database. Source-established. `013` KD-2.
 
+**Repaired 2026-09-21 by `026-backup-and-restore-integrity`.** The order is now
+validate, copy to a staging name beside the database, sync, remove the snapshots
+and logs and lock marker, then **rename** the staging file onto the database and
+sync the directory. The database is the last thing touched and is replaced by a
+rename, and the three removals report their failures instead of discarding them.
+Source-established: `026` section 4 states that `restore_backup` is not executed
+end to end.
+
 ### F-058 `defect`, confidence `high`
 
 **Every node that is not node 1 deletes its data directory before any restore has
@@ -1357,6 +1371,17 @@ path does not exist or the object is not in the bucket, has already destroyed th
 other nodes' state, so the cluster cannot fall back to what it had. The discarded
 `Result` also makes a failed deletion invisible, and the node then joins with a
 half-removed directory. Source-established. `013` KD-3.
+
+**Mitigated 2026-09-21 by `026-backup-and-restore-integrity`, not closed.** The
+follower no longer deletes: it moves everything into
+`{data_dir}/pre-restore-{ts}/`, keeps the storage owner lock, and returns its
+failures. The previous state is recoverable byte for byte, which is demonstrated.
+
+What is **not** repaired is the coordination this entry names. The followers
+still act on an environment variable alone, at their own start time, with no
+signal that node 1 has validated or applied anything. `026` B-7 therefore states
+`N = 1` as the supported restore topology for this release and says why `N = 3`
+is not; `026` KD-2 and KD-3 carry the remainder.
 
 ### F-059 `defect`, confidence `high`
 
@@ -1374,6 +1399,14 @@ authored `TODO` at `:393` acknowledges. `HQL_BACKUP_SKIP_VALIDATION` disables
 even that, comparing against the exact string `"true"`, so `"TRUE"` validates;
 that direction is fail-closed. Source-established. `013` KD-4.
 
+**Repaired 2026-09-21 by `026-backup-and-restore-integrity`.** Validation now runs
+`PRAGMA quick_check(1)`, requires a readable `_metadata` table and row, and
+returns a named error when the blob does not decode instead of `unwrap`ing it
+inside `spawn_blocking`. `HQL_BACKUP_SKIP_VALIDATION` is parsed
+case-insensitively and warns when it takes effect. Not repaired, and carried as
+`026` KD-5: nothing still compares a cluster or backup identity, so the wrong
+cluster's backup is accepted as long as it is structurally valid.
+
 ### F-060 `defect`, confidence `high`
 
 **The post-restore log purge retries forever with no delay.**
@@ -1385,6 +1418,10 @@ emitting an error line per iteration. Every other loop in the same function
 sleeps between 50 ms and 100 ms, and the snapshot trigger twelve lines above was
 deliberately changed to bail out rather than loop. Source-established.
 `013` KD-5.
+
+**Repaired 2026-09-21 by `026-backup-and-restore-integrity`.** Ten attempts with a
+100 ms sleep, then a bail-out, which is what the snapshot trigger twelve lines
+above it already did.
 
 ### F-061 `defect`, confidence `high`
 
@@ -1402,6 +1439,15 @@ wrong key is first discovered by the detached upload task in `create_backup`
 acknowledged, as an error log. Same class as F-009 and F-042.
 Source-established. `013` KD-6.
 
+**Repaired 2026-09-21 by `026-backup-and-restore-integrity`.** Each missing or
+unparsable variable is a named `Error::Config`; `HQL_S3_PATH_STYLE` is optional
+and defaults to `true`; and the reading is split into `from_lookup` so it is
+testable without process-wide environment mutation, which `009` D-3 records as
+the reason no environment route in this corpus has a test. `verify_access` proves
+the credentials with one list call and the restore path calls it before pulling.
+Carried as `026` KD-6: the probe is not run at startup, so a node with bad
+credentials still starts and discovers it at the first backup.
+
 ### F-062 `contradiction`, confidence `high`
 
 **The backup cron failure message counts retries that were not attempted.**
@@ -1412,6 +1458,9 @@ message that then runs is `"Backup task failed after {} retries"` with the
 literal 5. Consequence: an operator reading the log believes five backup attempts
 were made and all failed, when one was. Classed as a contradiction between
 authored text and behavior, not a defect. Source-established. `013` KD-7.
+
+**Corrected 2026-09-21 by `026-backup-and-restore-integrity`.** The loop counts
+real attempts and reports the last error alongside the bound.
 
 ### F-063 `contradiction`, confidence `high`
 
@@ -1425,6 +1474,10 @@ Nothing observable follows, because the constant's purpose is to be far in the
 past as a guard against a trailing token that happens to parse as a small
 integer. Recorded because the constant guards a deletion and its stated meaning
 is what a reader would check it against. Source-established. `013` KD-8.
+
+**Corrected 2026-09-21 by `026-backup-and-restore-integrity`.** `TS_MIN` is
+`1_704_067_200`, which is `2024-01-01T00:00:00Z`, and is pinned by a test rather
+than by a comment.
 
 ### F-064 `contradiction`, confidence `high`
 
@@ -2043,3 +2096,36 @@ stale: one said ten against a table of fourteen, and the next said twelve after
 minus the two repaired, and this paragraph is the one that has to be recomputed
 whenever the class table changes. F-021 through F-024 and F-029 are a separate
 cache-log repair that was deliberately not bundled into `008`.
+
+---
+
+## Found while delivering the downstream release (2026-09-21)
+
+### F-096 `contradiction`, confidence `high`
+
+**A repair changed a unit another spec owns and did not carry that spec's
+acceptance, so the acceptance kept asserting code that no longer exists.**
+`024-exclusive-storage-ownership` repaired the follower restore wipe, because
+where it put the storage owner lock required it, and `013`'s acceptance block
+asserts that wipe verbatim:
+`grep -q 'let _ = fs::remove_dir_all(node_config.data_dir.as_ref()).await;'`.
+`024` declared the `extends` edge on `hiqlite/src/backup.rs` and did not declare
+`amends_verification` on `013`, so `013`'s block began failing at that command on
+the integration branch the moment `024` merged.
+
+**Observed by execution**, not inference: `just spine-verify 013` was run against
+the integration branch at `024`'s merge commit and reported
+`FAILED at command 15`.
+
+The coupling gate did not catch it and is not meant to: `C-001` asks whether an
+owning spec moved in the same range, and `024` is an owning spec of that path
+through its `extends` edge, so the gate was satisfied. What went unchecked is a
+different question, whether the acceptance the owning spec carries still holds,
+and nothing runs that on a pull request by design (`004`'s trust boundary). W-24
+is the row that asks whether an automated control should.
+
+**Repaired 2026-09-21 by `026-backup-and-restore-integrity`**, which takes
+`013`'s acceptance and replaces the twelve commands that asserted defective
+expressions, including this one. Recorded rather than tidied away, because the
+rule it breaks is a real one and the failure mode is invisible until someone runs
+a command that CI deliberately does not.

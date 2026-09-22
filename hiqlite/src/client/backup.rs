@@ -145,7 +145,11 @@ impl Client {
 
                 let fname = entry.file_name();
                 let name = fname.to_str().unwrap_or_default().to_string();
-                if !name.starts_with("backup_node_") {
+                // The same predicate the retention sweep and the S3 filter use. This one
+                // checked the prefix alone, so the three disagreed about what a backup file
+                // is, which is the other half of F-056: a listing could show a file the sweep
+                // would never delete, or the reverse.
+                if crate::backup::dt_from_backup_name(&name).is_none() {
                     debug!("Found non-backup file: {name}");
                     continue;
                 }

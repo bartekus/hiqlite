@@ -1,0 +1,91 @@
+{
+  "record": {
+    "amends": [
+      "013-backup-retention-and-object-storage"
+    ],
+    "amendsSections": [
+      "3-behavior",
+      "5-known-defects"
+    ],
+    "amendsVerification": [
+      "013-backup-retention-and-object-storage"
+    ],
+    "created": "2026-09-21",
+    "dependsOn": [
+      "000-hiqlite-ownership-bootstrap",
+      "013-backup-retention-and-object-storage",
+      "024-exclusive-storage-ownership",
+      "025-snapshot-crash-recovery-contract"
+    ],
+    "extends": [
+      {
+        "nature": "superseding",
+        "spec": "013-backup-retention-and-object-storage",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/backup.rs"
+        }
+      },
+      {
+        "nature": "superseding",
+        "spec": "013-backup-retention-and-object-storage",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/s3.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "003-client-consistency-and-retry-outcomes",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/client/"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "005-adoption-assessment-and-plan",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/findings-register.md"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "005-adoption-assessment-and-plan",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/adoption-plan.md"
+        }
+      }
+    ],
+    "id": "026-backup-and-restore-integrity",
+    "implementation": "complete",
+    "owner": "hiqlite maintainers",
+    "risk": "critical",
+    "sectionHeadings": [
+      "026: Repair backup retention, restore ordering, validation and configuration failure",
+      "1. Purpose",
+      "2. Territory",
+      "3. Behavior",
+      "B-1. One predicate decides what a backup file is",
+      "B-2. The retention floor is stated in the zone it is compared in",
+      "B-3. A restore stages the replacement before destroying anything",
+      "B-4. A follower moves its state aside rather than deleting it",
+      "B-5. Validation checks the image and returns errors",
+      "B-6. The purge is bounded, the retry count is counted, and the S3 configuration names what is wrong",
+      "B-7. The supported restore topology is N=1, and this says why",
+      "4. Evidence and its limits",
+      "5. Known defects",
+      "6. Resolved decisions",
+      "7. Out of scope",
+      "Verification"
+    ],
+    "specPath": "specs/026-backup-and-restore-integrity/spec.md",
+    "status": "draft",
+    "summary": "Repairs F-056 through F-063. One predicate decides what a backup file is, a restore stages the replacement before destroying anything, a follower moves its state aside instead of deleting it on an environment variable alone, validation checks integrity and returns errors instead of panicking, the post-restore purge is bounded, the S3 configuration names the variable that is wrong and proves its credentials before a restore, and two reporting contradictions are corrected. States N=1 as the supported restore topology and says why N=3 is not.\n",
+    "title": "Repair backup retention, restore ordering, validation and configuration failure"
+  },
+  "shardHash": "f604f4a35cb04cf281fdb70de39a8b4b311c56e4daa4b96efb0c4a734e3847c6",
+  "specVersion": "1.3.0"
+}
