@@ -2180,3 +2180,40 @@ is the row that asks whether an automated control should.
 expressions, including this one. Recorded rather than tidied away, because the
 rule it breaks is a real one and the failure mode is invisible until someone runs
 a command that CI deliberately does not.
+
+### F-097 `contradiction`, confidence `high`
+
+**A recorded probe result was wrong, and it blocked a queue row for two days.**
+The adoption plan's rung-0 section records
+`index.resolver_exclusions += ["hiqlite/static", "dashboard/src/spow"]` as having
+"no effect", and concludes that the only key which removes generated and
+vendored files from the coverage denominator is `coupling.bypass_prefixes`,
+which also exempts them from the coupling gate. On that basis W-14 was recorded
+as **blocked on the pinned tool**, with a pin upgrade as the recommended
+resolution, and W-23 was recorded as depending on it.
+
+The observation was accurate and the conclusion was not. The pinned tool matches
+`resolver_exclusions` entries as path **components**, through
+`has_excluded_component`, not as path prefixes. `"hiqlite/static"` is not a
+component of anything; `"static"` is a component of
+`hiqlite/static/_app/immutable/chunks/…`, and `"spow"` is a component of
+`dashboard/src/spow/…`. Every other entry in that list is already a bare
+component name (`target`, `node_modules`, `.derived`, `dist`, `build`,
+`.next`), which is the shape the key wanted all along.
+
+**Observed by execution**, on the same pinned revision the original probe used:
+with `"static"` and `"spow"` added, the denominator goes from 239 to 223, all
+sixteen files leave, the numerator does not move, `C-001` still refuses a change
+to `hiqlite/src/config.rs`, and a change to `dashboard/src/spow/spow-wasm.js`
+still stales the committed index.
+
+Recorded as a contradiction rather than a defect: nothing in the tool or the
+configuration was wrong. What was wrong was a conclusion in an authored document,
+which then propagated into two queue rows and a recommendation to change the
+pin. Checked at the tool's current head as well: there is still no separate
+denominator-exclusion key, so the recommended pin upgrade would not have
+delivered what W-14 asked for.
+
+**Resolved 2026-09-21 by `028-enforcement-readiness-and-acceptance-control`**,
+which applies the correct form and replaces the conclusion in the plan rather
+than adding a note beside it.
