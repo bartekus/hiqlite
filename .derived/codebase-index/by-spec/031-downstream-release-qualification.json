@@ -42,6 +42,10 @@
         "source": "spec-edge"
       },
       {
+        "path": "standards/spec/consumer-handoff.md",
+        "source": "spec-edge"
+      },
+      {
         "path": "standards/spec/release-ledger.md",
         "source": "spec-edge"
       }
@@ -71,6 +75,19 @@
         "unit": {
           "kind": "file",
           "path": ".github/workflows/publish.yaml"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "standards/spec/consumer-handoff.md"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/consumer-handoff.md"
         }
       },
       {
@@ -156,5 +173,5 @@
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "a4567241d973d7e9edb2c23355c8fb499e77df19f98eead8f86ec62a48b4ccaa"
+  "shardHash": "0ac46f5f1b3f96de43db00466157120c2980c0d87080a50df04a04fc750a5332"
 }

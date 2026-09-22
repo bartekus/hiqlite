@@ -54,32 +54,32 @@ under upstream's name would say otherwise. All three were checked available on
 
 | id | subject | state | evidence |
 |---|---|---|---|
-| R-01 | cache log store against the locked OpenRaft contract | merged | `020`; eleven tests, all observed failing against the unrepaired implementation |
-| R-02 | truncated WAL append stream, and the terminal-writer call paths | merged | `021`; three tests, observed failing; adapter-level recovery across a WAL file boundary |
-| R-03 | replicated cache commands this build cannot apply | merged | `022`; five tests, four observed failing |
-| R-04 | distributed-lock handler liveness, and the lease limits it does not remove | merged | `023`; eight tests, four observed failing |
-| R-05 | exclusive storage ownership | merged | `024`; ten tests, four using two real processes |
-| R-06 | snapshot publication, installation and restart selection as one contract | merged | `025`; eight tests, five observed failing, deterministic injection |
-| R-07 | backup retention, restore ordering, validation and configuration failure | tested | `026`; eight tests, five observed failing, the eighth against this spec's own first implementation (F-100) |
-| R-08 | startup errors, background-failure observation, the lifecycle API | tested | `027`; three tests **plus** an abort-profile binary, observed catching the defect at exit `134` |
-| R-09 | the coverage denominator, the enforcement rungs, post-merge acceptance | tested | `028`; probes at the pin, recorded with their numbers |
-| R-10 | the defects that reach a consumer, and a gate for every exclusion | tested | `029`; F-098 found and repaired; five acceptance blocks carried |
-| R-11 | transport security and the dashboard's pre-auth surface | tested | `030`; nine tests; two defects recorded rather than repaired, with the argument |
-| R-12 | package rename, version, publication and review workflows | tested | `031`; this ledger |
-| R-18 | the remote client's event subscription, and the full-suite gate it was blocking | tested | `032`; three tests; the cluster integration suite runs to completion for the first time in this repository |
-| R-19 | F-107: one membership gate, decided under its lock, and a shutdown that drains before it stops | reviewed | `027` B-9, D-8; six interleaving tests, four mutations each observed failing; fresh-context review of `a51cb3f`, findings acted on in `d45826c` |
-| R-20 | F-108: the committed qualification graph, and `openraft = "=0.9.25"` | reviewed | `031` B-8; `cargo metadata --locked` in both qualifying workflows; same review |
-| R-21 | F-102: a lock waiter bounded by the lease, and an await that changes nothing | reviewed | `023` B-6; six tests, each observed failing against the handler before it; the review's release-blocking finding was in this work and is repaired |
-| R-22 | backup: restore roll-forward, a durable backup, a retention floor of one | reviewed | `026` B-8 to B-10; three tests, each observed failing under mutation; same review |
-| R-23 | F-110: an out-of-service node refuses its embedded client | implemented | `027` B-9; observed by the Rauthy integration; the refusal is not injected here (`027` KD-10) |
-| R-24 | F-109: the containerized workflows run bash | tested | `031` B-8; observed failing in CI on `a51cb3f`, passing on every `Check` from `d45826c` on |
-| R-25 | W-07: torn versus complete trailing WAL records | tested | `021` B-8; three tests, with and without `auto-heal`; evidence for existing behavior |
-| R-26 | the upgrade from 0.14.x: a legacy cache refused before anything opens, a move-aside opt-in, the reader that no longer aborts | reviewed | `027` B-10, KD-11; F-111 to F-113; four tests; upgrade, downgrade and re-upgrade run on Rauthy's directory; a refused start leaves it byte-identical apart from the owner lock; fresh-context review of `34641b0`, findings acted on in `23d1e62` |
-| R-27 | F-114: a terminated WAL writer refuses queued work instead of stranding it | tested | `021` B-9; a deterministic test that fails without the repair; 300 isolated runs of the WAL suite without a failure; fresh-context review of `e1e9135` found a clean shutdown reported for a terminated writer and a rollover failure that answered nobody, both acted on in the next commit |
-| R-13 | independent AI review of the candidate | reviewed | `.github/workflows/ai-review.yaml`, run against the tagged commit; findings and their disposition in `031` section 4 |
-| R-14 | publication to crates.io | published | the registry's own response per crate, recorded in `031` section 4 |
-| R-15 | external consumer verification | consumer-verified | a build outside this checkout with no workspace patch and no path dependency, recorded in `031` section 4 |
-| R-16 | the fork release and its artifacts | published | the GitHub release for the tag |
+| R-01 | cache log store against the locked OpenRaft contract | published | `020`; eleven tests, all observed failing against the unrepaired implementation |
+| R-02 | truncated WAL append stream, and the terminal-writer call paths | published | `021`; three tests, observed failing; adapter-level recovery across a WAL file boundary |
+| R-03 | replicated cache commands this build cannot apply | published | `022`; five tests, four observed failing |
+| R-04 | distributed-lock handler liveness, and the lease limits it does not remove | published | `023`; eight tests, four observed failing |
+| R-05 | exclusive storage ownership | published | `024`; ten tests, four using two real processes |
+| R-06 | snapshot publication, installation and restart selection as one contract | published | `025`; eight tests, five observed failing, deterministic injection |
+| R-07 | backup retention, restore ordering, validation and configuration failure | published | `026`; eight tests, five observed failing, the eighth against this spec's own first implementation (F-100) |
+| R-08 | startup errors, background-failure observation, the lifecycle API | published | `027`; three tests **plus** an abort-profile binary, observed catching the defect at exit `134` |
+| R-09 | the coverage denominator, the enforcement rungs, post-merge acceptance | published | `028`; probes at the pin, recorded with their numbers |
+| R-10 | the defects that reach a consumer, and a gate for every exclusion | published | `029`; F-098 found and repaired; five acceptance blocks carried |
+| R-11 | transport security and the dashboard's pre-auth surface | published | `030`; nine tests; two defects recorded rather than repaired, with the argument |
+| R-12 | package rename, version, publication and review workflows | published | `031`; this ledger |
+| R-18 | the remote client's event subscription, and the full-suite gate it was blocking | published | `032`; three tests; the cluster integration suite runs to completion for the first time in this repository |
+| R-19 | F-107: one membership gate, decided under its lock, and a shutdown that drains before it stops | published | `027` B-9, D-8; six interleaving tests, four mutations each observed failing; fresh-context review of `a51cb3f`, findings acted on in `d45826c` |
+| R-20 | F-108: the committed qualification graph, and `openraft = "=0.9.25"` | published | `031` B-8; `cargo metadata --locked` in both qualifying workflows; same review |
+| R-21 | F-102: a lock waiter bounded by the lease, and an await that changes nothing | published | `023` B-6; six tests, each observed failing against the handler before it; the review's release-blocking finding was in this work and is repaired |
+| R-22 | backup: restore roll-forward, a durable backup, a retention floor of one | published | `026` B-8 to B-10; three tests, each observed failing under mutation; same review |
+| R-23 | F-110: an out-of-service node refuses its embedded client | implemented | `027` B-9; shipped in `0.15.0-patched.1`. **Confirmed by the Rauthy integration's fault injection against the published crates** (logs directory made read-only under a live node): the lifecycle recorded the WAL writer failure and every later operation, including the failing write and a read, returned `Error::NodeFailed`; readiness went 503; the process did not abort. The state stays `implemented` because no regression in this repository drives it |
+| R-24 | F-109: the containerized workflows run bash | published | `031` B-8; observed failing in CI on `a51cb3f`, passing on every `Check` from `d45826c` on |
+| R-25 | W-07: torn versus complete trailing WAL records | published | `021` B-8; three tests, with and without `auto-heal`; evidence for existing behavior |
+| R-26 | the upgrade from 0.14.x: a legacy cache refused before anything opens, a move-aside opt-in, the reader that no longer aborts | published | `027` B-10, KD-11; F-111 to F-113; four tests; upgrade, downgrade and re-upgrade run on Rauthy's directory; a refused start leaves it byte-identical apart from the owner lock; fresh-context review of `34641b0`, findings acted on in `23d1e62` |
+| R-27 | F-114: a terminated WAL writer refuses queued work instead of stranding it | published | `021` B-9; a deterministic test that fails without the repair; 300 isolated runs of the WAL suite without a failure; fresh-context review of `e1e9135` found a clean shutdown reported for a terminated writer and a rollover failure that answered nobody, both acted on in the next commit |
+| R-13 | independent AI review of the candidate | reviewed | run 35787298830 on `b5039d2`, through the CLI (031 KD-10); findings acted on in #33 (031 KD-12); the #33 delta reviewed fresh-context before merge |
+| R-14 | publication to crates.io | published | publish run 35793410166 on `3392c120`; the registry serves all three at `0.15.0-patched.1`, checksums in the handoff |
+| R-15 | external consumer verification | consumer-verified | a consumer outside this checkout, no path, Git or patch override, resolved the three packages from the registry and ran a node under Rauthy's and Rahi's feature sets; the handoff records the graph |
+| R-16 | the fork release and its artifacts | published | https://github.com/bartekus/hiqlite/releases/tag/v0.15.0-patched.1 |
 | R-17 | the consumer handoff | published | `standards/spec/consumer-handoff.md` |
 
 ## What this release does not do

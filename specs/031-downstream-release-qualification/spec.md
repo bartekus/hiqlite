@@ -25,6 +25,7 @@ amends_verification:
   - "012-cluster-integration-evidence"
 establishes:
   - "standards/spec/release-ledger.md"
+  - "standards/spec/consumer-handoff.md"
   - ".github/workflows/publish.yaml"
   - ".github/workflows/ai-review.yaml"
 extends:
@@ -340,6 +341,11 @@ rejoining from an empty volume replays the leader's log from its start, whose
 first membership entry is the single-node bootstrap. Observed once in CI with one
 member reported; the log shows the rejoin itself was correct. It now waits up to
 thirty seconds for the membership.
+
+**Published 2026-09-22.** `v0.15.0-patched.1` on `3392c120`, all three packages
+served by crates.io, and a consumer outside this checkout, resolving only from
+the registry, built and ran a node under Rauthy's and Rahi's feature sets. The
+coordinates, checksums and runs are in `standards/spec/consumer-handoff.md`.
 
 **KD-12. Findings of the AI review of `b5039d2`, and what was done.** The review
 ran through the CLI (KD-10) on the merged candidate and found the durability,
