@@ -50,6 +50,11 @@ extra_hashed_inputs = [
   # glob here reaches; the hiqlite package walk already counts it in the coverage denominator,
   # so only the freshness hash needs it.
   "hiqlite/src/storage_lock.rs",
+  # The node lifecycle contract and the abort-profile probe, claimed by 027. Both live at the
+  # crate root or in `src/bin`, which no other glob here reaches; the hiqlite package walk
+  # already counts them in the coverage denominator, so only the freshness hash needs them.
+  "hiqlite/src/lifecycle.rs",
+  "hiqlite/src/bin/*.rs",
   "hiqlite/src/init.rs",
   "hiqlite/src/app_state.rs",
   "hiqlite/src/split_brain_check.rs",

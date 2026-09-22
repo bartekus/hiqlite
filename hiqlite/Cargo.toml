@@ -14,6 +14,14 @@ repository = "https://github.com/sebadob/hiqlite"
 [lib]
 doctest = false
 
+# Runs the expected failure paths under `panic = "abort"`, which no test can do: Rust's test
+# harness requires unwinding. Built only with the internal probe feature, so it is absent from
+# every normal build.
+[[bin]]
+name = "hiqlite-abort-probe"
+path = "src/bin/abort_probe.rs"
+required-features = ["__abort-probe"]
+
 [package.metadata.docs.rs]
 all-features = false
 features = ["full", "external-state-machine"]
@@ -135,6 +143,9 @@ __cluster = [
 
 # Internal use only
 __profiling = ["dep:console-subscriber"]
+
+# Internal use only: builds `hiqlite-abort-probe`. See the `[[bin]]` section above.
+__abort-probe = ["sqlite", "cache", "tokio/rt", "tokio/macros"]
 
 [dependencies]
 #hiqlite-derive = { version = "0.14", optional = true }

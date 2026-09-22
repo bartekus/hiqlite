@@ -287,6 +287,21 @@ Next action: fold into the configuration-contract spec of wave 2; decide
 whether a malformed or missing value is a startup error or a panic, and state
 it once for all readers.
 
+**Repaired 2026-09-21 by `027-node-lifecycle-and-startup-errors`.** The decision
+this entry asked for is taken and stated once: an expected failure that hiqlite
+can describe is a **returned error**, never a panic, because for an embedded
+node the panic profile belongs to the consumer and neither of its outcomes is a
+failure hiqlite reported. `HQL_SPLIT_BRAIN_INTERVAL` is validated before the task
+is spawned and returns `Error::Startup`; the S3 variables this entry also names
+are repaired by `026`; `hiqlite/src/server/proxy/config.rs` is not, and is
+`015`'s.
+
+Evidence under the profile that made it fatal: `hiqlite-abort-probe`, a
+`--release` binary that inherits `panic = "abort"`, calls this path and four
+others and reports that each returned an error, exit `0`. With the `.expect(..)`
+restored, the same binary aborted with exit `134`. No test can establish this,
+because Rust's test harness requires unwinding (`027` section 4).
+
 ### F-010 `gap`, confidence `high`
 
 **The configuration surface is dispersed and only partly claimed.** `001` claims
@@ -433,6 +448,14 @@ observability, and the mechanism intended to catch it cannot report it. The owne
 has directed that runtime behavior be preserved during retroactive adoption, so
 this is recorded as found. Whether the watchdog should be repaired, removed, or
 replaced by a reported error is a future policy decision with no default here.
+
+**Acted on 2026-09-21 by `027-node-lifecycle-and-startup-errors`.** The watchdog
+is **removed**. This entry established that it cannot work under either profile:
+unreachable under abort, and silent under unwind. An `assert!` in a task nobody
+joins is not a safety net, and keeping one reads as coverage. What replaces it is
+the checker no longer having a panic to be a net for (F-009). `010` D-1 preserved
+it under OD-3, which directed that the actual behavior be established first; it
+is established, and this is the decision that follows.
 
 ### F-015 `limit`, confidence `high`
 
@@ -632,6 +655,18 @@ is written down nowhere in the code; under this repository's `panic = "abort"`
 release profile it becomes process termination, and under a downstream
 consumer's unwinding profile it does not. Recorded as a decision because the
 intent is sound but unstated. Untested. `006` KD-1.
+
+**Partly acted on 2026-09-21.** `022` removed the panic for a cache command this
+build cannot apply, which is the reachable half: it is now a named terminal
+failure that stops application and takes the node out of service.
+`027-node-lifecycle-and-startup-errors` states the policy this entry says is
+written down nowhere: an expected failure is returned, never panicked, and the
+process is never ended by hiqlite because for an embedded node that decision
+belongs to the application.
+
+**Not repaired**, and carried as `027` KD-1: a **dead handler thread** still
+panics the applying task through `.expect(..)`. That is `006` KD-1 and it is a
+different failure from an entry this build cannot apply.
 
 ### F-026 `limit`, confidence `high`
 
@@ -945,6 +980,13 @@ handler to always listen". With exactly one endpoint on TLS the send succeeds,
 but the surviving receiver belongs to the plaintext server, so the TLS listener
 keeps accepting until the process exits either way.
 
+**Repaired 2026-09-21 by `027-node-lifecycle-and-startup-errors`.** Each listener
+takes its own receiver. The plaintext path keeps `with_graceful_shutdown`; the
+TLS path uses `axum_server::Handle` with a ten second grace period, which is that
+server's equivalent and is what the `TODO`s were waiting for. Source-established
+and **not executed**, for the reason `010` section 4 gave: reproducing it needs a
+node with real TLS material and a real shutdown, which `012` owns.
+
 **Source-established, not executed.** Reproducing it needs a node with real TLS
 material and a real shutdown; `010` section 4 states that limit and its
 acceptance block pins the source shape instead. The fault is caused in `010`'s
@@ -965,6 +1007,15 @@ reported started with an endpoint that does not exist; under this repository's
 a startup error, and for an embedded node the profile is the **consumer's**, as
 F-014 records for the same reason. Source-established. Same class as F-025.
 `010` KD-4.
+
+**Repaired 2026-09-21 by `027-node-lifecycle-and-startup-errors`.** Both
+listeners are bound before `AppState` is constructed and before any server task
+is spawned, and the already-bound socket is what the server is handed, so
+nothing re-resolves or re-binds later. An unparsable address and one already in
+use are both `Error::Startup`, naming the endpoint, the address and the OS
+reason. A partial startup tears down the raft groups it had already started
+(`027` B-4). Tested under unwind, and the bind path is one of the five the
+abort-profile probe exercises.
 
 ### F-041 `defect`, confidence `high`
 

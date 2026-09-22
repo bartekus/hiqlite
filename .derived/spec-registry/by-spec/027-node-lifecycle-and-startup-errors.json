@@ -1,0 +1,135 @@
+{
+  "record": {
+    "amends": [
+      "010-node-lifecycle-and-split-brain"
+    ],
+    "amendsSections": [
+      "3-behavior",
+      "5-known-defects"
+    ],
+    "amendsVerification": [
+      "010-node-lifecycle-and-split-brain"
+    ],
+    "created": "2026-09-21",
+    "dependsOn": [
+      "000-hiqlite-ownership-bootstrap",
+      "008-wal-append-completion-notification",
+      "010-node-lifecycle-and-split-brain",
+      "022-replicated-cache-command-compatibility",
+      "024-exclusive-storage-ownership"
+    ],
+    "establishes": [
+      {
+        "kind": "file",
+        "path": "hiqlite/src/lifecycle.rs"
+      },
+      {
+        "kind": "file",
+        "path": "hiqlite/src/bin/abort_probe.rs"
+      }
+    ],
+    "extends": [
+      {
+        "nature": "superseding",
+        "spec": "010-node-lifecycle-and-split-brain",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/start.rs"
+        }
+      },
+      {
+        "nature": "superseding",
+        "spec": "010-node-lifecycle-and-split-brain",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/app_state.rs"
+        }
+      },
+      {
+        "nature": "superseding",
+        "spec": "010-node-lifecycle-and-split-brain",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/split_brain_check.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "001-wal-durability-and-completion",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite-wal/src/"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "003-client-consistency-and-retry-outcomes",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/client/"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "003-client-consistency-and-retry-outcomes",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/network/"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "000-hiqlite-ownership-bootstrap",
+        "unit": {
+          "kind": "file",
+          "path": "spec-spine.toml"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "005-adoption-assessment-and-plan",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/findings-register.md"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "005-adoption-assessment-and-plan",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/adoption-plan.md"
+        }
+      }
+    ],
+    "id": "027-node-lifecycle-and-startup-errors",
+    "implementation": "complete",
+    "owner": "hiqlite maintainers",
+    "risk": "critical",
+    "sectionHeadings": [
+      "027: Return startup failures as errors, observe background failures, and define the node lifecycle API",
+      "1. Purpose",
+      "2. Territory",
+      "3. Behavior",
+      "B-1. Expected failures are returned, not panicked",
+      "B-2. Both listeners are bound before the node is reported started",
+      "B-3. Both paths shut down gracefully",
+      "B-4. A partial startup tears down what it started",
+      "B-5. A failed component takes the node out of service, and nothing restarts it",
+      "B-6. The WAL writer's termination has a consumer",
+      "B-7. The minimum public API this release freezes",
+      "B-8. The split-brain watchdog is removed",
+      "4. Evidence and its limits",
+      "5. Known defects",
+      "6. Resolved decisions",
+      "7. Out of scope",
+      "Verification"
+    ],
+    "specPath": "specs/027-node-lifecycle-and-startup-errors/spec.md",
+    "status": "draft",
+    "summary": "Repairs F-009, F-014, F-025, F-039 and F-040 as one policy. Expected configuration and startup failures are returned as named errors instead of depending on a panic profile that belongs to the consumer; both listeners are bound before a node is reported started and shut down gracefully on both the TLS and plaintext paths; a partial startup tears down what it started; and a WAL writer that ends, for any reason including a panic inside it, takes the node out of service instead of leaving it answering as though it were healthy. Defines the minimum public error and lifecycle API and runs the expected failure paths under an abort profile no test can use.\n",
+    "title": "Return startup failures as errors, observe background failures, and define the node lifecycle API"
+  },
+  "shardHash": "317a0f82bfb83a3ad967ff55134b4df571ddc5238ff7641b066091603a31f1fd",
+  "specVersion": "1.3.0"
+}

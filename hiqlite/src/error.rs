@@ -60,6 +60,17 @@ pub enum Error {
     /// Error informing about a Raft leader change
     #[error("LeaderChange: {0}")]
     LeaderChange(Cow<'static, str>),
+    /// A component this node depends on has failed terminally, so the node is out of service.
+    ///
+    /// It is not restarted automatically and this process is not ended: what an embedding
+    /// application does about it is the application's decision. Restarting the node is the
+    /// recovery path.
+    #[error("NodeFailed: {0}")]
+    NodeFailed(Cow<'static, str>),
+    /// A node could not start, and said why. Distinct from a panic: the caller gets this back
+    /// from the constructor and decides what to do, whatever panic profile it was built with.
+    #[error("Startup: {0}")]
+    Startup(Cow<'static, str>),
     /// Error when the given query parameters could not be bound properly to the prepared statement.
     #[error("QueryParams: {0}")]
     QueryParams(Cow<'static, str>),
@@ -154,6 +165,9 @@ impl IntoResponse for Error {
             #[cfg(any(feature = "dashboard", feature = "s3"))]
             Error::Cryptr(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Error::LeaderChange(_) => StatusCode::CONFLICT,
+            // The node is out of service and no retry against it will change that.
+            Error::NodeFailed(_) => StatusCode::SERVICE_UNAVAILABLE,
+            Error::Startup(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Error::QueryParams(_) => StatusCode::BAD_REQUEST,
             Error::QueryReturnedNoRows(_) => StatusCode::NOT_FOUND,
             Error::PrepareStatement(_) => StatusCode::BAD_REQUEST,

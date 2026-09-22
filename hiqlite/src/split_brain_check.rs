@@ -9,27 +9,59 @@ use std::time::Duration;
 use tokio::{task, time};
 use tracing::{debug, error, warn};
 
-pub fn spawn(state: Arc<AppState>, nodes: Vec<Node>, tls: bool) {
-    let handle = task::spawn(Box::pin(check_split_brain(state, nodes, tls)));
-
-    // TODO just a safety net until everything runs super smooth and stable
-    task::spawn(async move {
-        loop {
-            time::sleep(Duration::from_secs(600)).await;
-            assert!(!handle.is_finished())
-        }
-    });
+/// Read the check interval, as a configuration value rather than as a panic.
+///
+/// F-009: this was `.expect("Cannot parse HQL_SPLIT_BRAIN_INTERVAL as u64")` inside a spawned
+/// task, so a malformed value ended the process under `panic = "abort"` and killed one task
+/// silently under unwinding. For an embedded node that profile belongs to the consumer, so
+/// neither outcome is something hiqlite gets to choose. It is now a startup error the caller
+/// receives from the constructor.
+pub(crate) fn split_brain_interval_from(
+    raw: Option<&str>,
+) -> Result<Duration, crate::Error> {
+    let raw = raw.unwrap_or("60");
+    let secs = raw.trim().parse::<u64>().map_err(|err| {
+        crate::Error::Startup(
+            format!("HQL_SPLIT_BRAIN_INTERVAL must be a whole number of seconds: {err}").into(),
+        )
+    })?;
+    if secs == 0 {
+        return Err(crate::Error::Startup(
+            "HQL_SPLIT_BRAIN_INTERVAL must be greater than zero".into(),
+        ));
+    }
+    Ok(Duration::from_secs(secs))
 }
 
-async fn check_split_brain(state: Arc<AppState>, nodes: Vec<Node>, tls: bool) {
-    let interval = env::var("HQL_SPLIT_BRAIN_INTERVAL")
-        .as_deref()
-        .unwrap_or("60")
-        .parse::<u64>()
-        .expect("Cannot parse HQL_SPLIT_BRAIN_INTERVAL as u64");
+pub fn spawn(
+    state: Arc<AppState>,
+    nodes: Vec<Node>,
+    tls: bool,
+) -> Result<(), crate::Error> {
+    let interval = split_brain_interval_from(env::var("HQL_SPLIT_BRAIN_INTERVAL").ok().as_deref())?;
+
+    // The watchdog is gone, and F-014 is why. Under `panic = "abort"` the checker's own panic
+    // already terminated the process, so the watchdog was unreachable for its stated purpose;
+    // under unwinding, which is the default for dev and test profiles and for any downstream
+    // consumer that does not set abort, both the checker and the watchdog panicked into
+    // `JoinHandle`s nobody awaited, so split-brain checking stopped silently and nothing
+    // terminated. An `assert!` in a task nobody joins is not a safety net.
+    //
+    // What replaces it is the checker not panicking: its one unvalidated read is now validated
+    // above, before the task is spawned.
+    task::spawn(Box::pin(check_split_brain(state, nodes, tls, interval)));
+    Ok(())
+}
+
+async fn check_split_brain(
+    state: Arc<AppState>,
+    nodes: Vec<Node>,
+    tls: bool,
+    interval: Duration,
+) {
 
     loop {
-        time::sleep(Duration::from_secs(interval)).await;
+        time::sleep(interval).await;
 
         #[cfg(feature = "sqlite")]
         match state.raft_db.raft.current_leader().await {
@@ -161,4 +193,40 @@ async fn check_compare_membership(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// F-009, under the profile a test can run in.
+    ///
+    /// `hiqlite-abort-probe` runs the same call under `panic = "abort"`, which is the profile
+    /// that made this defect fatal and which no test can use, because Rust's test harness
+    /// requires unwinding.
+    #[test]
+    fn a_malformed_split_brain_interval_is_a_startup_error() {
+        assert_eq!(
+            split_brain_interval_from(None).unwrap(),
+            Duration::from_secs(60),
+            "the documented default is unchanged"
+        );
+        assert_eq!(
+            split_brain_interval_from(Some(" 15 ")).unwrap(),
+            Duration::from_secs(15)
+        );
+
+        let err = split_brain_interval_from(Some("not a number"))
+            .expect_err("a malformed value is a configuration error, not a panic");
+        let text = err.to_string();
+        assert!(text.starts_with("Startup: "), "got: {text}");
+        assert!(
+            text.contains("HQL_SPLIT_BRAIN_INTERVAL"),
+            "the operator is told which variable, got: {text}"
+        );
+
+        let err = split_brain_interval_from(Some("0"))
+            .expect_err("a zero interval would spin the checker");
+        assert!(err.to_string().contains("greater than zero"), "got: {err}");
+    }
 }

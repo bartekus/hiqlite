@@ -84,9 +84,38 @@ impl Client {
         }
     }
 
+    /// The terminal failure that has taken this node out of service, if there is one.
+    ///
+    /// `None` while the node is serving. `Some(..)` once a component it depends on has failed:
+    /// the WAL writer thread ending for any reason including a panic inside it, a listener that
+    /// stopped serving, or the cache state machine refusing committed work.
+    ///
+    /// **Nothing clears it and nothing restarts the failed component.** hiqlite does not end
+    /// this process either: what an embedding application does about an out-of-service node is
+    /// the application's decision, and restarting the node is the recovery path. Returns `None`
+    /// for a remote client, which has no local node to speak for.
+    pub fn node_failure(&self) -> Option<crate::lifecycle::NodeFailure> {
+        self.inner
+            .state
+            .as_ref()
+            .and_then(|state| state.lifecycle.failure().cloned())
+    }
+
+    /// `Err` once this node is out of service, with an account of why.
+    ///
+    /// Every local operation goes through this, so what a caller is refused with is the same
+    /// account the health endpoint gives.
+    pub fn ensure_node_available(&self) -> Result<(), Error> {
+        match &self.inner.state {
+            Some(state) => state.lifecycle.ensure_available(),
+            None => Ok(()),
+        }
+    }
+
     /// Check the cluster health state for the database Raft.
     #[cfg(feature = "sqlite")]
     pub async fn is_healthy_db(&self) -> Result<(), Error> {
+        self.ensure_node_available()?;
         let metrics = self.metrics_db().await?;
         metrics.running_state?;
         if metrics.current_leader.is_some() {
@@ -112,6 +141,7 @@ impl Client {
     /// Check the cluster health state for the cache Raft.
     #[cfg(feature = "cache")]
     pub async fn is_healthy_cache(&self) -> Result<(), Error> {
+        self.ensure_node_available()?;
         let metrics = self.metrics_cache().await?;
         metrics.running_state?;
         if metrics.current_leader.is_some() {

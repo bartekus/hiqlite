@@ -42,6 +42,7 @@ pub(crate) async fn start_raft_db(
     node_config: &NodeConfig,
     raft_config: Arc<RaftConfig>,
     do_reset_metadata: bool,
+    lifecycle: crate::lifecycle::NodeLifecycle,
 ) -> Result<StateRaftDB, Error> {
     // We always want to start stopped and set to `false` as soon as we found out,
     // that we are not pristine node and need cleanup.
@@ -81,7 +82,7 @@ pub(crate) async fn start_raft_db(
         recovery_bounds,
     )
     .await
-    .unwrap();
+    .map_err(|err| Error::Startup(format!("cannot open the sqlite state machine: {err}").into()))?;
 
     let is_startup_finished = Arc::new(AtomicBool::new(false));
     let sql_writer = state_machine_store.write_tx.clone();
@@ -98,6 +99,14 @@ pub(crate) async fn start_raft_db(
     };
 
     let shutdown_handle = log_store.shutdown_handle();
+    // `008` KD-3's missing consumer. A writer thread that ends, for any reason including a
+    // panic inside it, now takes this node out of service instead of leaving it answering as
+    // though its log storage were healthy.
+    crate::lifecycle::watch_wal_writer(
+        lifecycle.clone(),
+        log_store.writer_failure(),
+        "the sqlite raft log",
+    );
 
     let raft = openraft::Raft::new(
         node_config.node_id,
@@ -107,7 +116,7 @@ pub(crate) async fn start_raft_db(
         state_machine_store,
     )
     .await
-    .expect("Raft create failed");
+    .map_err(|err| Error::Startup(format!("cannot create the sqlite raft: {err}").into()))?;
 
     init::init_pristine_node_1_db(
         &raft,
@@ -138,6 +147,7 @@ pub(crate) async fn start_raft_db(
 pub(crate) async fn start_raft_cache<C>(
     node_config: &NodeConfig,
     raft_config: Arc<RaftConfig>,
+    lifecycle: crate::lifecycle::NodeLifecycle,
 ) -> Result<StateRaftCache, Error>
 where
     C: Debug + CacheVariants,
@@ -184,6 +194,11 @@ where
         )
         .await?;
         let shutdown_handle = log_store.shutdown_handle();
+        crate::lifecycle::watch_wal_writer(
+            lifecycle.clone(),
+            log_store.writer_failure(),
+            "the cache raft log",
+        );
 
         let raft = openraft::Raft::new(
             node_config.node_id,
@@ -193,7 +208,7 @@ where
             state_machine_store,
         )
         .await
-        .expect("Raft create failed");
+        .map_err(|err| Error::Startup(format!("cannot create the cache raft: {err}").into()))?;
 
         (raft, Some(shutdown_handle))
     } else {
@@ -205,7 +220,7 @@ where
             state_machine_store,
         )
         .await
-        .expect("Raft create failed");
+        .map_err(|err| Error::Startup(format!("cannot create the cache raft: {err}").into()))?;
 
         (raft, None)
     };
