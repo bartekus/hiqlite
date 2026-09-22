@@ -433,6 +433,22 @@ fn spawn_syncer(tx_writer: flume::Sender<Action>, mut interval: Interval) {
 ///
 /// Everything related to locking and memory mapping is being `unwrap()`ped. If anything fails in
 /// this regard, it's either a physical storage or OS issue and this code an do nothing about it.
+/// A step that fails before a `Remove` or `Vote` is acknowledged ends the writer, as it always
+/// did, but answers the caller with the cause first. It used to `?` straight out of `run`, so the
+/// caller got "the writer thread is no longer running" instead of the I/O error, the same class
+/// the `Append` rollover repair closed (found by the AI review of `b5039d2`).
+macro_rules! answer_or_end {
+    ($ack:ident, $step:expr) => {
+        match $step {
+            Ok(v) => v,
+            Err(err) => {
+                let _ = $ack.send(Err(Error::Internal(format!("{err}").into())));
+                return Err(err.into());
+            }
+        }
+    };
+}
+
 fn run(
     lockfile: LockFile,
     meta: Arc<RwLock<Metadata>>,
@@ -625,15 +641,15 @@ fn run(
                 // The flush has to block. `flush_async` only starts the writeback and returns,
                 // so a crash during the removal below can still land after the deletions and
                 // before the header reaches disk, which is the hole this guards against.
-                flush_blocking(&mut wal, &mut buf, &mut is_dirty)?;
+                answer_or_end!(ack, flush_blocking(&mut wal, &mut buf, &mut is_dirty));
 
                 // Persist the purge frontier before deleting (too low = hole into deleted files;
                 // too high = extra files). Revert it again if the deletion fails below.
-                let previous_purged = meta.read()?.last_purged_log_id.clone();
+                let previous_purged = answer_or_end!(ack, meta.read()).last_purged_log_id.clone();
                 let persist_purged = last_log.is_some();
                 if persist_purged {
-                    meta.write()?.last_purged_log_id = last_log;
-                    Metadata::write(meta.clone(), &wal.base_path)?;
+                    answer_or_end!(ack, meta.write()).last_purged_log_id = last_log;
+                    answer_or_end!(ack, Metadata::write(meta.clone(), &wal.base_path));
                 }
 
                 buf.clear();
@@ -678,9 +694,9 @@ fn run(
 
                 // Blocking on purpose: clearing `is_dirty` while an msync is still in flight
                 // would make the interval ticker skip a WAL that never reached disk.
-                flush_blocking(&mut wal, &mut buf, &mut is_dirty)?;
+                answer_or_end!(ack, flush_blocking(&mut wal, &mut buf, &mut is_dirty));
 
-                meta.write()?.vote = Some(value);
+                answer_or_end!(ack, meta.write()).vote = Some(value);
                 let res = Metadata::write(meta.clone(), &wal.base_path);
 
                 let _ = ack.send(res);

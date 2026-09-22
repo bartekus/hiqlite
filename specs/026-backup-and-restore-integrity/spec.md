@@ -249,6 +249,10 @@ the new upload had landed, so uploads that failed for longer than `keep_days`
 aged every remote copy out. Both sweeps now go through `expired_backups`, which
 never returns the newest backup of the set it is given. Added 2026-09-22.
 
+The S3 sweep also applies the local sweep's timestamp floor now, so an object
+whose name claims a date before 2024 is never treated as a backup (AI review of
+`b5039d2`).
+
 **What an S3 upload's completion means.** `Client::backup` returning `Ok` means
 the local backup exists, is durable, and has its metadata reset. The upload runs
 afterwards in the background, because the backup is taken inside the SQLite

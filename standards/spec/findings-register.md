@@ -2747,6 +2747,19 @@ owner's direction of 2026-09-22 separates them:
 Earlier results are kept as evidence about the graph they ran on (`0.9.24`
 locally before 2026-09-22), not as evidence about the committed one.
 
+### F-117 `defect`, confidence `medium`
+
+**The SSE notify handler sends with flume's blocking `send` into a one-slot
+channel.** `hiqlite/src/store/state_machine/memory/notify_handler.rs` forwards a
+notification to a remote listener's channel, which `api::listen` creates with
+capacity one. A subscriber that has not drained its first event makes the second
+`send` park the OS thread the handler runs on, not only its task. Found by the AI
+review of `b5039d2`, read from source, not observed.
+
+**Not repaired, and outside this release's supported feature sets:** the path
+exists only with `listen_notify` (remote SSE subscriptions). Rauthy and Rahi
+enable `listen_notify_local`, which does not reach it (`029` section 4).
+
 ### F-116 `evidence`, confidence `high`
 
 **The cluster suite's health check sampled a membership that was still being

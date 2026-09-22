@@ -280,6 +280,12 @@ has no test: nothing in the suite can make `roll_over` fail on demand. In
 `IntervalMillis` mode the interval syncer keeps a terminated writer's thread
 alive until a shutdown arrives, sending a `Sync` it ignores once per interval.
 
+A failure before a `Remove` or a `Vote` is acknowledged (the blocking flush, or
+reading or writing the metadata) still ends the writer, and now answers the
+caller with the cause first; it used to `?` straight out, and the caller saw only
+that the writer thread was gone (AI review of `b5039d2`). No test forces those
+steps to fail.
+
 `work_queued_behind_a_terminating_append_is_answered_not_stranded` reproduces
 the stall deterministically: it queues a second append behind one the writer is
 still reading, truncates the first, and requires the second to be refused
@@ -474,6 +480,7 @@ sh -c 'grep -q "while let Ok(action) = rx_after.recv()" hiqlite-wal/src/writer.r
 sh -c 'grep -q "while let Ok(action) = rx_after.try_recv()" hiqlite-wal/src/writer.rs'
 sh -c '! grep -q "wal.roll_over(wal_size, &mut buf)?;\n                            {" hiqlite-wal/src/writer.rs'
 sh -c 'grep -q "rolling over to a new WAL file failed" hiqlite-wal/src/writer.rs'
+sh -c 'test "$(grep -c "answer_or_end!(ack," hiqlite-wal/src/writer.rs)" -ge 6'
 sh -c 'grep -q "stalled at: {step}" hiqlite-wal/src/log_store_impl.rs'
 sh -c 'grep -q "timeout-minutes: 60" .github/workflows/code_style.yaml'
 # the three endings, pinned at the expressions. The `while let Ok(Some(..))` that collapsed

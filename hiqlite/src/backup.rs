@@ -188,7 +188,11 @@ async fn backup_cron_job(
                     continue;
                 }
                 for object in bucket.contents.iter() {
-                    if let Some(dt) = dt_from_backup_name(&object.key) {
+                    // The same floor the local sweep applies: nothing that claims to predate
+                    // hiqlite is treated as a backup (found by the AI review of `b5039d2`).
+                    if let Some(dt) = dt_from_backup_name(&object.key)
+                        && dt.timestamp() > TS_MIN
+                    {
                         backups.push((object.key.as_str(), dt));
                     }
                 }
