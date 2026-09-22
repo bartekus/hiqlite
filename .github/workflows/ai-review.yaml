@@ -55,7 +55,7 @@ jobs:
         with:
           node-version: 22
 
-      # 031 KD-10: `anthropics/claude-code-action` accepts only issue, pull-request, dispatch,
+      # 031 KD-10: the Claude Code GitHub action accepts only issue, pull-request, dispatch,
       # schedule and workflow_run events, and every one of those except pull requests runs the
       # workflow from the default branch, which does not carry this file. The first tag-triggered
       # run failed with "Unsupported event type: push". The CLI the action wraps has no event
