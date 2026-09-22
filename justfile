@@ -110,6 +110,17 @@ clippy:
     cargo clippy --no-default-features --features full,external-state-machine -- -D warnings
     cargo clippy --features external-state-machine -- -D warnings
 
+    # F-104: `server` is the only feature that compiles `hiqlite/src/server/`, and `full` does
+    # not imply it, so nothing above reaches the proxy handlers, the CLI or the server binary.
+    # A compile error confined to that tree passed every pre-merge gate and was caught only by
+    # the post-merge acceptance sweep, which is the wrong place to find one.
+    #
+    # Library targets only. `--all-targets` here additionally pulls in `hiqlite-wal`'s test
+    # modules, which carry pre-existing lints unrelated to this release, and silencing those to
+    # widen this check would be changing unrelated code to make a gate pass.
+    cargo clippy --no-default-features --features server -- -D warnings
+    cargo clippy --no-default-features --features server,cast_ints -- -D warnings
+
 clippy-examples:
     #!/usr/bin/env bash
     set -euxo pipefail

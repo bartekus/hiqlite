@@ -2568,3 +2568,35 @@ each workflow is the stronger statement anyway.
 configuration and nothing in a published artifact. It is in scope because the
 release's own instruction was to keep build, review and publication credentials
 separate and least-privilege, and auditing that is what found it.
+
+### F-104 `defect`, confidence `high`
+
+**No pre-merge gate compiles the `server` feature, so a compile error confined
+to `hiqlite/src/server/` reaches the integration branch.** The lint matrix in
+the `justfile` covers twenty-odd feature combinations and none of them is
+`server`. `full` does not imply it: `server` is defined as `full` **plus**
+`clap`, `home`, `tracing-subscriber`, `listen_notify` and `tokio/macros`, so
+`--features full` compiles none of the server tree. `just test-no-s3` does not
+enable it either.
+
+**Observed by execution**, on 2026-09-22. `032`'s change to
+`NotifyRequest::Listen` was applied to `network::api::listen` and not to the
+proxy's copy of the same endpoint at `server/proxy/handlers.rs:34`. Clippy with
+`-D warnings`, the feature matrix, the full test suite and both CI workflows all
+passed; **nine acceptance blocks then failed**, every one of them on the same
+`E0308`, because a `spec-spine verify` command somewhere in each enables
+`server`. The only gate that saw it was the post-merge one, which runs after the
+merge and reports rather than prevents.
+
+**Repaired 2026-09-22 by `031-downstream-release-qualification`**: two `server`
+combinations are added to the lint matrix, and the proxy handler now carries the
+same acknowledgement as the endpoint it proxies.
+
+**Consumer triage.** The missing gate reaches neither named consumer, because
+neither embeds the server binary. The defect it let through would have reached
+anyone building with `server`, as a build failure rather than a runtime one.
+
+**Library targets only.** `--all-targets` under `server` additionally pulls in
+`hiqlite-wal`'s test modules, which carry pre-existing lints unrelated to this
+release. Silencing those to widen the check would be changing unrelated code to
+make a gate pass, so the gate is narrower and this is what it does not cover.

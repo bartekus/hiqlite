@@ -180,6 +180,25 @@ manifests and refuses if any disagrees. A tag is the only thing that triggers
 publication, so a tag that means something different from what it publishes is
 the one mistake that cannot be corrected afterwards.
 
+### B-7. The lint matrix compiles the `server` feature
+
+`server` is the only feature that compiles `hiqlite/src/server/`, and `full`
+does not imply it: `server` is `full` **plus** four dependencies,
+`listen_notify` and `tokio/macros`. Nothing in the matrix reached that tree, and
+`just test-no-s3` does not enable it either.
+
+That is not a theoretical gap. A change to a shared enum was applied to
+`network::api::listen` and not to the proxy's copy of the same endpoint;
+`cargo clippy -- -D warnings`, the whole feature matrix, the full test suite and
+both CI workflows passed, and **nine acceptance blocks then failed on the same
+compile error**, because a `verify` command in each enables `server`. The only
+gate that saw it runs after the merge. F-104.
+
+Two `server` combinations are added, on library targets. `--all-targets` there
+pulls in `hiqlite-wal`'s test modules, which carry pre-existing lints unrelated
+to this release, and silencing those to widen a gate would be changing unrelated
+code to make it pass.
+
 ## 4. Evidence and its limits
 
 **Release state is in the ledger**, `standards/spec/release-ledger.md`, one row
@@ -367,6 +386,11 @@ sh -c 'grep -q "^version = \"0.15.0-patched.1\"" hiqlite/Cargo.toml'
 sh -c 'grep -q "hiqlite-wal = { package = \"hiqlite-wal-patched\", version = " hiqlite/Cargo.toml'
 sh -c 'grep -q "hiqlite-derive = { package = \"hiqlite-derive-patched\", version = " hiqlite/Cargo.toml'
 sh -c 'grep -q "auto-heal = \[\"hiqlite-wal/auto-heal\"\]" hiqlite/Cargo.toml'
+# B-7 / F-104: the matrix compiles the server tree, and the proxy carries the same contract
+sh -c 'grep -q -- "--features server -- -D warnings" justfile'
+sh -c 'grep -q -- "--features server,cast_ints -- -D warnings" justfile'
+sh -c 'grep -q "NotifyRequest::Listen((tx, ack))" hiqlite/src/server/proxy/handlers.rs'
+cargo clippy --no-default-features --features server -- -D warnings
 sh -c 'grep -q "\"dep:hiqlite-wal\"," hiqlite/Cargo.toml'
 # every manifest points at the fork and says it is not upstream
 sh -c 'test "$(grep -hc "bartekus/hiqlite" hiqlite/Cargo.toml hiqlite-wal/Cargo.toml hiqlite-derive/Cargo.toml | paste -sd+ - | bc)" -ge 3'

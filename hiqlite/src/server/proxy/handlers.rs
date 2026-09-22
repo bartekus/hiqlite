@@ -29,10 +29,19 @@ pub async fn listen(
     validate_secret(&state, &headers)?;
 
     let (tx, rx) = flume::unbounded();
+    let (ack, ack_rx) = tokio::sync::oneshot::channel();
     state
         .tx_notify
-        .send_async(NotifyRequest::Listen(tx))
+        .send_async(NotifyRequest::Listen((tx, ack)))
         .await?;
+
+    // F-051, on the proxy's copy of this endpoint. The response is not sent until the
+    // subscription exists, for the same reason and with the same consequence as
+    // `network::api::listen`: a client that sees the stream open is a client the handler will
+    // send to. The proxy forwards the same contract it is proxying.
+    ack_rx
+        .await
+        .map_err(|_| Error::Error("the notification handler is not running".into()))?;
 
     Ok(sse::Sse::new(rx.into_stream()).keep_alive(sse::KeepAlive::default()))
 }
