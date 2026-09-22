@@ -93,6 +93,8 @@ extra_hashed_inputs = [
   ".gitignore",
   "justfile",
   ".github/workflows/spec-spine.yaml",
+  # The post-merge acceptance workflow, claimed by 028.
+  ".github/workflows/acceptance.yaml",
   # Governance inputs. The tier-1 spec, tier-2 constitution, tier-3 contract,
   # the authoring templates, and the shared agent protocol all change what the
   # corpus means, so a byte change in any of them must stale the committed
@@ -125,7 +127,26 @@ extra_hashed_inputs = [
   "examples/*/migrations/*.sql",
   "examples/*/Cargo.toml",
 ]
-resolver_exclusions = ["target", "node_modules", ".derived", "dist", "build", ".next"]
+# These are matched as path **components**, not as path prefixes. That distinction is the whole
+# of W-14: the 2026-09-19 probe recorded this key as having "no effect" because it tried
+# `"hiqlite/static"` and `"dashboard/src/spow"`, which are prefixes and match no component.
+# `"static"` and `"spow"` are components, and they do exactly what rung 0 asked for.
+#
+# `static` is the dashboard's generated output, governed through its build contract by `019`
+# and never claimed as authored bytes (OD-2). `spow` is vendored third-party WebAssembly
+# bindings, referenced and never claimed (A15). Both leave the coverage denominator; neither
+# is added to `coupling.bypass_prefixes`, so no ownership check on authored source is weakened.
+# Verified by probe, recorded in `028`.
+resolver_exclusions = [
+  "target",
+  "node_modules",
+  ".derived",
+  "dist",
+  "build",
+  ".next",
+  "static",
+  "spow",
+]
 slices = {}
 
 [branding]

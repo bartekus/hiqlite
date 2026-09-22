@@ -1,17 +1,21 @@
 {
   "mapping": {
     "amends": [
-      "001-wal-durability-and-completion",
-      "008-wal-append-completion-notification"
+      "004-governance-harness"
     ],
     "dependsOn": [
       "000-hiqlite-ownership-bootstrap",
-      "001-wal-durability-and-completion",
-      "008-wal-append-completion-notification"
+      "004-governance-harness",
+      "005-adoption-assessment-and-plan",
+      "019-dashboard-build-contract"
     ],
     "implementingPaths": [
       {
-        "path": "hiqlite-wal/src/",
+        "path": ".github/workflows/acceptance.yaml",
+        "source": "spec-edge"
+      },
+      {
+        "path": "spec-spine.toml",
         "source": "spec-edge"
       },
       {
@@ -27,14 +31,27 @@
       {
         "locations": [
           {
-            "file": "hiqlite-wal/src/"
+            "file": ".github/workflows/acceptance.yaml"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": ".github/workflows/acceptance.yaml"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "spec-spine.toml"
           }
         ],
         "ownership": true,
         "sourceField": "extends",
         "unit": {
-          "kind": "directory",
-          "path": "hiqlite-wal/src/"
+          "kind": "file",
+          "path": "spec-spine.toml"
         }
       },
       {
@@ -64,9 +81,9 @@
         }
       }
     ],
-    "specId": "021-wal-append-stream-integrity",
+    "specId": "028-enforcement-readiness-and-acceptance-control",
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "f415e4c2fe38b1de380e1c2881b9ba2a6a268320d7909d990c06f239d45ab9a8"
+  "shardHash": "773c89a3076bff038fd9feaa9ae1abbf85c609d3e6fc53475236ea2f50076d49"
 }
