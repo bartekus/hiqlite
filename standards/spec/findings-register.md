@@ -583,6 +583,23 @@ longer than ten seconds has no supported way to extend it and nothing detects
 the overrun. Described as found per the owner's direction; no lease design is
 proposed. `006` KD-2.
 
+**Still standing on 2026-09-21, and deliberately.**
+`023-distributed-lock-lease-liveness` repaired the handler's liveness and
+declined to touch this: a longer lease does not make a dead holder detectable
+any sooner than its own deadline, and a configurable one moves the choice to the
+operator without changing what any value of it can promise. The lease length is
+injectable for tests only, so the expiry paths can be exercised without waiting
+out ten seconds per case, and `spawn` remains its only non-test caller.
+
+What `023` did add is the statement this entry was missing. `023` KD-1: this is
+a lease and not a fence. A holder whose lease expires is told nothing, stays
+inside its critical section, and has its eventual release ignored, so two
+clients can be inside the same critical section at once and the only bound on
+that is that the first one's work outlasted its lease. There is no fencing
+token. `023` KD-3 and KD-4 add the restart cases: replay re-grants an unreleased
+lock for one further lease window measured from the restart, and a memory-only
+cache node has no lock state at all until a snapshot or a new entry arrives.
+
 ### F-027 `defect`, confidence `high`
 
 **`cache_idx` is an unvalidated index.** `.get(cache_idx).unwrap()` panics out of

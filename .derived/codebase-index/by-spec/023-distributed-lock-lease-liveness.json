@@ -1,17 +1,16 @@
 {
   "mapping": {
     "amends": [
-      "001-wal-durability-and-completion",
-      "008-wal-append-completion-notification"
+      "022-replicated-cache-command-compatibility"
     ],
     "dependsOn": [
       "000-hiqlite-ownership-bootstrap",
-      "001-wal-durability-and-completion",
-      "008-wal-append-completion-notification"
+      "006-cache-state-machine",
+      "022-replicated-cache-command-compatibility"
     ],
     "implementingPaths": [
       {
-        "path": "hiqlite-wal/src/",
+        "path": "hiqlite/src/store/state_machine/memory/",
         "source": "spec-edge"
       },
       {
@@ -27,14 +26,14 @@
       {
         "locations": [
           {
-            "file": "hiqlite-wal/src/"
+            "file": "hiqlite/src/store/state_machine/memory/"
           }
         ],
         "ownership": true,
         "sourceField": "extends",
         "unit": {
           "kind": "directory",
-          "path": "hiqlite-wal/src/"
+          "path": "hiqlite/src/store/state_machine/memory/"
         }
       },
       {
@@ -64,9 +63,9 @@
         }
       }
     ],
-    "specId": "021-wal-append-stream-integrity",
+    "specId": "023-distributed-lock-lease-liveness",
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "8579293c8ae1c88b78128ec8e7e25a87c35d4aa957488e6c13bde3ea98e6981a"
+  "shardHash": "f5a43a484d3622668650bea91a258f0756f1ddf20cd1ffcb485e5e00105648bf"
 }
