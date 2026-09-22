@@ -1,16 +1,18 @@
 [package]
-name = "hiqlite-derive"
-version = "0.14.0"
+name = "hiqlite-derive-patched"
+version = "0.15.0-patched.1"
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
 rust-version = "1.88"
 categories = ["database", "caching"]
 keywords = ["database", "sql", "sqlite", "raft", "cache"]
-description = "Macros for Hiqlite"
-repository = "https://github.com/sebadob/hiqlite"
+description = "Macros for Hiqlite. Downstream patched build of Hiqlite, from the fork at bartekus/hiqlite. Not affiliated with or endorsed by the upstream project."
+repository = "https://github.com/bartekus/hiqlite"
 
 [lib]
+# See `hiqlite-wal`'s manifest: the package is renamed and the library is not.
+name = "hiqlite_derive"
 proc-macro = true
 
 [dependencies]

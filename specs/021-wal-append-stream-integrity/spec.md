@@ -328,26 +328,28 @@ was measured, not assumed.
 Each command below was confirmed to select exactly one test and run it.
 
 ```verify:cli
+# Package names, not library names: the downstream release renamed the three packages
+# (`031` B-2), and `-p` takes a package name. `use hiqlite::..` is unaffected.
 # --- 008's acceptance, which is also 001's, carried forward unchanged ---
-cargo test -p hiqlite-wal --lib writer::tests::append_result_precedes_persistence_and_completion -- --exact
-cargo test -p hiqlite-wal --lib writer::tests::persistence_failure_notifies_error_before_propagating -- --exact
-cargo test -p hiqlite-wal --lib writer::tests::append_rejection_notifies_error_and_never_success -- --exact
-cargo test -p hiqlite-wal --lib reader::tests::logs_action_reports_read_errors -- --exact
-cargo test -p hiqlite-wal --lib metadata::tests::metadata_overwrite_replaces_existing -- --exact
-cargo test -p hiqlite-wal --lib wal::tests::roll_over_purge_front -- --exact
-cargo test -p hiqlite-wal --lib wal::tests::roll_over_truncate_end -- --exact
-cargo test -p hiqlite-wal --lib writer::tests::rejection_takes_precedence_over_a_failing_persistence_step -- --exact
-cargo test -p hiqlite-wal --lib writer::tests::success_notifies_once_per_append_in_every_log_sync_mode -- --exact
-cargo test -p hiqlite-wal --lib writer::tests::persistence_failure_notifies_then_terminates_the_writer -- --exact
-cargo test -p hiqlite-wal --lib writer::tests::writer_termination_is_reported -- --exact
-cargo test -p hiqlite-wal --lib writer::tests::injections_are_isolated_per_wal_and_consumed_exactly_once -- --exact
-cargo test -p hiqlite-wal --lib writer::tests::a_dropped_guard_disarms_an_unconsumed_injection -- --exact
-cargo test -p hiqlite-wal --lib log_store_impl::tests::append_adapter_forwards_a_persistence_failure_to_openraft -- --exact
-cargo test -p hiqlite-wal --lib --features oversized-entry-error log_store_impl::tests::append_adapter_reports_a_rejected_append_as_an_error -- --exact
+cargo test -p hiqlite-wal-patched --lib writer::tests::append_result_precedes_persistence_and_completion -- --exact
+cargo test -p hiqlite-wal-patched --lib writer::tests::persistence_failure_notifies_error_before_propagating -- --exact
+cargo test -p hiqlite-wal-patched --lib writer::tests::append_rejection_notifies_error_and_never_success -- --exact
+cargo test -p hiqlite-wal-patched --lib reader::tests::logs_action_reports_read_errors -- --exact
+cargo test -p hiqlite-wal-patched --lib metadata::tests::metadata_overwrite_replaces_existing -- --exact
+cargo test -p hiqlite-wal-patched --lib wal::tests::roll_over_purge_front -- --exact
+cargo test -p hiqlite-wal-patched --lib wal::tests::roll_over_truncate_end -- --exact
+cargo test -p hiqlite-wal-patched --lib writer::tests::rejection_takes_precedence_over_a_failing_persistence_step -- --exact
+cargo test -p hiqlite-wal-patched --lib writer::tests::success_notifies_once_per_append_in_every_log_sync_mode -- --exact
+cargo test -p hiqlite-wal-patched --lib writer::tests::persistence_failure_notifies_then_terminates_the_writer -- --exact
+cargo test -p hiqlite-wal-patched --lib writer::tests::writer_termination_is_reported -- --exact
+cargo test -p hiqlite-wal-patched --lib writer::tests::injections_are_isolated_per_wal_and_consumed_exactly_once -- --exact
+cargo test -p hiqlite-wal-patched --lib writer::tests::a_dropped_guard_disarms_an_unconsumed_injection -- --exact
+cargo test -p hiqlite-wal-patched --lib log_store_impl::tests::append_adapter_forwards_a_persistence_failure_to_openraft -- --exact
+cargo test -p hiqlite-wal-patched --lib --features oversized-entry-error log_store_impl::tests::append_adapter_reports_a_rejected_append_as_an_error -- --exact
 # --- what this repair adds ---
-cargo test -p hiqlite-wal --lib writer::tests::a_truncated_entry_stream_never_reports_success_in_any_log_sync_mode -- --exact
-cargo test -p hiqlite-wal --lib writer::tests::a_clean_empty_batch_succeeds_and_notifies_once -- --exact
-cargo test -p hiqlite-wal --lib log_store_impl::tests::a_truncated_append_leaves_a_recoverable_prefix_in_every_log_sync_mode -- --exact
+cargo test -p hiqlite-wal-patched --lib writer::tests::a_truncated_entry_stream_never_reports_success_in_any_log_sync_mode -- --exact
+cargo test -p hiqlite-wal-patched --lib writer::tests::a_clean_empty_batch_succeeds_and_notifies_once -- --exact
+cargo test -p hiqlite-wal-patched --lib log_store_impl::tests::a_truncated_append_leaves_a_recoverable_prefix_in_every_log_sync_mode -- --exact
 # the three endings, pinned at the expressions. The `while let Ok(Some(..))` that collapsed
 # the last two into the first must not come back.
 sh -c '! grep -q "while let Ok(Some((id, bytes))) = rx.recv()" hiqlite-wal/src/writer.rs'

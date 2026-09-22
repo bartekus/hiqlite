@@ -1,14 +1,14 @@
 [package]
-name = "hiqlite-wal"
-version = "0.14.0"
+name = "hiqlite-wal-patched"
+version = "0.15.0-patched.1"
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
 rust-version = "1.88"
 categories = ["database", "caching"]
 keywords = ["database", "raft", "cache", "wal"]
-description = "WAL file implementation for Hiqlite"
-repository = "https://github.com/sebadob/hiqlite"
+description = "WAL file implementation for Hiqlite. Downstream patched build of Hiqlite, from the fork at bartekus/hiqlite. Not affiliated with or endorsed by the upstream project."
+repository = "https://github.com/bartekus/hiqlite"
 
 [features]
 auto-heal = []
@@ -22,6 +22,9 @@ migration = []
 oversized-entry-error = []
 
 [lib]
+# The package is renamed; the **library** keeps its name, so `use hiqlite_wal::..` and every
+# `::hiqlite_wal::` path in dependent code resolve without a dependency alias.
+name = "hiqlite_wal"
 doctest = false
 
 [package.metadata.docs.rs]

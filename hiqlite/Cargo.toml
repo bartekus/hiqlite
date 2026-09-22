@@ -1,17 +1,24 @@
 [package]
-name = "hiqlite"
-version = "0.14.0"
+name = "hiqlite-patched"
+version = "0.15.0-patched.1"
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
 rust-version = "1.95.0"
 categories = ["database", "caching"]
 keywords = ["database", "sql", "sqlite", "raft", "cache"]
-description = "Hiqlite - highly-available, embeddable, raft-based SQLite + cache"
-readme = "../README.md"
-repository = "https://github.com/sebadob/hiqlite"
+description = "Hiqlite - highly-available, embeddable, raft-based SQLite + cache. Downstream patched build of Hiqlite, from the fork at bartekus/hiqlite. Not affiliated with or endorsed by the upstream project."
+# `hiqlite/README.md` already exists and is what the archive would contain anyway; pointing at
+# `../README.md` made `cargo package` warn that it was resolving to the copy in the package
+# root. Naming it directly says what is published.
+readme = "README.md"
+repository = "https://github.com/bartekus/hiqlite"
 
 [lib]
+# The package is renamed and the library is not, so `use hiqlite::..` keeps working and the
+# `::hiqlite::` paths the derive macros and `params!` emit resolve in a consumer's crate
+# without a dependency alias. See `031` B-3.
+name = "hiqlite"
 doctest = false
 
 # Runs the expected failure paths under `panic = "abort"`, which no test can do: Rust's test
@@ -148,10 +155,14 @@ __profiling = ["dep:console-subscriber"]
 __abort-probe = ["sqlite", "cache", "tokio/rt", "tokio/macros"]
 
 [dependencies]
-#hiqlite-derive = { version = "0.14", optional = true }
-hiqlite-derive = { path = "../hiqlite-derive", optional = true }
-#hiqlite-wal = { version = "0.14" }
-hiqlite-wal = { path = "../hiqlite-wal", optional = true }
+# Renamed **packages**, kept **dependency keys**. The keys are what `dep:hiqlite-derive`,
+# `dep:hiqlite-wal` and `hiqlite-wal/auto-heal` in the feature table above refer to, so keeping
+# them means the feature table needs no change and cannot drift from the dependency names.
+#
+# `path` is for workspace development; `version` is what the published manifest resolves
+# against, and publication is verified without the paths (`031` section 4).
+hiqlite-derive = { package = "hiqlite-derive-patched", version = "0.15.0-patched.1", path = "../hiqlite-derive", optional = true }
+hiqlite-wal = { package = "hiqlite-wal-patched", version = "0.15.0-patched.1", path = "../hiqlite-wal", optional = true }
 
 argon2 = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }

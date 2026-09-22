@@ -300,33 +300,35 @@ this spec's** (D-6), and `024`'s is `002`'s, so `spec-spine verify 002` and
 `verify 024` both resolve here.
 
 ```verify:cli
+# Package names, not library names: the downstream release renamed the three packages
+# (`031` B-2), and `-p` takes a package name. `use hiqlite::..` is unaffected.
 # --- 024's acceptance, which is also 002's, carried forward unchanged ---
-cargo test -p hiqlite --lib --no-default-features --features sqlite,auto-heal store::state_machine::sqlite::state_machine::tests::restart_reconstructs_snapshot_then_replays_retained_wal -- --exact
-cargo test -p hiqlite --lib --no-default-features --features sqlite,auto-heal store::state_machine::sqlite::state_machine::tests::interrupted_staging_files_are_not_published_snapshots -- --exact
-cargo test -p hiqlite --lib --no-default-features --features external-state-machine external_state_machine::tests::snapshot_evidence_restore_receipts_and_staleness -- --exact
-cargo test -p hiqlite --lib --no-default-features --features external-state-machine external_state_machine::tests::online_backup_snapshot_preserves_implicit_rowids -- --exact
-cargo test -p hiqlite --lib --no-default-features --features external-state-machine external_state_machine::tests::durability_is_explicit_and_unclean_replayable_off_fails_closed -- --exact
-cargo test -p hiqlite --lib --no-default-features --features sqlite storage_lock::tests::a_second_process_is_refused_without_touching_the_data -- --exact
-cargo test -p hiqlite --lib --no-default-features --features sqlite storage_lock::tests::this_process_is_refused_while_another_process_holds_it -- --exact
-cargo test -p hiqlite --lib --no-default-features --features sqlite storage_lock::tests::an_orderly_shutdown_releases_ownership -- --exact
-cargo test -p hiqlite --lib --no-default-features --features sqlite storage_lock::tests::a_crash_releases_ownership -- --exact
-cargo test -p hiqlite --lib --no-default-features --features sqlite storage_lock::tests::a_contender_is_refused_while_ownership_is_held_even_to_restore -- --exact
-cargo test -p hiqlite --lib --no-default-features --features sqlite storage_lock::tests::a_second_node_in_the_same_process_is_refused -- --exact
-cargo test -p hiqlite --lib --no-default-features --features sqlite storage_lock::tests::an_aliased_path_to_the_same_directory_is_refused -- --exact
-cargo test -p hiqlite --lib --no-default-features --features sqlite storage_lock::tests::dropping_the_guard_releases_ownership -- --exact
-cargo test -p hiqlite --lib --no-default-features --features sqlite storage_lock::tests::the_owner_lock_file_is_recognisable -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features sqlite,auto-heal store::state_machine::sqlite::state_machine::tests::restart_reconstructs_snapshot_then_replays_retained_wal -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features sqlite,auto-heal store::state_machine::sqlite::state_machine::tests::interrupted_staging_files_are_not_published_snapshots -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features external-state-machine external_state_machine::tests::snapshot_evidence_restore_receipts_and_staleness -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features external-state-machine external_state_machine::tests::online_backup_snapshot_preserves_implicit_rowids -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features external-state-machine external_state_machine::tests::durability_is_explicit_and_unclean_replayable_off_fails_closed -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features sqlite storage_lock::tests::a_second_process_is_refused_without_touching_the_data -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features sqlite storage_lock::tests::this_process_is_refused_while_another_process_holds_it -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features sqlite storage_lock::tests::an_orderly_shutdown_releases_ownership -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features sqlite storage_lock::tests::a_crash_releases_ownership -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features sqlite storage_lock::tests::a_contender_is_refused_while_ownership_is_held_even_to_restore -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features sqlite storage_lock::tests::a_second_node_in_the_same_process_is_refused -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features sqlite storage_lock::tests::an_aliased_path_to_the_same_directory_is_refused -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features sqlite storage_lock::tests::dropping_the_guard_releases_ownership -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features sqlite storage_lock::tests::the_owner_lock_file_is_recognisable -- --exact
 sh -c 'grep -q "FileExt::try_lock" hiqlite/src/storage_lock.rs'
 sh -c 'grep -q "StorageInUse" hiqlite/src/error.rs'
 sh -c 'grep -q "release_storage_ownership" hiqlite/src/client/mgmt.rs'
 sh -c '! grep -q "fs::remove_dir_all(node_config.data_dir.as_ref())" hiqlite/src/backup.rs'
 # --- what this repair adds ---
-cargo test -p hiqlite --lib --no-default-features --features sqlite,auto-heal store::state_machine::sqlite::state_machine::tests::a_torn_published_snapshot_is_never_selected -- --exact
-cargo test -p hiqlite --lib --no-default-features --features sqlite,auto-heal store::state_machine::sqlite::state_machine::tests::a_corrupt_newest_snapshot_falls_back_to_an_older_valid_one -- --exact
-cargo test -p hiqlite --lib --no-default-features --features sqlite,auto-heal store::state_machine::sqlite::state_machine::tests::a_fallback_is_refused_when_the_wal_has_purged_past_the_older_snapshot -- --exact
-cargo test -p hiqlite --lib --no-default-features --features sqlite,auto-heal store::state_machine::sqlite::state_machine::tests::no_usable_snapshot_refuses_startup_instead_of_starting_empty -- --exact
-cargo test -p hiqlite --lib --no-default-features --features sqlite,auto-heal store::state_machine::sqlite::state_machine::tests::an_unusable_received_snapshot_is_discarded_without_publishing_or_restoring -- --exact
-cargo test -p hiqlite --lib --no-default-features --features sqlite,auto-heal store::state_machine::sqlite::state_machine::tests::an_incoming_staging_file_is_never_a_restart_candidate -- --exact
-cargo test -p hiqlite --lib --no-default-features --features sqlite,auto-heal store::state_machine::sqlite::state_machine::tests::the_previous_published_snapshot_is_kept -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features sqlite,auto-heal store::state_machine::sqlite::state_machine::tests::a_torn_published_snapshot_is_never_selected -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features sqlite,auto-heal store::state_machine::sqlite::state_machine::tests::a_corrupt_newest_snapshot_falls_back_to_an_older_valid_one -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features sqlite,auto-heal store::state_machine::sqlite::state_machine::tests::a_fallback_is_refused_when_the_wal_has_purged_past_the_older_snapshot -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features sqlite,auto-heal store::state_machine::sqlite::state_machine::tests::no_usable_snapshot_refuses_startup_instead_of_starting_empty -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features sqlite,auto-heal store::state_machine::sqlite::state_machine::tests::an_unusable_received_snapshot_is_discarded_without_publishing_or_restoring -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features sqlite,auto-heal store::state_machine::sqlite::state_machine::tests::an_incoming_staging_file_is_never_a_restart_candidate -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features sqlite,auto-heal store::state_machine::sqlite::state_machine::tests::the_previous_published_snapshot_is_kept -- --exact
 # publication must never be a byte copy into the final name again
 sh -c '! grep -q "fs::copy(path_temp" hiqlite/src/store/state_machine/sqlite/snapshot_builder.rs'
 sh -c 'grep -q "fs::rename(&path_temp, &path)" hiqlite/src/store/state_machine/sqlite/snapshot_builder.rs'

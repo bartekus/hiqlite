@@ -1,0 +1,129 @@
+# Publishes the three downstream crates to crates.io, in dependency order.
+#
+# Trigger: a tag push of the form `v*-patched.*`, which is a maintainer act on an already
+# merged commit. Never on a pull request, never on a branch push, never automatically.
+#
+# Separation of privilege, which is the point of this file being its own workflow:
+#
+#   - `build`   runs the checks and holds **no** secret.
+#   - `publish` holds `CARGO_REGISTRY_TOKEN` and runs only after `build` succeeds.
+#   - the AI review (`ai-review.yaml`) holds a different credential and is a different trigger.
+#
+# The token is referenced only inside the `publish` job's steps, so nothing a pull request or a
+# specification file can influence ever runs in a context that can read it.
+name: Publish
+
+on:
+  push:
+    tags:
+      - "v*-patched.*"
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  TERM: xterm
+
+jobs:
+  build:
+    name: Checks (no secrets)
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/sebadob/rauthy-builder:20260519
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: The tag must match the manifests
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME#v}"
+          for crate in hiqlite hiqlite-wal hiqlite-derive; do
+            v=$(grep -m1 '^version = ' "$crate/Cargo.toml" | cut -d'"' -f2)
+            if [ "$v" != "$tag" ]; then
+              echo "::error::$crate/Cargo.toml is $v but the tag says $tag"
+              exit 1
+            fi
+          done
+          echo "all three manifests are $tag"
+
+      - name: Clippy (deny warnings)
+        run: cargo clippy -- -D warnings
+
+      - name: Clippy (feature matrix)
+        run: just clippy
+
+      - name: Tests
+        # S3 tests cannot be done inside GitHub CI
+        run: just test-no-s3
+
+      - name: Expected failures under an aborting profile
+        # No test can run under `panic = "abort"`; this binary can. See `027` section 4.
+        run: |
+          cargo build --release --features __abort-probe,s3 --bin hiqlite-abort-probe -p hiqlite-patched
+          ./target/release/hiqlite-abort-probe
+
+      - name: Package the two leaf crates
+        # `hiqlite-patched` cannot be packaged until these two are on the registry, because its
+        # published manifest resolves them by version. That is verified at publication time
+        # instead, and never with `--no-verify`.
+        run: |
+          cargo package -p hiqlite-wal-patched
+          cargo package -p hiqlite-derive-patched
+
+  publish:
+    name: Publish (holds the registry token)
+    needs: build
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/sebadob/rauthy-builder:20260519
+    environment: crates-io
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Publish, dependency first, waiting for the registry between steps
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          set -euo pipefail
+          version=$(grep -m1 '^version = ' hiqlite/Cargo.toml | cut -d'"' -f2)
+
+          # Idempotent by inspection, not by `|| true`: a version that is already on the
+          # registry is skipped, and any other failure still fails the job. Re-running this
+          # workflow for a tag that partly published must not be a second upload attempt.
+          already_published() {
+            curl -sS -A "hiqlite-release (bartekus)" \
+              "https://crates.io/api/v1/crates/$1/$2" \
+              | grep -q '"num"' && return 0 || return 1
+          }
+
+          wait_for_registry() {
+            for i in $(seq 1 60); do
+              if already_published "$1" "$2"; then
+                echo "$1 $2 is served by the registry"
+                return 0
+              fi
+              echo "waiting for $1 $2 to be served ($i/60)"
+              sleep 10
+            done
+            echo "::error::$1 $2 never became available"
+            return 1
+          }
+
+          for crate in hiqlite-wal-patched hiqlite-derive-patched; do
+            if already_published "$crate" "$version"; then
+              echo "$crate $version is already published, skipping"
+            else
+              cargo publish -p "$crate"
+            fi
+            wait_for_registry "$crate" "$version"
+          done
+
+          if already_published hiqlite-patched "$version"; then
+            echo "hiqlite-patched $version is already published, skipping"
+          else
+            # This is where the core crate's manifest is verified against the registry rather
+            # than against the workspace. `--no-verify` is never used.
+            cargo publish -p hiqlite-patched
+          fi
+          wait_for_registry hiqlite-patched "$version"

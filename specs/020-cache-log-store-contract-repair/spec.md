@@ -298,11 +298,13 @@ not acceptance evidence, so the reported `1 passed` was read for each line
 rather than the exit code alone.
 
 ```verify:cli
+# Package names, not library names: the downstream release renamed the three packages
+# (`031` B-2), and `-p` takes a package name. `use hiqlite::..` is unaffected.
 # --- 007's acceptance, carried forward ---
 # was get_log_state_reports_no_last_log_id_even_after_append, which pinned KD-1
-cargo test -p hiqlite --lib --no-default-features --features cache store::logs::memory::tests::get_log_state_reports_the_last_stored_entry -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features cache store::logs::memory::tests::get_log_state_reports_the_last_stored_entry -- --exact
 # was purge_removes_entries_below_the_given_index, which pinned KD-5
-cargo test -p hiqlite --lib --no-default-features --features cache store::logs::memory::tests::purge_removes_the_entry_it_names_and_records_the_frontier -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features cache store::logs::memory::tests::purge_removes_the_entry_it_names_and_records_the_frontier -- --exact
 # was a grep for `logs.get(logs.len()).map(|entry| entry.log_id)`, the KD-1 expression this
 # repair removed. Replaced with the expression that must be there now.
 sh -c 'grep -q "logs.back().map(|entry| entry.log_id)" hiqlite/src/store/logs/memory.rs'
@@ -311,15 +313,15 @@ grep -q 'pub fn logs_dir_cache' hiqlite/src/store/logs/mod.rs
 grep -q 'pub fn logs_dir_db' hiqlite/src/store/logs/mod.rs
 sh -c '! grep -qE "fs::write|File::create|sync_all" hiqlite/src/store/logs/memory.rs'
 # --- what this repair adds ---
-cargo test -p hiqlite --lib --no-default-features --features cache store::logs::memory::tests::get_log_state_falls_back_to_the_purge_frontier_when_empty -- --exact
-cargo test -p hiqlite --lib --no-default-features --features cache store::logs::memory::tests::purge_advances_the_frontier_monotonically_and_on_an_empty_store -- --exact
-cargo test -p hiqlite --lib --no-default-features --features cache store::logs::memory::tests::purge_beyond_the_last_entry_empties_the_store_without_panicking -- --exact
-cargo test -p hiqlite --lib --no-default-features --features cache store::logs::memory::tests::truncate_after_a_purge_advanced_the_front_does_not_fire_the_assertion -- --exact
-cargo test -p hiqlite --lib --no-default-features --features cache store::logs::memory::tests::truncate_one_past_the_end_is_a_no_op -- --exact
-cargo test -p hiqlite --lib --no-default-features --features cache store::logs::memory::tests::an_exclusive_end_bound_of_zero_returns_no_entries -- --exact
-cargo test -p hiqlite --lib --no-default-features --features cache store::logs::memory::tests::reading_an_empty_store_returns_no_entries -- --exact
-cargo test -p hiqlite --lib --no-default-features --features cache store::logs::memory::tests::a_range_is_clamped_to_what_the_store_actually_holds -- --exact
-cargo test -p hiqlite --lib --no-default-features --features cache store::logs::memory::tests::a_concurrent_reader_never_sees_a_purged_deque_beside_a_stale_frontier -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features cache store::logs::memory::tests::get_log_state_falls_back_to_the_purge_frontier_when_empty -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features cache store::logs::memory::tests::purge_advances_the_frontier_monotonically_and_on_an_empty_store -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features cache store::logs::memory::tests::purge_beyond_the_last_entry_empties_the_store_without_panicking -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features cache store::logs::memory::tests::truncate_after_a_purge_advanced_the_front_does_not_fire_the_assertion -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features cache store::logs::memory::tests::truncate_one_past_the_end_is_a_no_op -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features cache store::logs::memory::tests::an_exclusive_end_bound_of_zero_returns_no_entries -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features cache store::logs::memory::tests::reading_an_empty_store_returns_no_entries -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features cache store::logs::memory::tests::a_range_is_clamped_to_what_the_store_actually_holds -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features cache store::logs::memory::tests::a_concurrent_reader_never_sees_a_purged_deque_beside_a_stale_frontier -- --exact
 # the inclusive purge, pinned at the expression: `drain(..n)` removes n and kept the entry the
 # purge named, which is the KD-5 defect.
 sh -c 'grep -q "logs.drain(..=purge_until);" hiqlite/src/store/logs/memory.rs'

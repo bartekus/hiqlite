@@ -77,6 +77,6 @@
     "summary": "Repairs all six known defects of the cache Raft group's in-memory log store against the locked OpenRaft 0.9.24 log-storage traits: the last-log frontier and its empty-store fallback, inclusive purge with purge-frontier bookkeeping, tolerant range reads with clamping, and the debug assertions that compared an offset to an absolute index. Adopts one lock order, data then logs, held together across the purge update. Amends 007's behavior, evidence and known-defect sections and carries its acceptance.\n",
     "title": "Repair the cache log store against the locked OpenRaft log-storage contract"
   },
-  "shardHash": "dfc4dad6eaba3972fb7d27d6e16e13eabed32bd216e6e910ba731a9e1b2cff43",
+  "shardHash": "367c90a2eb7361d8780bc972ea31067771c73c421ba5a4976248eaa69033299a",
   "specVersion": "1.3.0"
 }

@@ -1,33 +1,32 @@
 {
   "mapping": {
     "amends": [
-      "002-snapshot-publication-and-recovery"
+      "003-client-consistency-and-retry-outcomes",
+      "012-cluster-integration-evidence",
+      "016-derive-macros"
     ],
     "dependsOn": [
       "000-hiqlite-ownership-bootstrap",
-      "002-snapshot-publication-and-recovery",
-      "010-node-lifecycle-and-split-brain",
-      "013-backup-retention-and-object-storage"
+      "004-governance-harness",
+      "005-adoption-assessment-and-plan",
+      "029-consumer-surface-repairs",
+      "030-transport-security-and-dashboard-repairs"
     ],
     "implementingPaths": [
       {
-        "path": "hiqlite/src/app_state.rs",
+        "path": ".github/workflows/ai-review.yaml",
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite/src/backup.rs",
+        "path": ".github/workflows/publish.yaml",
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite/src/client/",
+        "path": "examples/",
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite/src/start.rs",
-        "source": "spec-edge"
-      },
-      {
-        "path": "hiqlite/src/storage_lock.rs",
+        "path": "justfile",
         "source": "spec-edge"
       },
       {
@@ -39,7 +38,7 @@
         "source": "spec-edge"
       },
       {
-        "path": "standards/spec/findings-register.md",
+        "path": "standards/spec/release-ledger.md",
         "source": "spec-edge"
       }
     ],
@@ -47,66 +46,66 @@
       {
         "locations": [
           {
-            "file": "hiqlite/src/storage_lock.rs"
+            "file": ".github/workflows/ai-review.yaml"
           }
         ],
         "ownership": true,
         "sourceField": "establishes",
         "unit": {
           "kind": "file",
-          "path": "hiqlite/src/storage_lock.rs"
+          "path": ".github/workflows/ai-review.yaml"
         }
       },
       {
         "locations": [
           {
-            "file": "hiqlite/src/client/"
+            "file": ".github/workflows/publish.yaml"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": ".github/workflows/publish.yaml"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "standards/spec/release-ledger.md"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/release-ledger.md"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "examples/"
           }
         ],
         "ownership": true,
         "sourceField": "extends",
         "unit": {
           "kind": "directory",
-          "path": "hiqlite/src/client/"
+          "path": "examples/"
         }
       },
       {
         "locations": [
           {
-            "file": "hiqlite/src/app_state.rs"
+            "file": "justfile"
           }
         ],
         "ownership": true,
         "sourceField": "extends",
         "unit": {
           "kind": "file",
-          "path": "hiqlite/src/app_state.rs"
-        }
-      },
-      {
-        "locations": [
-          {
-            "file": "hiqlite/src/backup.rs"
-          }
-        ],
-        "ownership": true,
-        "sourceField": "extends",
-        "unit": {
-          "kind": "file",
-          "path": "hiqlite/src/backup.rs"
-        }
-      },
-      {
-        "locations": [
-          {
-            "file": "hiqlite/src/start.rs"
-          }
-        ],
-        "ownership": true,
-        "sourceField": "extends",
-        "unit": {
-          "kind": "file",
-          "path": "hiqlite/src/start.rs"
+          "path": "justfile"
         }
       },
       {
@@ -134,24 +133,11 @@
           "kind": "file",
           "path": "standards/spec/adoption-plan.md"
         }
-      },
-      {
-        "locations": [
-          {
-            "file": "standards/spec/findings-register.md"
-          }
-        ],
-        "ownership": true,
-        "sourceField": "extends",
-        "unit": {
-          "kind": "file",
-          "path": "standards/spec/findings-register.md"
-        }
       }
     ],
-    "specId": "024-exclusive-storage-ownership",
+    "specId": "031-downstream-release-qualification",
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "72c9c934e3c6823a97c138ac0c44e88064afeaabd3ba659062b0db871be80972"
+  "shardHash": "3eee8016c48a40d85b4ec8a2f524948b994c5c2720672db26a15f1455dca1c8a"
 }

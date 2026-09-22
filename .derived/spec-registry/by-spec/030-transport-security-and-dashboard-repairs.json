@@ -151,6 +151,6 @@
     "summary": "Repairs the transport-security and dashboard defects that reach a consumer of this release. Certificate verification becomes reachable at all, which it was not: the client trust store was built empty and there was no way to add to it. The API endpoint stops taking the raft channel's answers to its own questions. The claim that the secret is never sent over the network is narrowed to the channel it is true of. And the dashboard's unauthenticated surface stops panicking, stops allocating 32 MiB per concurrent attempt, and stops replicating reads as writes.\n",
     "title": "Make certificate verification reachable, stop the API endpoint taking the raft channel's answers, and repair the dashboard's pre-auth surface"
   },
-  "shardHash": "0237b6a1a97aa1fdf754ee4164ba9c6aa6ae4ca6f124192de9a855153fff8ec4",
+  "shardHash": "e8538da3173142111aa6b391aa92f5a2c093f48c550e4cb3d831fab096770e3c",
   "specVersion": "1.3.0"
 }

@@ -67,9 +67,9 @@ check:
     clear
     cargo update
     cargo clippy -- -D warnings
-    cargo minimal-versions check -p hiqlite --features server
-    cargo minimal-versions check -p hiqlite --no-default-features --features external-state-machine
-    cargo minimal-versions check -p hiqlite-wal
+    cargo minimal-versions check -p hiqlite-patched --features server
+    cargo minimal-versions check -p hiqlite-patched --no-default-features --features external-state-machine
+    cargo minimal-versions check -p hiqlite-wal-patched
 
     # update at the end again for following clippy and testing
     cargo update
@@ -253,23 +253,37 @@ release:
 
     just build-image
 
-# publish order: wal, core, macros - remember to update version in hiqlite-macros beforehand
-publish-wal: verify-is-clean
+# Packaging check for one crate, without touching the registry.
+#
+# `--no-verify` is deliberately absent everywhere in this file: it skips the build of the
+# packaged tree, which is the only thing that catches a manifest that resolves in the workspace
+# and not from the registry.
+package-check:
     #!/usr/bin/env bash
     set -euxo pipefail
-    cargo publish -p hiqlite-wal
-    echo "WAL published - now update the version in hiqlite/Cargo.toml and publish-derive"
+    cargo package -p hiqlite-wal-patched --allow-dirty
+    cargo package -p hiqlite-derive-patched --allow-dirty
+    # `hiqlite-patched` cannot be packaged until its two dependencies are on the registry: its
+    # published manifest resolves them by version. `--no-verify` would hide that rather than
+    # answer it, so this stops here and `publish-core` is what proves it.
+    echo "wal and derive package cleanly; core is verified at publication time"
+
+# Publication order is the dependency order: wal and derive first, then core, which depends on
+# both by version. Each step waits for the registry to serve what the next one needs.
+publish-wal:
+    #!/usr/bin/env bash
+    set -euxo pipefail
+    cargo publish -p hiqlite-wal-patched
 
 publish-derive:
     #!/usr/bin/env bash
     set -euxo pipefail
-    cargo publish -p hiqlite-derive
-    echo "Derive published - now update the version in hiqlite/Cargo.toml and publish-core"
+    cargo publish -p hiqlite-derive-patched
 
 publish-core:
     #!/usr/bin/env bash
     set -euxo pipefail
-    cargo publish -p hiqlite
+    cargo publish -p hiqlite-patched
 
 # does a `cargo update` + `npm update` for the UI
 update:

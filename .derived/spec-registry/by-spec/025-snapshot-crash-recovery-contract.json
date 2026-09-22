@@ -67,6 +67,6 @@
     "summary": "Repairs F-003, F-004 and F-006 as one contract rather than three fixes. Publication is a synced same-directory rename instead of a byte copy into the final name; installation stages, validates and restores before publishing, so a failed install neither destroys the last recoverable state nor becomes a restart candidate; and restart selection validates candidates, falls back to an older snapshot only when the local WAL can still close the gap, and otherwise refuses with an actionable error instead of starting empty.\n",
     "title": "Make internal snapshot publication, installation and restart selection one crash-recovery contract"
   },
-  "shardHash": "054121604b46abcfb16d718dee1cb1d33e878a52ac26fc21a48e523bcc7bff40",
+  "shardHash": "5f2e210c4bdf9233f78e908cca1102a6d7a77e32f585a3fa9863a7ff0946a12b",
   "specVersion": "1.3.0"
 }

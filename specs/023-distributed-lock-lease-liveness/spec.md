@@ -268,42 +268,44 @@ this spec's** (D-5), and `022`'s is `006`'s, so `spec-spine verify 006` and
 `verify 022` both resolve here and print the attribution line.
 
 ```verify:cli
+# Package names, not library names: the downstream release renamed the three packages
+# (`031` B-2), and `-p` takes a package name. `use hiqlite::..` is unaffected.
 # --- 022's acceptance, which is also 006's, carried forward unchanged ---
-cargo test -p hiqlite --lib --no-default-features --features cache store::state_machine::memory::cache_ttl_handler::tests::collision_bump_keeps_both_keys -- --exact
-cargo test -p hiqlite --lib --no-default-features --features cache store::state_machine::memory::cache_ttl_handler::tests::refreshed_key_is_not_deleted_at_old_expiry -- --exact
-cargo test -p hiqlite --lib --no-default-features --features cache store::state_machine::memory::cache_ttl_handler::tests::refreshed_key_expires_at_new_expiry -- --exact
-cargo test -p hiqlite --lib --no-default-features --features cache store::state_machine::memory::cache_ttl_handler::tests::clear_removes_pending_expiry -- --exact
-cargo test -p hiqlite --lib --no-default-features --features cache store::state_machine::memory::cache_ttl_handler::tests::snapshot_roundtrip_preserves_expiries -- --exact
-cargo test -p hiqlite --lib --no-default-features --features cache store::state_machine::memory::cache_ttl_handler::tests::old_seconds_expiries_are_normalized_on_install -- --exact
-cargo test -p hiqlite --lib --no-default-features --features cache store::state_machine::memory::kv_handler::tests::get_remove_and_replace_are_atomic_per_key -- --exact
-cargo test -p hiqlite --lib --no-default-features --features cache store::state_machine::memory::state_machine::serialized_enum_order::cache_request_variant_order_is_stable -- --exact
-cargo test -p hiqlite --lib --no-default-features --features cache,in-memory-snapshots store::state_machine::memory::state_machine::tests::in_memory_only_does_not_require_data_dir -- --exact
-cargo test -p hiqlite --lib --no-default-features --features cache,in-memory-snapshots store::state_machine::memory::state_machine::tests::read_current_snapshot_skips_temp_files -- --exact
-cargo test -p hiqlite --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::tests::lock_release_roundtrip -- --exact
-cargo test -p hiqlite --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::tests::duplicate_release_is_ignored -- --exact
-cargo test -p hiqlite --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::tests::release_after_lock_was_removed_is_ignored -- --exact
-cargo test -p hiqlite --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::tests::acquire_after_lock_was_removed_grants_fresh -- --exact
-cargo test -p hiqlite --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::tests::await_when_lock_was_removed_returns_released -- --exact
-cargo test -p hiqlite --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::tests::late_release_after_takeover_is_ignored -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features cache store::state_machine::memory::cache_ttl_handler::tests::collision_bump_keeps_both_keys -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features cache store::state_machine::memory::cache_ttl_handler::tests::refreshed_key_is_not_deleted_at_old_expiry -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features cache store::state_machine::memory::cache_ttl_handler::tests::refreshed_key_expires_at_new_expiry -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features cache store::state_machine::memory::cache_ttl_handler::tests::clear_removes_pending_expiry -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features cache store::state_machine::memory::cache_ttl_handler::tests::snapshot_roundtrip_preserves_expiries -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features cache store::state_machine::memory::cache_ttl_handler::tests::old_seconds_expiries_are_normalized_on_install -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features cache store::state_machine::memory::kv_handler::tests::get_remove_and_replace_are_atomic_per_key -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features cache store::state_machine::memory::state_machine::serialized_enum_order::cache_request_variant_order_is_stable -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features cache,in-memory-snapshots store::state_machine::memory::state_machine::tests::in_memory_only_does_not_require_data_dir -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features cache,in-memory-snapshots store::state_machine::memory::state_machine::tests::read_current_snapshot_skips_temp_files -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::tests::lock_release_roundtrip -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::tests::duplicate_release_is_ignored -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::tests::release_after_lock_was_removed_is_ignored -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::tests::acquire_after_lock_was_removed_grants_fresh -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::tests::await_when_lock_was_removed_returns_released -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::tests::late_release_after_takeover_is_ignored -- --exact
 grep -q 'LOCK_VALID_SECONDS: i64 = 10' hiqlite/src/store/state_machine/memory/dlock_handler.rs
 sh -c 'grep -q "unreachable!(\"a CacheRequest::Get should never come through the Raft\")" hiqlite/src/store/state_machine/memory/state_machine.rs'
-cargo test -p hiqlite --lib --no-default-features --features cache,counters,dlock,listen_notify_local store::state_machine::memory::state_machine::cache_compatibility_tests::an_out_of_range_cache_index_stops_application_at_that_entry -- --exact
-cargo test -p hiqlite --lib --no-default-features --features cache,counters,dlock,listen_notify_local store::state_machine::memory::state_machine::cache_compatibility_tests::a_later_batch_is_refused_once_the_node_is_incompatible -- --exact
-cargo test -p hiqlite --lib --no-default-features --features cache,counters,dlock,listen_notify_local store::state_machine::memory::state_machine::cache_compatibility_tests::a_command_that_must_never_be_replicated_stops_application -- --exact
-cargo test -p hiqlite --lib --no-default-features --features cache,counters,dlock,listen_notify_local store::state_machine::memory::state_machine::cache_compatibility_tests::the_recorded_failure_is_what_callers_are_refused_with -- --exact
-cargo test -p hiqlite --lib --no-default-features --features cache,counters,dlock,listen_notify_local store::state_machine::memory::state_machine::cache_compatibility_tests::a_compatible_batch_still_applies_completely -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features cache,counters,dlock,listen_notify_local store::state_machine::memory::state_machine::cache_compatibility_tests::an_out_of_range_cache_index_stops_application_at_that_entry -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features cache,counters,dlock,listen_notify_local store::state_machine::memory::state_machine::cache_compatibility_tests::a_later_batch_is_refused_once_the_node_is_incompatible -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features cache,counters,dlock,listen_notify_local store::state_machine::memory::state_machine::cache_compatibility_tests::a_command_that_must_never_be_replicated_stops_application -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features cache,counters,dlock,listen_notify_local store::state_machine::memory::state_machine::cache_compatibility_tests::the_recorded_failure_is_what_callers_are_refused_with -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features cache,counters,dlock,listen_notify_local store::state_machine::memory::state_machine::cache_compatibility_tests::a_compatible_batch_still_applies_completely -- --exact
 sh -c 'grep -q "fn unsupported_reason" hiqlite/src/store/state_machine/memory/state_machine.rs'
 sh -c 'grep -q "CacheIncompatible" hiqlite/src/error.rs'
 sh -c 'grep -q "fn ensure_cache_compatible" hiqlite/src/app_state.rs'
 # --- what this repair adds ---
-cargo test -p hiqlite --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::an_abandoned_waiter_never_kills_the_handler -- --exact
-cargo test -p hiqlite --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::a_grant_that_was_never_received_does_not_hold_the_lock -- --exact
-cargo test -p hiqlite --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::a_dead_promoted_ticket_does_not_block_the_next_caller -- --exact
-cargo test -p hiqlite --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::a_stale_release_after_takeover_blocks_nothing -- --exact
-cargo test -p hiqlite --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::an_interrupted_lease_is_reacquired_immediately_from_a_snapshot -- --exact
-cargo test -p hiqlite --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::a_completed_operation_leaves_nothing_to_wait_for_after_a_restart -- --exact
-cargo test -p hiqlite --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::replaying_an_unreleased_lock_re_grants_it_for_one_more_lease_window -- --exact
-cargo test -p hiqlite --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::a_fully_released_lock_wakes_its_stragglers -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::an_abandoned_waiter_never_kills_the_handler -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::a_grant_that_was_never_received_does_not_hold_the_lock -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::a_dead_promoted_ticket_does_not_block_the_next_caller -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::a_stale_release_after_takeover_blocks_nothing -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::an_interrupted_lease_is_reacquired_immediately_from_a_snapshot -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::a_completed_operation_leaves_nothing_to_wait_for_after_a_restart -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::replaying_an_unreleased_lock_re_grants_it_for_one_more_lease_window -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::a_fully_released_lock_wakes_its_stragglers -- --exact
 # no acknowledgement in the lock handler may panic its own task
 sh -c '! grep -q "ack.send(LockState::" hiqlite/src/store/state_machine/memory/dlock_handler.rs'
 sh -c 'grep -q "fn answer(" hiqlite/src/store/state_machine/memory/dlock_handler.rs'

@@ -1,0 +1,10 @@
+{
+  "package": {
+    "kind": "rust-lib-bin",
+    "name": "hiqlite-patched",
+    "path": "hiqlite",
+    "version": "0.15.0-patched.1"
+  },
+  "schemaVersion": "1.1.0",
+  "shardHash": "162ba322651dd0523ab0550e9db13ab95a7cc655d86a2b11aa72269f1e821710"
+}

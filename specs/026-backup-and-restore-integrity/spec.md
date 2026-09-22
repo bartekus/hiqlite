@@ -322,16 +322,18 @@ Run with `just spine-verify 026`. **This block is `013`'s acceptance as well as
 this spec's** (D-7). `013`'s own file is not edited.
 
 ```verify:cli
+# Package names, not library names: the downstream release renamed the three packages
+# (`031` B-2), and `-p` takes a package name. `use hiqlite::..` is unaffected.
 # --- 013's acceptance, carried forward, with the defect-pinning commands replaced ---
 test -f hiqlite/src/backup.rs
 test -f hiqlite/src/s3.rs
 sh -c 'spec-spine index owner hiqlite/src/backup.rs | grep -q 013-backup-retention-and-object-storage'
 sh -c 'spec-spine index owner hiqlite/src/s3.rs | grep -q 013-backup-retention-and-object-storage'
 sh -c 'spec-spine registry relationships 013-backup-retention-and-object-storage | grep -q 002-snapshot-publication-and-recovery'
-cargo test -p hiqlite --lib backup::tests::backup_config_validates_only_the_cron_expression -- --exact
-cargo test -p hiqlite --lib backup::tests::the_remote_retention_filter_accepts_only_the_documented_name_shape -- --exact
+cargo test -p hiqlite-patched --lib backup::tests::backup_config_validates_only_the_cron_expression -- --exact
+cargo test -p hiqlite-patched --lib backup::tests::the_remote_retention_filter_accepts_only_the_documented_name_shape -- --exact
 # was local_cleanup_deletes_files_that_are_not_backups, which pinned F-056
-cargo test -p hiqlite --lib backup::tests::local_cleanup_only_deletes_files_that_are_actually_backups -- --exact
+cargo test -p hiqlite-patched --lib backup::tests::local_cleanup_only_deletes_files_that_are_actually_backups -- --exact
 grep -q 'backup_node_{node_id}_{ts}.sqlite' hiqlite/src/store/state_machine/sqlite/writer.rs
 # was a grep for the inverted `!starts_with && !ends_with` guard
 sh -c 'grep -q "let Some(dt) = dt_from_backup_name(s) else" hiqlite/src/backup.rs'
@@ -372,8 +374,8 @@ spec-spine index coverage
 sh -c '! grep -rl "$(printf "\342\200\224")" specs/013-backup-retention-and-object-storage'
 sh -c '! grep -rl "$(printf "\342\200\224")" specs/026-backup-and-restore-integrity'
 # --- what this repair adds ---
-cargo test -p hiqlite --lib --features sqlite,backup backup::tests::the_retention_floor_is_utc_midnight_on_2024_01_01 -- --exact
-cargo test -p hiqlite --lib --features sqlite,backup backup::tests::an_invalid_backup_fails_validation_instead_of_panicking -- --exact
-cargo test -p hiqlite --lib --features sqlite,backup backup::tests::a_follower_moves_its_state_aside_instead_of_deleting_it -- --exact
-cargo test -p hiqlite --lib --features sqlite,backup,s3 backup::tests::missing_s3_variables_are_named_rather_than_panicking -- --exact
+cargo test -p hiqlite-patched --lib --features sqlite,backup backup::tests::the_retention_floor_is_utc_midnight_on_2024_01_01 -- --exact
+cargo test -p hiqlite-patched --lib --features sqlite,backup backup::tests::an_invalid_backup_fails_validation_instead_of_panicking -- --exact
+cargo test -p hiqlite-patched --lib --features sqlite,backup backup::tests::a_follower_moves_its_state_aside_instead_of_deleting_it -- --exact
+cargo test -p hiqlite-patched --lib --features sqlite,backup,s3 backup::tests::missing_s3_variables_are_named_rather_than_panicking -- --exact
 ```

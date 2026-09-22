@@ -368,6 +368,8 @@ Run with `just spine-verify 029`. **This block is the acceptance for `005`,
 is edited.
 
 ```verify:cli
+# Package names, not library names: the downstream release renamed the three packages
+# (`031` B-2), and `-p` takes a package name. `use hiqlite::..` is unaffected.
 # --- 005-adoption-assessment-and-plan's acceptance, carried forward, with the defect-pinning commands replaced ---
 test -f standards/spec/adoption-plan.md
 test -f standards/spec/findings-register.md
@@ -417,12 +419,12 @@ sh -c 'spec-spine index owner hiqlite.toml | grep -q 009-configuration-contract'
 sh -c 'spec-spine index owner hiqlite.env | grep -q 009-configuration-contract'
 sh -c 'spec-spine registry relationships 009-configuration-contract | grep -q 001-wal-durability-and-completion'
 # was documented_tls_api_no_verify_key_is_rejected_as_unknown, which pinned F-031
-cargo test -p hiqlite --lib --features toml config_toml::tests::the_documented_tls_api_no_verify_key_is_consumed_and_honoured -- --exact
-cargo test -p hiqlite --lib --features toml config_toml::tests::tls_api_no_verify_stays_false_when_the_raft_key_is_set -- --exact
+cargo test -p hiqlite-patched --lib --features toml config_toml::tests::the_documented_tls_api_no_verify_key_is_consumed_and_honoured -- --exact
+cargo test -p hiqlite-patched --lib --features toml config_toml::tests::tls_api_no_verify_stays_false_when_the_raft_key_is_set -- --exact
 # was prepared_statement_cache_capacity_default_differs_from_the_env_path, which pinned F-034
-cargo test -p hiqlite --lib --features toml config_toml::tests::the_prepared_statement_cache_default_is_the_same_on_every_route -- --exact
+cargo test -p hiqlite-patched --lib --features toml config_toml::tests::the_prepared_statement_cache_default_is_the_same_on_every_route -- --exact
 # was health_check_delay_secs_is_settable_from_toml_only, which pinned F-032
-cargo test -p hiqlite --lib --features toml config_toml::tests::health_check_delay_secs_is_settable_from_toml_and_from_the_environment -- --exact
+cargo test -p hiqlite-patched --lib --features toml config_toml::tests::health_check_delay_secs_is_settable_from_toml_and_from_the_environment -- --exact
 grep -q 'tls_api_danger_tls_no_verify' hiqlite.toml
 # was an assertion that the parser never reads the key `hiqlite.toml` documents
 sh -c 'grep -q "\"tls_api_danger_tls_no_verify\"" hiqlite/src/config_toml.rs'
@@ -449,11 +451,11 @@ sh -c 'spec-spine index owner hiqlite/src/migration.rs | grep -q 014-schema-migr
 sh -c 'spec-spine index owner hiqlite/tests/cluster/migrations/good/1_init.sql | grep -q 014-schema-migration-contract'
 sh -c 'spec-spine index owner hiqlite/tests/cluster/migration.rs | grep -q 012-cluster-integration-evidence'
 sh -c 'spec-spine registry relationships 014-schema-migration-contract | grep -q 012-cluster-integration-evidence'
-cargo test -p hiqlite --lib --features sqlite migration::tests::a_valid_set_is_ordered_by_index_and_hashed_by_content -- --exact
-cargo test -p hiqlite --lib --features sqlite migration::tests::a_syntactically_invalid_migration_still_builds -- --exact
+cargo test -p hiqlite-patched --lib --features sqlite migration::tests::a_valid_set_is_ordered_by_index_and_hashed_by_content -- --exact
+cargo test -p hiqlite-patched --lib --features sqlite migration::tests::a_syntactically_invalid_migration_still_builds -- --exact
 # was a_name_without_a_numeric_index_panics_with_the_other_rules_message, which pinned F-064
-cargo test -p hiqlite --lib --features sqlite migration::tests::a_name_without_a_numeric_index_names_that_rule -- --exact
-cargo test -p hiqlite --lib --features sqlite migration::tests::an_index_set_that_does_not_start_at_one_is_an_error -- --exact
+cargo test -p hiqlite-patched --lib --features sqlite migration::tests::a_name_without_a_numeric_index_names_that_rule -- --exact
+cargo test -p hiqlite-patched --lib --features sqlite migration::tests::an_index_set_that_does_not_start_at_one_is_an_error -- --exact
 # was the `expect` whose message fired for the wrong rule
 grep -q 'no `_` separating the index from the name' hiqlite/src/migration.rs
 grep -q 'must start with an integer index' hiqlite/src/migration.rs
@@ -486,12 +488,12 @@ sh -c 'spec-spine index owner hiqlite/src/server/proxy/stream.rs | grep -q 003-c
 sh -c 'spec-spine registry relationships 015-server-binary-and-proxy | grep -q 011-transport-security-material'
 # was the_proxy_metrics_route_is_rejected_by_the_pinned_axum, which pinned F-067 by asserting
 # that the literal the proxy used panics. It does; the proxy no longer uses it.
-cargo test -p hiqlite --features server --lib server::proxy::tests::the_proxy_route_table_can_be_constructed -- --exact
-cargo test -p hiqlite --features server --lib server::proxy::tests::the_zero_seven_spelling_is_still_rejected -- --exact
-cargo test -p hiqlite --features server --lib server::proxy::tests::the_same_capture_in_zero_eight_syntax_is_accepted -- --exact
-cargo test -p hiqlite --features server --lib server::config::tests::the_generated_config_omits_keys_the_reference_file_documents -- --exact
+cargo test -p hiqlite-patched --features server --lib server::proxy::tests::the_proxy_route_table_can_be_constructed -- --exact
+cargo test -p hiqlite-patched --features server --lib server::proxy::tests::the_zero_seven_spelling_is_still_rejected -- --exact
+cargo test -p hiqlite-patched --features server --lib server::proxy::tests::the_same_capture_in_zero_eight_syntax_is_accepted -- --exact
+cargo test -p hiqlite-patched --features server --lib server::config::tests::the_generated_config_omits_keys_the_reference_file_documents -- --exact
 # was proxy_validation_covers_two_fields_and_names_a_third, which pinned F-074
-cargo test -p hiqlite --features server --lib server::proxy::config::tests::proxy_validation_covers_two_fields_and_names_the_right_one -- --exact
+cargo test -p hiqlite-patched --features server --lib server::proxy::config::tests::proxy_validation_covers_two_fields_and_names_the_right_one -- --exact
 # was the axum 0.7 spelling that panics at router construction under the pinned axum 0.8
 grep -q '.route("/metrics/{raft_type}", get(handlers::metrics)),' hiqlite/src/server/proxy/mod.rs
 grep -q '"/metrics/{raft_type}", get(management::metrics)' hiqlite/src/start.rs
@@ -531,12 +533,12 @@ sh -c 'spec-spine index owner hiqlite-derive/src/from_row.rs | grep -q 016-deriv
 sh -c 'spec-spine index owner hiqlite-derive/src/into_cache_data.rs | grep -q 016-derive-macros'
 sh -c 'spec-spine registry relationships 016-derive-macros | grep -q 006-cache-state-machine'
 # was the_core_spelling_of_option_is_not_recognised, which pinned F-078
-cargo test -p hiqlite-derive --lib from_row::tests::both_spellings_of_option_take_the_optional_branch -- --exact
-cargo test -p hiqlite-derive --lib from_row::tests::the_fallible_attributes_expand_to_unwrap_or_expect -- --exact
-cargo test -p hiqlite-derive --lib from_row::tests::rename_combines_with_a_conversion_in_either_order -- --exact
-cargo test -p hiqlite-derive --lib from_row::tests::an_enum_input_panics_instead_of_emitting_a_diagnostic -- --exact
-cargo test -p hiqlite-derive --lib from_row::tests::from_i32_uses_try_from_and_never_clamps -- --exact
-cargo test -p hiqlite-derive --lib from_row::tests::basic_mapping_uses_row_get_by_column_name -- --exact
+cargo test -p hiqlite-derive-patched --lib from_row::tests::both_spellings_of_option_take_the_optional_branch -- --exact
+cargo test -p hiqlite-derive-patched --lib from_row::tests::the_fallible_attributes_expand_to_unwrap_or_expect -- --exact
+cargo test -p hiqlite-derive-patched --lib from_row::tests::rename_combines_with_a_conversion_in_either_order -- --exact
+cargo test -p hiqlite-derive-patched --lib from_row::tests::an_enum_input_panics_instead_of_emitting_a_diagnostic -- --exact
+cargo test -p hiqlite-derive-patched --lib from_row::tests::from_i32_uses_try_from_and_never_clamps -- --exact
+cargo test -p hiqlite-derive-patched --lib from_row::tests::basic_mapping_uses_row_get_by_column_name -- --exact
 grep -q 'proc_macro_derive(FromRow, attributes(column))' hiqlite-derive/src/lib.rs
 grep -q 'proc_macro_derive(CacheVariants)' hiqlite-derive/src/lib.rs
 sh -c 'grep -q "impl #impl_generics ::std::convert::From<&mut ::hiqlite::Row" hiqlite-derive/src/from_row.rs'
@@ -560,8 +562,8 @@ sh -c '! grep -rl "$(printf "\342\200\224")" specs/016-derive-macros'
 
 # --- what this repair adds ---
 # an oversized entry is a rejected append, not a dead writer
-cargo test -p hiqlite-wal --lib writer::tests::oversized_entry_errors_without_killing_writer -- --exact
-cargo test -p hiqlite-wal --lib log_store_impl::tests::append_adapter_reports_a_rejected_append_as_an_error -- --exact
+cargo test -p hiqlite-wal-patched --lib writer::tests::oversized_entry_errors_without_killing_writer -- --exact
+cargo test -p hiqlite-wal-patched --lib log_store_impl::tests::append_adapter_reports_a_rejected_append_as_an_error -- --exact
 sh -c '! grep -q "`data` length must not exceed `wal_size` -> data length" hiqlite-wal/src/writer.rs || ! grep -q "panic!" hiqlite-wal/src/writer.rs'
 sh -c 'grep -q "No-op, kept so a consumer that enables it still builds" hiqlite-wal/Cargo.toml'
 # and the ceiling it implies is selectable from the environment
@@ -572,13 +574,13 @@ sh -c 'grep -q "pub fn selected" hiqlite/src/app_state.rs'
 sh -c 'test "$(grep -c "raft_type.selected()?;" hiqlite/src/network/management.rs)" -eq 6'
 sh -c 'grep -q "raft_type.selected()?;" hiqlite/src/network/api.rs'
 # the migration rules are named errors, and the duplicate case says so
-cargo test -p hiqlite --lib --features sqlite migration::tests::a_duplicate_index_says_so -- --exact
-cargo test -p hiqlite --lib --features sqlite migration::tests::the_panicking_wrapper_still_panics_for_source_compatibility -- --exact
+cargo test -p hiqlite-patched --lib --features sqlite migration::tests::a_duplicate_index_says_so -- --exact
+cargo test -p hiqlite-patched --lib --features sqlite migration::tests::the_panicking_wrapper_still_panics_for_source_compatibility -- --exact
 test -f hiqlite/tests/cluster/migrations/duplicate/1_first.sql
 test -f hiqlite/tests/cluster/migrations/duplicate/1_second.sql
 sh -c 'grep -q "pub fn try_build<T: RustEmbed>() -> Result<Vec<Migration>, crate::Error>" hiqlite/src/migration.rs'
 # the derive accepts both spellings of Option and both shapes of generics
-cargo test -p hiqlite-derive --lib from_row::tests::both_spellings_of_option_take_the_optional_branch -- --exact
+cargo test -p hiqlite-derive-patched --lib from_row::tests::both_spellings_of_option_take_the_optional_branch -- --exact
 sh -c 'grep -q "needs unit variants" hiqlite-derive/src/into_cache_data.rs'
 # the public health waits can be bounded
 sh -c 'grep -q "pub async fn wait_until_healthy_db_timeout" hiqlite/src/client/mgmt.rs'

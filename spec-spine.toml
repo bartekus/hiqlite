@@ -95,6 +95,11 @@ extra_hashed_inputs = [
   ".github/workflows/spec-spine.yaml",
   # The post-merge acceptance workflow, claimed by 028.
   ".github/workflows/acceptance.yaml",
+  # The publication and review workflows, claimed by 031.
+  ".github/workflows/publish.yaml",
+  ".github/workflows/ai-review.yaml",
+  # The release ledger, claimed by 031. `standards/spec/**/*.md` above already covers it;
+  # named here only so a reader of this list sees the release documents together.
   # Governance inputs. The tier-1 spec, tier-2 constitution, tier-3 contract,
   # the authoring templates, and the shared agent protocol all change what the
   # corpus means, so a byte change in any of them must stale the committed

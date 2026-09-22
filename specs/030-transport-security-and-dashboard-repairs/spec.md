@@ -336,6 +336,8 @@ Run with `just spine-verify 030`. **This block is the acceptance for `011` and
 `018` as well as this spec's** (D-7).
 
 ```verify:cli
+# Package names, not library names: the downstream release renamed the three packages
+# (`031` B-2), and `-p` takes a package name. `use hiqlite::..` is unaffected.
 # --- 011's acceptance, carried forward, with the defect-pinning commands replaced ---
 test -f hiqlite/src/tls.rs
 test -f hiqlite/src/http_client.rs
@@ -344,11 +346,11 @@ sh -c 'spec-spine index owner hiqlite/src/tls.rs | grep -q 011-transport-securit
 sh -c 'spec-spine index owner hiqlite/src/http_client.rs | grep -q 011-transport-security-material'
 sh -c 'spec-spine index owner hiqlite/tests/tls_env.rs | grep -q 011-transport-security-material'
 sh -c 'spec-spine registry relationships 011-transport-security-material | grep -q 010-node-lifecycle-and-split-brain'
-cargo test -p hiqlite --lib --features sqlite tls::tests::auto_certificates_always_disable_verification -- --exact
+cargo test -p hiqlite-patched --lib --features sqlite tls::tests::auto_certificates_always_disable_verification -- --exact
 # was the_tls_material_type_has_no_field_for_a_trust_anchor, which pinned F-043
-cargo test -p hiqlite --lib --features sqlite tls::tests::the_tls_material_type_carries_a_trust_anchor -- --exact
-cargo test -p hiqlite --lib --features sqlite tls::tests::the_trust_anchor_reader_accepts_a_chain_and_rejects_anything_else -- --exact
-cargo test -p hiqlite --test tls_env --features sqlite -- --test-threads=1
+cargo test -p hiqlite-patched --lib --features sqlite tls::tests::the_tls_material_type_carries_a_trust_anchor -- --exact
+cargo test -p hiqlite-patched --lib --features sqlite tls::tests::the_trust_anchor_reader_accepts_a_chain_and_rejects_anything_else -- --exact
+cargo test -p hiqlite-patched --test tls_env --features sqlite -- --test-threads=1
 grep -q 'ServerTlsConfig::TlsAutoCertificates => true' hiqlite/src/tls.rs
 grep -q 'danger_tls_no_verify: false' hiqlite/src/tls.rs
 # was the `is_some() && is_some()` that fell through to `None` for half a pair (F-041)
@@ -411,17 +413,17 @@ sh -c 'spec-spine index owner dashboard/src/lib/utils/fetch.ts | grep -q 018-das
 sh -c 'spec-spine index owner dashboard/tests/smoke.spec.ts | grep -q 018-dashboard-service-and-ui'
 sh -c 'spec-spine registry relationships 018-dashboard-service-and-ui | grep -q 015-server-binary-and-proxy'
 # was the_single_flight_lock_is_released_before_any_hashing, which pinned F-084
-cargo test -p hiqlite --features dashboard --lib dashboard::password::tests::the_single_flight_lock_is_held_for_the_whole_hashing -- --exact
-cargo test -p hiqlite --features dashboard --lib dashboard::password::tests::verify_password_holds_the_lock_while_it_runs -- --exact
-cargo test -p hiqlite --features dashboard --lib dashboard::password::tests::the_hasher_is_argon2id_with_recorded_parameters -- --exact
+cargo test -p hiqlite-patched --features dashboard --lib dashboard::password::tests::the_single_flight_lock_is_held_for_the_whole_hashing -- --exact
+cargo test -p hiqlite-patched --features dashboard --lib dashboard::password::tests::verify_password_holds_the_lock_while_it_runs -- --exact
+cargo test -p hiqlite-patched --features dashboard --lib dashboard::password::tests::the_hasher_is_argon2id_with_recorded_parameters -- --exact
 # was a_multibyte_path_panics_the_fallback, which pinned F-085
-cargo test -p hiqlite --features dashboard --lib dashboard::static_files::tests::a_multibyte_path_is_served_or_missing_but_never_a_panic -- --exact
-cargo test -p hiqlite --features dashboard --lib dashboard::static_files::tests::an_already_compressed_type_is_not_encoded_again -- --exact
-cargo test -p hiqlite --features dashboard --lib dashboard::static_files::tests::a_known_asset_is_served_with_its_cache_headers -- --exact
-cargo test -p hiqlite --features dashboard --lib dashboard::static_files::tests::an_unknown_asset_is_a_plain_404 -- --exact
-cargo test -p hiqlite --features dashboard --lib dashboard::query::tests::forbidden_fn_scan_catches_only_real_calls -- --exact
-cargo test -p hiqlite --features dashboard --lib dashboard::session::tests -- --test-threads=1
-cargo test -p hiqlite --features dashboard --lib dashboard::handlers::tests
+cargo test -p hiqlite-patched --features dashboard --lib dashboard::static_files::tests::a_multibyte_path_is_served_or_missing_but_never_a_panic -- --exact
+cargo test -p hiqlite-patched --features dashboard --lib dashboard::static_files::tests::an_already_compressed_type_is_not_encoded_again -- --exact
+cargo test -p hiqlite-patched --features dashboard --lib dashboard::static_files::tests::a_known_asset_is_served_with_its_cache_headers -- --exact
+cargo test -p hiqlite-patched --features dashboard --lib dashboard::static_files::tests::an_unknown_asset_is_a_plain_404 -- --exact
+cargo test -p hiqlite-patched --features dashboard --lib dashboard::query::tests::forbidden_fn_scan_catches_only_real_calls -- --exact
+cargo test -p hiqlite-patched --features dashboard --lib dashboard::session::tests -- --test-threads=1
+cargo test -p hiqlite-patched --features dashboard --lib dashboard::handlers::tests
 # was the `let _ =` that dropped the guard at the end of the statement. It survives in the
 # test that asserts the difference, and not in the function.
 sh -c '! grep -q "^    let _ = IS_HASHING.write().await;" hiqlite/src/dashboard/password.rs'
@@ -436,7 +438,7 @@ sh -c 'grep -q "\.extension()" hiqlite/src/dashboard/static_files.rs'
 # (F-088), in one line
 sh -c '! grep -q "let sql_start = sql\[..7\].to_lowercase();" hiqlite/src/dashboard/query.rs'
 sh -c 'grep -q "fn first_keyword" hiqlite/src/dashboard/query.rs'
-cargo test -p hiqlite --features dashboard --lib dashboard::query::tests::the_first_keyword_is_found_past_whitespace_and_comments -- --exact
+cargo test -p hiqlite-patched --features dashboard --lib dashboard::query::tests::the_first_keyword_is_found_past_whitespace_and_comments -- --exact
 sh -c '! grep -q "if sql.len() < 8 {" hiqlite/src/dashboard/query.rs'
 grep -q 'There is no per-client state' hiqlite/src/dashboard/session.rs
 grep -q 'static NEXT_LOGIN_ALLOWED: Mutex<Option<Instant>> = Mutex::new(None);' hiqlite/src/dashboard/session.rs
@@ -444,7 +446,7 @@ grep -q 'static NEXT_LOGIN_ALLOWED: Mutex<Option<Instant>> = Mutex::new(None);' 
 # four lines below merely disabled the dashboard (F-089)
 sh -c '! grep -q "String::from_utf8(b64_decode(&b64).unwrap()).unwrap()" hiqlite/src/dashboard/mod.rs'
 sh -c 'grep -q "is not valid base64 and the dashboard will be disabled" hiqlite/src/dashboard/mod.rs'
-cargo test -p hiqlite --features dashboard --lib dashboard::tests::a_malformed_dashboard_password_is_a_value_not_a_panic -- --exact
+cargo test -p hiqlite-patched --features dashboard --lib dashboard::tests::a_malformed_dashboard_password_is_a_value_not_a_panic -- --exact
 grep -q 'HQL_PASSWORD_DASHBOARD has not been set and the dashboard will be disabled' hiqlite/src/dashboard/mod.rs
 sh -c 'grep -q "const COOKIE_NAME: &str = \"__Host-Hiqlite-Session\";" hiqlite/src/dashboard/session.rs'
 grep -q 'const SESSION_LIFETIME: i64 = 3600;' hiqlite/src/dashboard/session.rs
@@ -470,6 +472,6 @@ sh -c 'grep -q "const SESSION_LIFETIME: i64 = 3600;" hiqlite/src/dashboard/sessi
 sh -c '! grep -rq "logout" hiqlite/src/dashboard/'
 # and the generated server config documents the trust anchor alongside the reference file
 sh -c 'grep -q "tls_api_ca" hiqlite/src/server/config.rs'
-cargo test -p hiqlite --features server --lib server::config::tests::the_generated_config_omits_keys_the_reference_file_documents -- --exact
+cargo test -p hiqlite-patched --features server --lib server::config::tests::the_generated_config_omits_keys_the_reference_file_documents -- --exact
 sh -c '! grep -rl "$(printf "\342\200\224")" specs/030-transport-security-and-dashboard-repairs'
 ```

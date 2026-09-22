@@ -374,6 +374,8 @@ The two probe commands are a pair and must stay together: the build is what puts
 the binary under `panic = "abort"`, and running a stale one would prove nothing.
 
 ```verify:cli
+# Package names, not library names: the downstream release renamed the three packages
+# (`031` B-2), and `-p` takes a package name. `use hiqlite::..` is unaffected.
 # --- 010's acceptance, carried forward, with the defect-pinning commands replaced ---
 test -f hiqlite/src/start.rs
 test -f hiqlite/src/init.rs
@@ -384,12 +386,12 @@ sh -c 'spec-spine index owner hiqlite/src/init.rs | grep -q 010-node-lifecycle-a
 sh -c 'spec-spine index owner hiqlite/src/app_state.rs | grep -q 010-node-lifecycle-and-split-brain'
 sh -c 'spec-spine index owner hiqlite/src/split_brain_check.rs | grep -q 010-node-lifecycle-and-split-brain'
 sh -c 'spec-spine registry relationships 010-node-lifecycle-and-split-brain | grep -q 009-configuration-contract'
-cargo test -p hiqlite --lib start::tests::listen_port_comes_from_the_advertised_address -- --exact
-cargo test -p hiqlite --lib start::tests::missing_advertised_port_falls_back_to_the_scheme_default -- --exact
-cargo test -p hiqlite --lib start::tests::ipv6_advertised_address_produces_an_unparsable_listen_address -- --exact
-cargo test -p hiqlite --lib init::tests::node_identity_is_resolved_by_id_here_and_by_position_in_start -- --exact
-cargo test -p hiqlite --lib init::tests::is_valid_accepts_a_nodes_list_whose_ids_are_not_positions -- --exact
-cargo test -p hiqlite --lib init::tests::get_this_node_panics_when_the_id_is_absent -- --exact
+cargo test -p hiqlite-patched --lib start::tests::listen_port_comes_from_the_advertised_address -- --exact
+cargo test -p hiqlite-patched --lib start::tests::missing_advertised_port_falls_back_to_the_scheme_default -- --exact
+cargo test -p hiqlite-patched --lib start::tests::ipv6_advertised_address_produces_an_unparsable_listen_address -- --exact
+cargo test -p hiqlite-patched --lib init::tests::node_identity_is_resolved_by_id_here_and_by_position_in_start -- --exact
+cargo test -p hiqlite-patched --lib init::tests::is_valid_accepts_a_nodes_list_whose_ids_are_not_positions -- --exact
+cargo test -p hiqlite-patched --lib init::tests::get_this_node_panics_when_the_id_is_absent -- --exact
 grep -q '.get(node_config.node_id as usize - 1)' hiqlite/src/start.rs
 grep -q 'expect("this node to always exist in all nodes")' hiqlite/src/init.rs
 grep -q 'let (tx_shutdown, rx_shutdown) = tokio::sync::watch::channel(false);' hiqlite/src/start.rs
@@ -422,15 +424,15 @@ spec-spine index coverage
 sh -c '! grep -rl "$(printf "\342\200\224")" specs/010-node-lifecycle-and-split-brain'
 sh -c '! grep -rl "$(printf "\342\200\224")" specs/027-node-lifecycle-and-startup-errors'
 # --- what this repair adds ---
-cargo test -p hiqlite --lib --no-default-features --features sqlite,cache split_brain_check::tests::a_malformed_split_brain_interval_is_a_startup_error -- --exact
-cargo test -p hiqlite --lib --no-default-features --features sqlite,cache start::tests::a_listener_that_cannot_start_is_a_startup_error -- --exact
-cargo test -p hiqlite --lib --no-default-features --features sqlite,cache lifecycle::tests::the_first_failure_is_the_one_that_is_kept -- --exact
-cargo test -p hiqlite --lib --no-default-features --features sqlite,cache lifecycle::tests::a_failed_node_refuses_with_an_account_of_why -- --exact
-cargo test -p hiqlite --lib --no-default-features --features sqlite,cache lifecycle::tests::a_writer_thread_that_ends_without_a_reason_still_fails_the_node -- --exact
-cargo test -p hiqlite --lib --no-default-features --features sqlite,cache lifecycle::tests::a_reported_writer_failure_names_its_cause -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features sqlite,cache split_brain_check::tests::a_malformed_split_brain_interval_is_a_startup_error -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features sqlite,cache start::tests::a_listener_that_cannot_start_is_a_startup_error -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features sqlite,cache lifecycle::tests::the_first_failure_is_the_one_that_is_kept -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features sqlite,cache lifecycle::tests::a_failed_node_refuses_with_an_account_of_why -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features sqlite,cache lifecycle::tests::a_writer_thread_that_ends_without_a_reason_still_fails_the_node -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features sqlite,cache lifecycle::tests::a_reported_writer_failure_names_its_cause -- --exact
 # the abort-profile half. The build is what puts it under `panic = "abort"`; these two are a
 # pair and running a stale binary would prove nothing.
-cargo build --release -p hiqlite --features __abort-probe,s3 --bin hiqlite-abort-probe
+cargo build --release -p hiqlite-patched --features __abort-probe,s3 --bin hiqlite-abort-probe
 ./target/release/hiqlite-abort-probe
 # the lifecycle is consulted before any raft metric, on both endpoints and in the client
 sh -c 'grep -q "state.lifecycle.ensure_available()?" hiqlite/src/network/api.rs'

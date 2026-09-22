@@ -44,7 +44,7 @@
         "ownership": true,
         "sourceField": "establishes",
         "unit": {
-          "id": "hiqlite-derive",
+          "id": "hiqlite-derive-patched",
           "kind": "crate"
         }
       },
@@ -131,5 +131,5 @@
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "c7f7ad77bfdd0fc849c7269c562bcc434b02f6488a01fb382b5b030af34a8a55"
+  "shardHash": "11b280f7030c62c74aae4e25d175a5b9943b34d86a4d8c17c2fd87246e066bcc"
 }

@@ -372,7 +372,7 @@ dependencies = [
  "chrono",
  "clap",
  "console-subscriber",
- "hiqlite",
+ "hiqlite-patched",
  "serde",
  "tokio",
  "tracing",
@@ -738,6 +738,15 @@ name = "const-oid"
 version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a6ef517f0926dd24a1582492c791b6a4818a4d94e789a334894aa15b0d12f55c"
+
+[[package]]
+name = "constant_time_eq"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6187e670c346a04bcbf5def0393d57ec0e5ab56565cde6be4a7cbdb6cdc2f3f6"
+dependencies = [
+ "rustversion",
+]
 
 [[package]]
 name = "core-foundation"
@@ -1504,8 +1513,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
-name = "hiqlite"
-version = "0.14.0"
+name = "hiqlite-derive-patched"
+version = "0.15.0-patched.1"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.114",
+]
+
+[[package]]
+name = "hiqlite-patched"
+version = "0.15.0-patched.1"
 dependencies = [
  "axum",
  "axum-server",
@@ -1513,6 +1531,7 @@ dependencies = [
  "bytes",
  "chrono",
  "console-subscriber",
+ "constant_time_eq",
  "cron",
  "crossbeam",
  "cryptr",
@@ -1522,11 +1541,12 @@ dependencies = [
  "eventsource-client",
  "fastwebsockets",
  "flume",
+ "fs4",
  "futures-util",
  "getrandom 0.4.1",
  "hex",
- "hiqlite-derive",
- "hiqlite-wal",
+ "hiqlite-derive-patched",
+ "hiqlite-wal-patched",
  "hostname",
  "http-body-util",
  "hyper 1.8.1",
@@ -1560,23 +1580,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "hiqlite-derive"
-version = "0.14.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.114",
-]
-
-[[package]]
-name = "hiqlite-wal"
-version = "0.14.0"
+name = "hiqlite-wal-patched"
+version = "0.15.0-patched.1"
 dependencies = [
  "bincode",
  "byteorder",
  "crc",
  "flume",
  "fs4",
+ "libc",
  "memmap2",
  "openraft",
  "serde",
@@ -3141,7 +3153,7 @@ dependencies = [
  "security-framework 3.7.0",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
