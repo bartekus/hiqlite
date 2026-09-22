@@ -309,6 +309,15 @@ not every graph the ranges admit.
 0.9 patch release, including a security fix, without a new `-patched.N` release
 of this crate.
 
+**KD-10. `ai-review.yaml` could never be dispatched.** `workflow_dispatch`
+reaches only a workflow that exists on the repository's default branch, and that
+is `main`, which tracks upstream and carries none of this corpus. The first
+attempt to dispatch it after the merge returned "workflow not found on the
+default branch". It now also runs on a pushed `review-*` tag, a maintainer act
+with the same write access, from the tagged commit, with the same ancestor
+check. Changing the default branch was the other option; it is a repository
+setting and was not taken.
+
 **KD-9. This spec's own `## Verification` block does not run.** `032` declares
 `amends_verification` on it, so `just spine-verify 031` executes `032`'s block.
 The F-108 and F-109 checks were first written here, where they never ran, and

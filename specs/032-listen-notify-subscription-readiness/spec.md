@@ -286,6 +286,10 @@ sh -c 'grep -q "CLAUDE_CODE_OAUTH_TOKEN" .github/workflows/ai-review.yaml'
 sh -c '! grep -q "secrets.CARGO_REGISTRY_TOKEN" .github/workflows/ai-review.yaml'
 sh -c '! grep -qE "^ *pull_request" .github/workflows/ai-review.yaml'
 sh -c 'grep -q "merge-base --is-ancestor" .github/workflows/ai-review.yaml'
+# 031 KD-10: dispatch cannot reach this workflow, so a review-* tag can, and the ref is not interpolated
+sh -c 'grep -q "      - \"review-\*\"" .github/workflows/ai-review.yaml'
+sh -c '! grep -q "\${{ inputs.ref }}\"" .github/workflows/ai-review.yaml'
+sh -c '! grep -qE "^ *pull_request" .github/workflows/ai-review.yaml'
 # the ledger
 test -f standards/spec/release-ledger.md
 sh -c 'grep -q "hiqlite-patched" standards/spec/release-ledger.md'

@@ -15,6 +15,13 @@ on:
         description: "The commit to review. Must already be on the integration branch."
         required: true
         type: string
+  # `workflow_dispatch` only reaches a workflow that exists on the repository's default branch,
+  # which here is `main`, the branch that tracks upstream and carries none of this. A pushed
+  # `review-*` tag is the same maintainer act with the same write access, and it runs this file
+  # from the tagged commit. The ancestor check below applies to both.
+  push:
+    tags:
+      - "review-*"
 
 permissions:
   contents: read
@@ -24,10 +31,14 @@ jobs:
     name: Review the release candidate
     runs-on: ubuntu-latest
     environment: ai-review
+    env:
+      # The dispatch input, or the tagged commit. Passed through the environment rather than
+      # interpolated into a script.
+      REVIEW_REF: ${{ inputs.ref || github.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ env.REVIEW_REF }}
           fetch-depth: 0
 
       - name: The ref must be an ancestor of the integration branch
@@ -35,8 +46,8 @@ jobs:
         run: |
           set -euo pipefail
           git fetch origin spec-spine
-          if ! git merge-base --is-ancestor "${{ inputs.ref }}" origin/spec-spine; then
-            echo "::error::${{ inputs.ref }} is not on the integration branch"
+          if ! git merge-base --is-ancestor "$REVIEW_REF" origin/spec-spine; then
+            echo "::error::$REVIEW_REF is not on the integration branch"
             exit 1
           fi
 
