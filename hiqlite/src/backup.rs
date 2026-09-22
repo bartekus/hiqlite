@@ -473,11 +473,29 @@ pub async fn restore_backup(node_config: &NodeConfig, src: BackupSource) -> Resu
     sync_file(&path_db_staged).await?;
 
     debug!("Removing old data");
-    // The database is removed last of the four, and by rename rather than by deletion, so a
+    // The database is published last of the four, and by rename rather than by deletion, so a
     // crash anywhere in here leaves either the old file or the new one at the final name.
     remove_dir_all_reported(&path_snapshots).await?;
     remove_file_reported(&path_lock_file).await?;
     remove_dir_all_reported(&path_logs).await?;
+
+    // F-100: the previous database's write-ahead log and shared-memory file are removed too.
+    // Replacing `hiqlite.db` alone leaves `hiqlite.db-wal` beside it, and that WAL belongs to
+    // the database that was just discarded: it carries the pre-restore `_metadata`, including
+    // the membership. A node restored that way came up believing it was already a member of
+    // the cluster it was supposed to rejoin, so it never initialized itself, could not reach a
+    // quorum on its own, and never served the endpoint its peers needed in order to rejoin it.
+    //
+    // They are removed after the staged image is durable and before the rename, so the window
+    // in which the final name holds a database with a foreign WAL is never entered.
+    for sidecar in [
+        format!("{path_db_full}-wal"),
+        format!("{path_db_full}-shm"),
+    ] {
+        if fs::try_exists(&sidecar).await.unwrap_or(false) {
+            remove_file_reported(&sidecar).await?;
+        }
+    }
 
     fs::rename(&path_db_staged, &path_db_full).await?;
     sync_parent_dir(&path_db).await?;
@@ -924,6 +942,83 @@ mod tests {
         assert!(
             quarantined.join("state_machine/db/hiqlite.db").exists(),
             "an earlier quarantine is left where it is"
+        );
+
+        fs::remove_dir_all(&dir).await.unwrap();
+    }
+
+    /// F-100: a restore removes the previous database's write-ahead log and shared-memory file
+    /// along with the database itself.
+    ///
+    /// Replacing `hiqlite.db` alone left `hiqlite.db-wal` beside it, and that WAL belongs to the
+    /// database that was just discarded. The restored node opened the backup with the old WAL
+    /// attached, read the pre-restore `_metadata` out of it, and therefore believed it was
+    /// already a member of the cluster it had just been told to rejoin: it never initialized
+    /// itself, could not reach a quorum alone, and never served the endpoint its peers needed
+    /// in order to rejoin it. Observed as a three-node deadlock in the cluster test's restore
+    /// phase.
+    #[cfg(feature = "sqlite")]
+    #[tokio::test]
+    async fn a_restore_removes_the_previous_write_ahead_log_and_not_only_the_database() {
+        let dir = std::env::temp_dir().join(format!(
+            "hiqlite-restore-sidecars-{}",
+            Utc::now().timestamp_nanos_opt().unwrap()
+        ));
+        let base = dir.to_string_lossy().into_owned();
+        let db_dir = dir.join("state_machine/db");
+        fs::create_dir_all(&db_dir).await.unwrap();
+
+        // The state the restore is replacing, sidecars and all.
+        fs::write(db_dir.join("hiqlite.db"), b"the previous database")
+            .await
+            .unwrap();
+        fs::write(db_dir.join("hiqlite.db-wal"), b"the previous write-ahead log")
+            .await
+            .unwrap();
+        fs::write(db_dir.join("hiqlite.db-shm"), b"the previous shared memory")
+            .await
+            .unwrap();
+
+        // A backup that passes validation on its own merits, so nothing here depends on
+        // `HQL_BACKUP_SKIP_VALIDATION`, which is process-wide.
+        let backup = dir.join("valid-backup.sqlite").to_string_lossy().into_owned();
+        let path = backup.clone();
+        task::spawn_blocking(move || {
+            let conn = rusqlite::Connection::open(path).unwrap();
+            conn.execute("CREATE TABLE _metadata (key TEXT PRIMARY KEY, data BLOB)", ())
+                .unwrap();
+            conn.execute(
+                "INSERT INTO _metadata VALUES ('meta', ?1)",
+                [crate::helpers::serialize(&StateMachineData::default()).unwrap()],
+            )
+            .unwrap();
+        })
+        .await
+        .unwrap();
+
+        let mut node_config = NodeConfig::default();
+        node_config.data_dir = base.clone().into();
+        node_config.filename_db = "hiqlite.db".into();
+
+        restore_backup(&node_config, BackupSource::File(backup))
+            .await
+            .expect("a valid backup restores");
+
+        assert!(
+            db_dir.join("hiqlite.db").exists(),
+            "the restored database is in place"
+        );
+        assert!(
+            !db_dir.join("hiqlite.db-wal").exists(),
+            "the previous write-ahead log must not survive the restore"
+        );
+        assert!(
+            !db_dir.join("hiqlite.db-shm").exists(),
+            "the previous shared-memory file must not survive the restore"
+        );
+        assert!(
+            !db_dir.join("hiqlite.db.restoring").exists(),
+            "the staging name is consumed by the rename"
         );
 
         fs::remove_dir_all(&dir).await.unwrap();

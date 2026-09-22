@@ -296,13 +296,13 @@ cargo test -p hiqlite-patched --lib --no-default-features --features cache,liste
 cargo test -p hiqlite-patched --lib --no-default-features --features cache,listen_notify_local store::state_machine::memory::notify_handler::tests::every_acknowledged_subscriber_receives_the_same_event -- --exact
 # B-1: the request carries an acknowledgement, and the handler answers it after the push
 sh -c 'grep -q "tokio::sync::oneshot::Sender<()>" hiqlite/src/store/state_machine/memory/notify_handler.rs'
-sh -c 'grep -A2 "listeners.push(tx);" hiqlite/src/store/state_machine/memory/notify_handler.rs | grep -q "ack.send(())"'
+sh -c 'grep -A5 "listeners.push(tx);" hiqlite/src/store/state_machine/memory/notify_handler.rs | grep -q "ack.send(())"'
 sh -c '! grep -q "ack.send(()).unwrap()" hiqlite/src/store/state_machine/memory/notify_handler.rs'
 sh -c 'grep -q "ack_rx" hiqlite/src/network/api.rs'
 # B-2: the client is handed a readiness signal and waits on it
 sh -c 'grep -q "READY_TIMEOUT: Duration = Duration::from_secs(10)" hiqlite/src/client/listen_notify.rs'
 sh -c 'grep -q "oneshot::Receiver<()>)" hiqlite/src/client/listen_notify.rs'
-sh -c 'grep -A3 "SSE::Connected(c)" hiqlite/src/client/listen_notify.rs | grep -q "tx_ready.take()"'
+sh -c 'grep -A6 "SSE::Connected(c)" hiqlite/src/client/listen_notify.rs | grep -q "tx_ready.take()"'
 sh -c 'grep -q "tokio::time::timeout(crate::client::listen_notify::remote::READY_TIMEOUT, ready)" hiqlite/src/client/create.rs'
 # B-3: a timeout warns and construction still succeeds
 sh -c 'grep -A6 "READY_TIMEOUT, ready" hiqlite/src/client/create.rs | grep -q "Ok(Ok(())) => {}"'

@@ -121,6 +121,19 @@ the final name. The three removals now **report** their failures instead of
 discarding them: a restore that could not remove the old snapshots or logs has
 left a new database beside stale state, which is not a state to start on.
 
+The previous database's `-wal` and `-shm` files are removed in the same pass,
+after the staged image is durable and before the rename. This is F-100, and it
+was this spec's own regression: replacing `hiqlite.db` by rename replaces that
+name and nothing else, and the removal the old order did for free was a removal
+of the whole database directory. A restored node that keeps the discarded
+database's write-ahead log reads the pre-restore `_metadata` out of it,
+including the membership, and comes up believing it is already a member of the
+cluster it was told to rejoin. Section 4 records what that cost.
+
+Removing them before the rename rather than after keeps F-057's property: the
+final name is never occupied by a database with a foreign write-ahead log, and
+nothing at all is removed until the replacement is on disk and synced.
+
 ### B-4. A follower moves its state aside rather than deleting it
 
 Every node that is not node 1 used to run `remove_dir_all(data_dir)` whenever
@@ -196,8 +209,10 @@ Stated here so a release note can repeat it without inventing it.
 
 ## 4. Evidence and its limits
 
-Seven tests in `backup.rs`, four of them added or replaced here. **Four fail
-against the unrepaired code**, run and observed: 3 passed, 4 failed.
+Eight tests in `backup.rs`, five of them added or replaced here. **Four fail
+against the unrepaired code**, run and observed: 3 passed, 4 failed. The fifth,
+added on 2026-09-22, fails against this spec's own first implementation, which
+is what it is for.
 
 - the local sweep only deletes files that are actually backups, asserted against
   the F-056 shape and two more lookalikes, one of which the old prefix-only
@@ -209,17 +224,23 @@ against the unrepaired code**, run and observed: 3 passed, 4 failed.
   a database and for a real database whose metadata does not decode;
 - a follower moves its state aside instead of deleting it, asserted on the
   recovered bytes, on the owner lock surviving, and on a second run not nesting;
-- missing S3 variables are named rather than panicking, through `from_lookup`.
+- missing S3 variables are named rather than panicking, through `from_lookup`;
+- a restore removes the previous write-ahead log and not only the database,
+  driving `restore_backup` end to end against a real backup file and a real
+  data-directory layout. Observed failing against this spec's first
+  implementation, which left `hiqlite.db-wal` in place. F-100.
 
 What the acceptance does **not** establish:
 
 - **No S3 transfer happens.** `verify_access` is not called in any test, and
   neither is `push` or `pull`. F-019's skipped S3 tests are unchanged, and the
   credential probe is a source change.
-- **`restore_backup` is not executed end to end.** B-3's ordering is a source
-  change. What is tested is the validation it depends on and the follower path
-  beside it. A test of the full restore needs a real backup file and a real data
-  directory layout, which is `012`'s surface.
+- **The restore is executed end to end, on one node.** The F-100 test drives
+  `restore_backup` against a real backup file and a real data-directory layout,
+  which is more than this section claimed before 2026-09-22, and it is still one
+  node with no raft attached. What a restored node then does with its state is
+  `012`'s surface, and it is where F-100 was actually found: no unit test would
+  have caught a node that starts successfully and then declines to elect itself.
 - **The S3 test cannot exercise the environment route.** It drives `from_lookup`,
   so it proves the named errors and not that `try_from_env` reads the right
   variable names. That gap is `009` D-3's and is unchanged.
@@ -378,4 +399,8 @@ cargo test -p hiqlite-patched --lib --features sqlite,backup backup::tests::the_
 cargo test -p hiqlite-patched --lib --features sqlite,backup backup::tests::an_invalid_backup_fails_validation_instead_of_panicking -- --exact
 cargo test -p hiqlite-patched --lib --features sqlite,backup backup::tests::a_follower_moves_its_state_aside_instead_of_deleting_it -- --exact
 cargo test -p hiqlite-patched --lib --features sqlite,backup,s3 backup::tests::missing_s3_variables_are_named_rather_than_panicking -- --exact
+# F-100: the restore removes the discarded database's write-ahead log too
+cargo test -p hiqlite-patched --lib --features sqlite,backup backup::tests::a_restore_removes_the_previous_write_ahead_log_and_not_only_the_database -- --exact
+sh -c 'grep -q "{path_db_full}-wal" hiqlite/src/backup.rs'
+sh -c 'grep -B4 "fs::rename(&path_db_staged, &path_db_full)" hiqlite/src/backup.rs | grep -q "remove_file_reported(&sidecar)"'
 ```

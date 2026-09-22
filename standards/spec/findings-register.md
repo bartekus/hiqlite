@@ -2444,3 +2444,34 @@ Found 2026-09-21 while triaging the register for the release. Not repaired:
 the register's structure is `005`'s, and adding two entries is a change to it
 rather than to any code. Recorded so the count and the content stop disagreeing
 silently.
+
+### F-100 `defect`, confidence `high`
+
+**A restore replaced the database and left the previous database's write-ahead
+log beside it, so the restored node started on foreign metadata.** `026`'s
+staging repair (F-057) changed the restore from "remove the database directory,
+then copy the backup into it" to "copy the backup to `hiqlite.db.restoring`,
+sync it, remove the snapshots, the lock marker and the logs, then rename". The
+rename replaces `hiqlite.db` and nothing else, and `hiqlite.db-wal` and
+`hiqlite.db-shm` were left where they were. They belong to the database that
+was just discarded.
+
+**Observed by execution**, on 2026-09-22, in the cluster integration test's
+`restore from file backup` phase, which became reachable for the first time
+once F-051 was repaired. Node 1 restored, read the pre-restore `_metadata` out
+of the stale write-ahead log, and reported `node 1 raft is already initialized`
+with the three-node membership from before the restore instead of
+`initializing pristine node 1 raft`. It therefore needed two votes it could not
+get, and `restore_backup_finish` blocks on `current_leader()` before the
+routers serve, so nodes 2 and 3 could not reach the endpoint they needed in
+order to rejoin it. Three nodes, no leader, no progress.
+
+The same run on the fork's base with only the F-051 repair applied completed
+all fifteen phases, which is what identifies this as a regression introduced by
+`026` and not a pre-existing defect.
+
+**Repaired 2026-09-22 by `026-backup-and-restore-integrity`.** The two sidecar
+files are removed after the staged image is durable and before the rename, so
+the final name never holds a database with a foreign write-ahead log, and
+F-057's rollback property is unchanged: nothing is removed until the
+replacement is on disk and synced.

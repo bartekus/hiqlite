@@ -1,31 +1,30 @@
 {
   "mapping": {
     "amends": [
-      "001-wal-durability-and-completion"
+      "031-downstream-release-qualification"
     ],
     "dependsOn": [
       "000-hiqlite-ownership-bootstrap",
-      "001-wal-durability-and-completion"
+      "003-client-consistency-and-retry-outcomes",
+      "006-cache-state-machine",
+      "012-cluster-integration-evidence",
+      "031-downstream-release-qualification"
     ],
     "implementingPaths": [
       {
-        "path": "hiqlite-wal/src/",
+        "path": "hiqlite/src/client/",
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite/src/store/state_machine/sqlite/",
+        "path": "hiqlite/src/network/",
         "source": "spec-edge"
       },
       {
-        "path": "standards/spec/adoption-plan.md",
+        "path": "hiqlite/src/store/state_machine/memory/",
         "source": "spec-edge"
       },
       {
         "path": "standards/spec/findings-register.md",
-        "source": "spec-edge"
-      },
-      {
-        "path": "standards/spec/wal-repair-proposal.md",
         "source": "spec-edge"
       }
     ],
@@ -33,40 +32,40 @@
       {
         "locations": [
           {
-            "file": "hiqlite-wal/src/"
+            "file": "hiqlite/src/client/"
           }
         ],
         "ownership": true,
         "sourceField": "extends",
         "unit": {
           "kind": "directory",
-          "path": "hiqlite-wal/src/"
+          "path": "hiqlite/src/client/"
         }
       },
       {
         "locations": [
           {
-            "file": "hiqlite/src/store/state_machine/sqlite/"
+            "file": "hiqlite/src/network/"
           }
         ],
         "ownership": true,
         "sourceField": "extends",
         "unit": {
           "kind": "directory",
-          "path": "hiqlite/src/store/state_machine/sqlite/"
+          "path": "hiqlite/src/network/"
         }
       },
       {
         "locations": [
           {
-            "file": "standards/spec/adoption-plan.md"
+            "file": "hiqlite/src/store/state_machine/memory/"
           }
         ],
         "ownership": true,
         "sourceField": "extends",
         "unit": {
-          "kind": "file",
-          "path": "standards/spec/adoption-plan.md"
+          "kind": "directory",
+          "path": "hiqlite/src/store/state_machine/memory/"
         }
       },
       {
@@ -81,24 +80,11 @@
           "kind": "file",
           "path": "standards/spec/findings-register.md"
         }
-      },
-      {
-        "locations": [
-          {
-            "file": "standards/spec/wal-repair-proposal.md"
-          }
-        ],
-        "ownership": true,
-        "sourceField": "extends",
-        "unit": {
-          "kind": "file",
-          "path": "standards/spec/wal-repair-proposal.md"
-        }
       }
     ],
-    "specId": "008-wal-append-completion-notification",
+    "specId": "032-listen-notify-subscription-readiness",
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "7cdf33b33f6eab300335c5fb3a4c198fe7c600f07a07137e4865894555b044c4"
+  "shardHash": "0e7c77dfa2eca75163571ea91f22f28e0a1f2875fb8aa11c67a13413c573a1cb"
 }
