@@ -2476,6 +2476,13 @@ the final name never holds a database with a foreign write-ahead log, and
 F-057's rollback property is unchanged: nothing is removed until the
 replacement is on disk and synced.
 
+**Consumer triage.** Reaches both named consumers: Rauthy and Rahi both enable
+`backup`. The three-node deadlock needs `N > 1`, because a single-member
+membership can elect itself; at `N = 1` the same stale write-ahead log instead
+gives the restored node a `last_applied` and a membership from before the
+restore, which is the wrong state to start on even though it starts. Either way
+the repair is the same and neither consumer should run an affected build.
+
 ### F-101 `defect`, confidence `high`
 
 **A deliberate shutdown was recorded as a WAL writer failure, and took the node
@@ -2498,6 +2505,14 @@ had not.
 is asked to stop, and `fail` records nothing afterwards. A failure recorded
 **before** the shutdown is kept, because that failure is still why the node is
 going away.
+
+**Consumer triage.** Reaches both named consumers: every embedded node shuts
+down, and both run one. The consequence is a false `ERROR` line and a node that
+describes itself as out of service while it is going away; nothing outlives the
+process, and no operation is wrongly refused in a way a caller could observe,
+because the refusals begin at the moment the node stops serving anyway. Low
+severity, high visibility, and it would have made every clean shutdown look like
+an incident in a consumer's logs.
 
 ### F-102 `evidence`, confidence `medium`
 
@@ -2525,6 +2540,10 @@ are changes to `012`'s fixture surface rather than to the handler `023`
 repaired. Recorded so the next occurrence has something to attach to, with the
 run's evidence rather than an impression. `012` KD-1, F-048.
 
+**Consumer triage.** Reaches neither named consumer: it is a property of this
+repository's test fixture, not of the library. It is recorded because it bounds
+what the suite's green result establishes, not because a consumer is exposed.
+
 ### F-103 `defect`, confidence `high`
 
 **The pull-request style workflow ran with a writable token.**
@@ -2544,3 +2563,8 @@ B-4: the workflow now declares `permissions: contents: read`, with the reason
 in the file. The repository-wide default is not changed, because that is a
 repository setting rather than a change to this tree, and an explicit block in
 each workflow is the stronger statement anyway.
+
+**Consumer triage.** Reaches neither named consumer: it is this repository's CI
+configuration and nothing in a published artifact. It is in scope because the
+release's own instruction was to keep build, review and publication credentials
+separate and least-privilege, and auditing that is what found it.
