@@ -2600,3 +2600,45 @@ anyone building with `server`, as a build failure rather than a runtime one.
 `hiqlite-wal`'s test modules, which carry pre-existing lints unrelated to this
 release. Silencing those to widen the check would be changing unrelated code to
 make a gate pass, so the gate is narrower and this is what it does not cover.
+
+### F-105 `defect`, confidence `high`
+
+**A rejected append reported "sending on a closed channel" instead of why it
+was rejected, depending on who won a race.** `RaftLogStorage::append` sends the
+batch's entries to the writer thread over a bounded channel and then waits on an
+acknowledgement. The writer stops reading a batch as soon as it has decided that
+batch's outcome, and dropping its receiver makes the adapter's **next** send
+fail. That `SendError` was mapped straight to `StorageIOError::write_logs`, so
+openraft received `flume::SendError<Option<(u64, Vec<u8>)>>: sending on a closed
+channel` and the actual cause, `WalSizeExceeded`, was discarded. The cause was
+never lost: it was already on its way down the acknowledgement channel, which
+the early return abandoned.
+
+Which of the two a caller saw depended purely on whether the writer reached
+`drop(rx)` before the adapter reached its next send.
+
+**Observed by execution**, on 2026-09-22.
+`append_adapter_reports_a_rejected_append_as_an_error` passed **forty out of
+forty** local runs and failed on the first CI run, on a slower and more
+contended machine. It would have been easy and wrong to record that as a flaky
+test: the test asserted the right thing, and the code under it was reporting the
+wrong error half the time.
+
+**Repaired 2026-09-22 by `021-wal-append-stream-integrity`.** A failed send now
+waits for the writer's verdict and reports that. Three outcomes are named: the
+writer's own error; a success reported for a batch that was never finished
+sending, which is a broken contract rather than a storage failure and is refused
+as one rather than passed to openraft as a successful append; and no verdict at
+all, which is what a panic in the writer looks like from the adapter.
+
+**Consumer triage.** Reaches both named consumers: any append larger than
+`wal_size`, or any other writer-side rejection, could surface as a closed-channel
+error instead of its cause. The append still failed either way, so this is a
+diagnosis defect rather than a durability one, and it is the difference between
+an operator reading "entry is larger than the WAL file" and reading a channel
+error that names nothing actionable. F-098 is the defect that produces the
+rejection; this is the one that hid its reason.
+
+**Tested directly, not by re-running the race.** The three verdict paths are
+driven through the function itself, because whether a given machine loses the
+race is not something a test should depend on.

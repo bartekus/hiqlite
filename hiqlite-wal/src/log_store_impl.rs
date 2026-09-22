@@ -37,6 +37,35 @@ pub fn deserialize<T: DeserializeOwned>(bytes: &[u8]) -> Result<T, DecodeError> 
 /// silently. A queued or in-flight operation whose thread has gone away is a storage error,
 /// and openraft has a channel for exactly that.
 #[inline]
+/// The writer's own verdict on an append whose entry stream it stopped reading.
+///
+/// The writer stops reading only after it has decided the batch's outcome, so that decision is
+/// already on its way down `ack`. This waits for it and reports it, so the caller is told why
+/// the append failed rather than that a channel was closed.
+async fn writer_verdict<T: RaftTypeConfig>(
+    ack_rx: oneshot::Receiver<Result<(), crate::error::Error>>,
+) -> StorageError<T::NodeId> {
+    match ack_rx.await {
+        // The expected case: the writer refused the batch and said why.
+        Ok(Err(err)) => StorageIOError::write_logs(&err).into(),
+        // The writer reported success for a batch it never finished reading. That is a broken
+        // contract rather than a storage failure, and it is named as one instead of being
+        // returned to openraft as a successful append.
+        Ok(Ok(())) => StorageError::IO {
+            source: StorageIOError::new(
+                ErrorSubject::Logs,
+                ErrorVerb::Write,
+                AnyError::error(
+                    "the WAL writer reported this append as complete while it was still being \
+                     sent, so the batch it persisted is not the batch that was submitted",
+                ),
+            ),
+        },
+        // The writer is gone without a verdict, which is what a panic in it looks like here.
+        Err(_) => thread_gone::<T>(ErrorSubject::Logs, ErrorVerb::Write, "writer"),
+    }
+}
+
 fn thread_gone<T: RaftTypeConfig>(
     subject: ErrorSubject<T::NodeId>,
     verb: ErrorVerb,
@@ -263,15 +292,27 @@ where
         // the truncated stream the writer now names rather than mistaking for a clean end. The
         // writer reports that failure on both channels, so returning here does not leave the
         // completion callback unfired.
+        //
+        // A **failed send** is different from a failed serialization, and is not reported as
+        // one. The writer only stops reading a batch once it has already decided that batch's
+        // outcome, so a closed receiver means the verdict is waiting on `ack`. Returning the
+        // `SendError` here would replace "this entry is larger than the WAL file" with
+        // "sending on a closed channel", which names the symptom and discards the cause. Which
+        // of the two the caller saw depended purely on whether the writer got to `drop(rx)`
+        // before this loop got to its next send.
         for entry in entries {
             let data = serialize(&entry).map_err(|err| StorageIOError::write_logs(&err))?;
-            tx.send_async(Some((entry.get_log_id().index, data)))
+            if tx
+                .send_async(Some((entry.get_log_id().index, data)))
                 .await
-                .map_err(|err| StorageIOError::write_logs(&err))?;
+                .is_err()
+            {
+                return Err(writer_verdict::<T>(ack_rx).await);
+            }
         }
-        tx.send_async(None)
-            .await
-            .map_err(|err| StorageIOError::write_logs(&err))?;
+        if tx.send_async(None).await.is_err() {
+            return Err(writer_verdict::<T>(ack_rx).await);
+        }
 
         ack_rx
             .await
@@ -565,6 +606,52 @@ mod tests {
             reported.contains("injected persistence failure"),
             "openraft must receive the underlying cause, not a closed-channel error; got: \
             {reported}"
+        );
+    }
+
+    /// The three verdicts `writer_verdict` can reach, driven directly.
+    ///
+    /// This is the path CI exercised and local runs did not. When the writer stops reading a
+    /// batch before the adapter has finished sending it, the send fails and the real outcome is
+    /// on the acknowledgement channel. Whether that happens is a race between the writer's
+    /// `drop(rx)` and the adapter's next send, so it is tested here rather than left to whether
+    /// a given machine loses it: `append_adapter_reports_a_rejected_append_as_an_error` passed
+    /// forty times locally and failed on the first CI run.
+    #[tokio::test]
+    async fn a_writer_that_stopped_reading_is_reported_by_its_verdict_not_by_the_channel() {
+        // The expected case: the writer refused the batch and said why.
+        let (ack, ack_rx) = oneshot::channel();
+        ack.send(Err(crate::error::Error::WalSizeExceeded(
+            "entry is larger than the WAL file".into(),
+        )))
+        .unwrap();
+        let err = writer_verdict::<TestTypeConfig>(ack_rx).await;
+        assert!(
+            format!("{err}").contains("WalSizeExceeded"),
+            "the caller must be told why the writer refused the batch, got: {err}"
+        );
+        assert!(
+            !format!("{err}").contains("closed channel"),
+            "and must not be told about the channel instead, got: {err}"
+        );
+
+        // A success reported for a batch that was never finished is a broken contract, and is
+        // named as one rather than returned to openraft as a successful append.
+        let (ack, ack_rx) = oneshot::channel();
+        ack.send(Ok(())).unwrap();
+        let err = writer_verdict::<TestTypeConfig>(ack_rx).await;
+        assert!(
+            format!("{err}").contains("not the batch that was submitted"),
+            "got: {err}"
+        );
+
+        // No verdict at all, which is what a panic in the writer looks like from here.
+        let (ack, ack_rx) = oneshot::channel::<Result<(), crate::error::Error>>();
+        drop(ack);
+        let err = writer_verdict::<TestTypeConfig>(ack_rx).await;
+        assert!(
+            format!("{err}").contains("no longer running"),
+            "got: {err}"
         );
     }
 

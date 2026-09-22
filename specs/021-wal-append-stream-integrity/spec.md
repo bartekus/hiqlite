@@ -196,6 +196,25 @@ wait for it, and under `LogSync::IntervalMillis` the per-append path performs no
 flush at all. Calling either of those "persisted" is the confusion `001` exists
 to prevent, and section 4 states exactly what the evidence establishes.
 
+### B-7. A rejected append reports why, not that a channel closed
+
+The adapter sends a batch's entries to the writer over a bounded channel and
+then waits on an acknowledgement. The writer stops reading a batch the moment it
+has decided that batch's outcome, so its `drop(rx)` makes the adapter's next
+send fail. Returning that `SendError` handed openraft
+`sending on a closed channel` and discarded `WalSizeExceeded`, which was already
+on its way down the acknowledgement channel that the early return abandoned.
+
+Which error a caller saw depended on nothing but who won that race. A failed
+send now waits for the writer's verdict, and three outcomes are named: the
+writer's own error; a success reported for a batch that was never finished
+being sent, which is a broken contract and is refused as one rather than
+returned to openraft as a successful append; and no verdict at all, which is
+what a panic in the writer looks like from here.
+
+F-105. B-5 is the same principle on the other channel: a terminal writer fails
+its callers with a reason instead of panicking them.
+
 ## 4. Evidence and its limits
 
 Three tests, all of which fail against the unrepaired implementation.
@@ -358,4 +377,8 @@ sh -c 'grep -q "IncompleteAppend" hiqlite-wal/src/error.rs'
 sh -c '! grep -q "expect(\"Writer to always be running\")" hiqlite-wal/src/log_store_impl.rs'
 sh -c '! grep -q "expect(\"LogsReader to always be listening\")" hiqlite-wal/src/log_store_impl.rs'
 sh -c 'grep -q "fn thread_gone" hiqlite-wal/src/log_store_impl.rs'
+# B-7 / F-105: the rejection cause survives, whoever wins the race
+cargo test -p hiqlite-wal-patched --lib log_store_impl::tests::a_writer_that_stopped_reading_is_reported_by_its_verdict_not_by_the_channel -- --exact
+sh -c 'grep -q "fn writer_verdict" hiqlite-wal/src/log_store_impl.rs'
+sh -c 'grep -c "writer_verdict::<T>(ack_rx)" hiqlite-wal/src/log_store_impl.rs | grep -q "^2$"'
 ```
