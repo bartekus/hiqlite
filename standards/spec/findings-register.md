@@ -140,11 +140,30 @@ partial final UUID file can be observed. `001` and `002` own the surrounding
 contract; recorded at `002` section 7, bullet 1. Consequence: a reader can
 select a truncated snapshot.
 
+**Repaired 2026-09-21 by `025-snapshot-crash-recovery-contract`.** Publication is
+a same-directory rename of a file the writer has already synced, followed by a
+sync of the directory that holds the new name. Both halves were needed: the
+rename was already atomic with respect to a reader and ordered nothing with
+respect to a crash, so replacing `copy` alone would have fixed the torn-file
+case and left the zero-length one (`025` B-2, D-1). Demonstrated by a
+deterministic injection: a file written truncated on purpose under a valid UUID
+name is not selected.
+
 ### F-004 `defect`, confidence `high`
 
 **Install publishes the received snapshot before restore.** A failed restore
 leaves the published file eligible for startup selection. `002` section 7,
 bullet 2. Consequence: a failed install can be chosen on the next start.
+
+**Repaired 2026-09-21 by `025-snapshot-crash-recovery-contract`.** Installation
+now stages the received file under `{uuid}.incoming`, which nothing selects,
+validates it (`quick_check`, a decodable `_metadata` row, and an embedded id
+matching the id it was sent as), restores from the staging name, and publishes
+only afterwards. A received image that fails validation is discarded with the
+live database byte-identical; a restore that fails publishes nothing, so restart
+selection still sees what this node had before the install (`025` B-3, D-2,
+D-3). Recorded as still open in `025` KD-1: nothing rolls the live database back
+in place after a partial restore.
 
 ### F-005 `defect`, confidence `high`
 
@@ -194,6 +213,22 @@ keeps answering the different question `auto-heal` reads it for.
 **Startup does not fall back to an older valid snapshot.** It selects the
 greatest UUID and then validates the embedded snapshot id, with no fallback when
 the newest file is corrupt. `002` section 7, bullet 4.
+
+**Repaired 2026-09-21 by `025-snapshot-crash-recovery-contract`, with a stated
+condition.** Selection walks candidates newest first and validates each, so a
+corrupt newest file is skipped with a log line rather than being an `assert_eq!`
+panic, and the cleanup after a build keeps two published snapshots instead of
+one so there is something to skip to.
+
+The fallback is **conditional**, which is the part that was not obvious.
+Restoring an older snapshot rewinds applied state, and only the log can carry it
+forward again, so an older candidate is accepted only when the WAL's purge
+frontier has not passed its last applied index. No peer is assumed to be able to
+close the gap: at `N = 1` there is none, and at `N > 1` a leader might equally
+have purged it or be unreachable. Otherwise startup **refuses** with a message
+naming every rejected candidate and the two recoveries that exist, rather than
+coming up on an empty database (`025` B-4, D-4). Five tests, all observed
+failing against the unrepaired behavior.
 
 ### F-007 `limit`, confidence `high`
 

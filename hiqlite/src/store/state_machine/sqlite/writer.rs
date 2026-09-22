@@ -763,8 +763,14 @@ fn create_snapshot(conn: &rusqlite::Connection, path: String) -> Result<(), Erro
         let _ = std::fs::remove_file(&path_temp);
         return Err(Error::Sqlite(err.to_string().into()));
     }
+
+    // The rename was already atomic. What it was not is durable: a rename orders nothing by
+    // itself, so a crash could leave the directory entry present and the file's contents not
+    // yet written back. Sync the bytes, then the rename.
+    crate::store::state_machine::sqlite::sync_file_blocking(&path_temp)?;
     std::fs::rename(&path_temp, &path)
         .map_err(|err| Error::Error(format!("rename snapshot into place: {err}").into()))?;
+    crate::store::state_machine::sqlite::sync_parent_dir_blocking(&path)?;
     Ok(())
 }
 
