@@ -141,8 +141,9 @@ recorded.
 
 ## 4. Evidence and its limits
 
-Eight tests in `dlock_handler.rs`, in a module beside the six PR #352 left,
-which are unchanged and still pass.
+Nine tests in `dlock_handler.rs`, in a module beside the six PR #352 left,
+which are unchanged and still pass. Eight were written with this spec; the
+ninth was added on 2026-09-22 and is described below.
 
 **Four fail against the unrepaired handler**, run and observed: 4 passed, 4
 failed.
@@ -152,6 +153,20 @@ failed.
 - a grant that was never received does not hold the lock;
 - a dead promoted ticket does not block the next caller;
 - a fully released lock wakes its stragglers.
+
+A ninth was added on 2026-09-22, after F-102: **three queued awaiters are each
+promoted in turn.** Nothing here drove the promotion chain more than one link at
+a time, and B-3's `Release` walks it (refresh `exp`, wake the front, drop a dead
+ticket and promote the next in the same pass). The test queues three awaiters on
+one key, parks all three before any release, and bounds every wait so a lost
+wake names the link that broke instead of hanging. It passes, sixty runs of
+sixty, which is what moves F-102's suspicion off this handler rather than
+leaving it pointed here.
+
+Writing it corrected an assumption: a promoted awaiter is answered `Released`,
+not `Locked`, and `client::dlock` re-requests with the same ticket. The first
+draft asserted `Locked` and was wrong about the protocol. The test now accepts
+either grant shape and follows the client's own loop.
 
 **Four pass both before and after**, because they characterize behavior this
 spec describes rather than changes, which is why they are here:
@@ -306,6 +321,8 @@ cargo test -p hiqlite-patched --lib --no-default-features --features dlock store
 cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::a_completed_operation_leaves_nothing_to_wait_for_after_a_restart -- --exact
 cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::replaying_an_unreleased_lock_re_grants_it_for_one_more_lease_window -- --exact
 cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::a_fully_released_lock_wakes_its_stragglers -- --exact
+# F-102: the promotion chain, driven more than one link at a time
+cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::three_queued_awaiters_are_each_promoted_in_turn -- --exact
 # no acknowledgement in the lock handler may panic its own task
 sh -c '! grep -q "ack.send(LockState::" hiqlite/src/store/state_machine/memory/dlock_handler.rs'
 sh -c 'grep -q "fn answer(" hiqlite/src/store/state_machine/memory/dlock_handler.rs'

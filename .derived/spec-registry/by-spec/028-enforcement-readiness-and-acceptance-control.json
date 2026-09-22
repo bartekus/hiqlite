@@ -1,13 +1,17 @@
 {
   "record": {
     "amends": [
-      "004-governance-harness"
+      "004-governance-harness",
+      "017-examples-as-documentation",
+      "019-dashboard-build-contract"
     ],
     "amendsSections": [
       "3-behavior"
     ],
     "amendsVerification": [
-      "004-governance-harness"
+      "004-governance-harness",
+      "017-examples-as-documentation",
+      "019-dashboard-build-contract"
     ],
     "created": "2026-09-21",
     "dependsOn": [
@@ -61,6 +65,7 @@
       "B-2. No ownership check on authored source is weakened, and that was measured",
       "B-3. Neither enforcement rung is enabled, and both were measured before that was decided",
       "B-4. Acceptance runs on trusted commits, and only those",
+      "B-6. An acceptance command that cannot fail is not acceptance",
       "B-5. OD-4 is reassessed, accurately",
       "4. Evidence and its limits",
       "5. Known defects",
@@ -73,6 +78,6 @@
     "summary": "Resolves W-14 against the pinned tool rather than a pin upgrade: the earlier probe read `resolver_exclusions` as path prefixes where the tool matches path components, so the key that was recorded as having no effect does exactly what rung 0 asked. Measures rungs 1 and 2 and refuses to enable either, because both are global refusals and the corpus is not ready for one. Adds W-24's restricted post-merge acceptance job, which runs on trusted commits only and references no secret. Reassesses OD-4 with an accurate account of what the per-document transition does and does not reach.\n",
     "title": "Correct the coverage denominator, measure the enforcement rungs, and run acceptance on trusted commits"
   },
-  "shardHash": "4d19cdeaec52b88f83cd30de55996c8a8d5c2371f15e039504e6f4f7bc5f0ff2",
+  "shardHash": "b3dd7606930f8181560dbf24b146c3ca226b7f0685b7e9549867378e98be8592",
   "specVersion": "1.3.0"
 }

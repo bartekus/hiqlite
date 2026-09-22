@@ -2544,6 +2544,66 @@ run's evidence rather than an impression. `012` KD-1, F-048.
 repository's test fixture, not of the library. It is recorded because it bounds
 what the suite's green result establishes, not because a consumer is exposed.
 
+**The timing argues against contention, which was the first explanation
+offered.** Measured from the run's log: `>>> Test distributed locks` at
+`03:49:17.259824Z`, `>>> awaiting handle_1_2` at `03:49:17.437192Z` and no
+further output of any kind from the phase, then the panic at `03:51:17.329358Z`.
+That is a stall of **119.9 seconds**, and the lease is ten. The concurrent
+`learner_only` shutdowns completed at `03:49:09`, `03:49:24` and `03:49:36`, so
+roughly a hundred of those hundred and twenty seconds elapsed **after** the
+second cluster was gone and the machine was idle again. Load alone does not
+explain it.
+
+**The handler's promotion chain was then tested directly and is sound.** The
+suspicion was `023` B-3: `Release` refreshes `exp`, wakes the front of the
+queue, and on a failed wake drops that ticket and promotes the next in the same
+pass, a chain nothing drove more than one link at a time.
+`three_queued_awaiters_are_each_promoted_in_turn` now queues three awaiters on
+one key, parks all three before any release, and walks the whole chain with
+every wait bounded. It passed **sixty of sixty** runs. Writing it also corrected
+an assumption worth recording: a promoted awaiter is answered `Released`, not
+`Locked`, and `client::dlock` re-requests with the same ticket. The first draft
+of the test asserted `Locked` and was wrong about the protocol, not about the
+handler.
+
+So the handler is not where this stall comes from, and the remaining candidates
+are above it: the client stream, the cache Raft apply path, or the fixture. Still
+**not repaired and still not a flake**: F-105 in this same release passed forty
+of forty local runs and was a real defect. This entry is a narrowed open
+question.
+
+### F-106 `defect`, confidence `high`
+
+**Three acceptance commands could not fail for the reason they exist.**
+`017` and `019` assert that certain files are not tracked, with
+`! git ls-files <tree> | grep -q "<pattern>"`. When `git` cannot run, it writes
+to stderr, the pipeline produces nothing, `grep -q` exits non-zero, and the
+leading `!` turns that into a pass. The assertion reported success in exactly
+the environment where it had checked nothing.
+
+**Observed by execution**, on 2026-09-22: run in a directory that is not a
+repository, the original command exits `0`.
+
+Found while pre-flighting `028`'s post-merge acceptance job, which had never
+run. That job executes inside a container, which is precisely where a checkout
+can be present but unreadable by `git`.
+
+**Repaired 2026-09-22 by `028-enforcement-readiness-and-acceptance-control`**,
+B-6. The shape is now `tracked=$(git ls-files <tree>) && ! printf ... | grep -q`,
+so a `git` failure fails the assignment and short-circuits. Measured in all
+three directions: `128` where git cannot run, `0` in this repository, and `1`
+against a pattern that is tracked, so it still detects what it forbids. The
+workflow also sets `safe.directory`, so the failure mode is avoided as well as
+detected.
+
+**Consumer triage.** Reaches neither named consumer: it is an acceptance
+command, not shipped code. It is recorded because a check that cannot fail is
+not a check, and this release adds the gate that would have relied on it.
+
+**Not a waiver.** No implementation changed to match these commands. They were
+replaced through `amends_verification`, which replaces whole blocks, and every
+other command in both blocks is carried forward unchanged.
+
 ### F-103 `defect`, confidence `high`
 
 **The pull-request style workflow ran with a writable token.**
@@ -2600,6 +2660,19 @@ anyone building with `server`, as a build failure rather than a runtime one.
 `hiqlite-wal`'s test modules, which carry pre-existing lints unrelated to this
 release. Silencing those to widen the check would be changing unrelated code to
 make a gate pass, so the gate is narrower and this is what it does not cover.
+
+**The blind spot was bounded, not just patched.** Every feature declared in
+`hiqlite/Cargo.toml` was checked against the lint matrix on 2026-09-22. Eight
+are never named in a clippy line: `default`, `macros`, `s3`, `toml`,
+`__cluster`, `__abort-probe`, `jemalloc`, `__profiling`. The first five are
+compiled transitively (`default` by the bare clippy line, `macros`, `s3` and
+`toml` through `full` and `server`, `__cluster` through `sqlite`), and
+`__abort-probe` is built by the publication workflow's probe step. The two
+genuinely uncompiled ones, `jemalloc` and `__profiling`, were compiled by hand
+with `-D warnings` and are clean, as are `sqlite,macros`, `sqlite,toml` and
+`sqlite,s3`. `server` was the only gap with a defect behind it. They are not
+added to the matrix: a lint line that has never caught anything costs every
+future run, and this record is the cheaper evidence.
 
 ### F-105 `defect`, confidence `high`
 

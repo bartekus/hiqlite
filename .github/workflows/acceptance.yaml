@@ -50,6 +50,12 @@ jobs:
             --rev "$SPEC_SPINE_REV" \
             --locked
 
+      - name: Let git read the checkout
+        # The job runs in a container, and a container is where a repository can be present but
+        # `git` refuse to read it. Three acceptance commands call `git ls-files`; B-6 makes them
+        # fail loudly when git cannot run, and this makes sure it can. F-106.
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
       - name: The read-only chain first
         # An acceptance block asserts things about a tree whose derived shards are supposed to
         # be fresh. Running it against a stale one would report a failure whose cause is the

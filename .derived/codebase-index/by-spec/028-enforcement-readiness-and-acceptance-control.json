@@ -1,7 +1,9 @@
 {
   "mapping": {
     "amends": [
-      "004-governance-harness"
+      "004-governance-harness",
+      "017-examples-as-documentation",
+      "019-dashboard-build-contract"
     ],
     "dependsOn": [
       "000-hiqlite-ownership-bootstrap",
@@ -85,5 +87,5 @@
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "15587e56645457bc0c0f32e549a131bbc6f8b98346b8d2896a60a185aa242653"
+  "shardHash": "7067a2fc50ffad0902c36ad919a625d8fc23345f29b632efaff45f513527eb37"
 }

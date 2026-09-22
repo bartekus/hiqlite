@@ -11,10 +11,19 @@ depends_on:
   - "004-governance-harness"
   - "005-adoption-assessment-and-plan"
   - "019-dashboard-build-contract"
-amends: ["004-governance-harness"]
+amends:
+  - "004-governance-harness"
+  - "017-examples-as-documentation"
+  - "019-dashboard-build-contract"
 # D-5: this spec's `## Verification` block IS 004's acceptance from now on, and 004's own file
 # is not edited. Whole-block replacement is the mechanism's unit.
-amends_verification: ["004-governance-harness"]
+# D-8: `017`'s and `019`'s blocks are taken as well, because three of their commands could not
+# fail for the reason they exist (F-106). Repairing them means replacing whole blocks, which is
+# the mechanism's unit, not editing a predecessor's acceptance in place.
+amends_verification:
+  - "004-governance-harness"
+  - "017-examples-as-documentation"
+  - "019-dashboard-build-contract"
 amends_sections:
   - "3-behavior"
 establishes:
@@ -176,6 +185,36 @@ handed to a job whose whole input is a branch under review. It is now
 This is the boundary `004` drew being applied to a file `004` did not write,
 rather than a new rule.
 
+### B-6. An acceptance command that cannot fail is not acceptance
+
+Three commands across `017` and `019` had the shape
+`! git ls-files <tree> | grep -q "<pattern>"`. They exist to assert that a file
+is **not** tracked. When `git` cannot run at all, it writes to stderr, the
+pipeline produces nothing, `grep -q` exits non-zero, and the leading `!` turns
+that into a pass. The assertion therefore reported success in exactly the
+environment where it had checked nothing.
+
+Demonstrated rather than reasoned about: run in a directory that is not a
+repository, the original command exits `0`.
+
+The shape is now
+`tracked=$(git ls-files <tree>) && ! printf ... | grep -q "<pattern>"`, where a
+failure of `git` fails the assignment and short-circuits the `&&`. Measured in
+all three directions: exit `128` where `git` cannot run, exit `0` in this
+repository, and exit `1` against a pattern that **is** tracked, so it still
+detects what it forbids.
+
+This matters more now than it did when it was written. `028` added a post-merge
+acceptance job that runs inside a container, and a container is precisely the
+kind of environment where a repository can be present but `git` refuse to read
+it. The job also gains an explicit `safe.directory` so that failure mode is
+avoided as well as detected. F-106.
+
+**This is not editing a predecessor's acceptance to match an implementation.**
+No implementation changed. The commands were replaced through
+`amends_verification`, which replaces whole blocks, and every other command in
+both blocks is carried forward unchanged.
+
 ### B-5. OD-4 is reassessed, accurately
 
 Three statements, and the middle one is the correction.
@@ -295,10 +334,79 @@ asserted anything this spec removes.
 
 ## Verification
 
-Run with `just spine-verify 028`. **This block is `004`'s acceptance as well as
+Run with `just spine-verify 028`. **This block is `004`'s acceptance, and
+`017`'s and `019`'s as well** (D-5, D-8). **This block is `004`'s acceptance as well as
 this spec's** (D-5).
 
 ```verify:cli
+# --- `017`'s acceptance, carried forward. Two commands are strengthened (B-6, F-106);
+# every other one is unchanged. ---
+test -f examples/walkthrough/src/main.rs
+test -f examples/external-state-machine/src/main.rs
+sh -c 'spec-spine index owner examples/walkthrough/src/main.rs | grep -q 017-examples-as-documentation'
+sh -c 'spec-spine index owner examples/bench/src/bench.rs | grep -q 017-examples-as-documentation'
+sh -c 'spec-spine index owner examples/external-state-machine/src/main.rs | grep -q 017-examples-as-documentation'
+sh -c 'spec-spine registry relationships 017-examples-as-documentation | grep -q 016-derive-macros'
+sh -c 'test "$(ls -d examples/*/ | wc -l | tr -d " ")" = "6"'
+sh -c 'test "$(grep -h -c "assert" examples/*/src/*.rs | paste -sd+ - | bc)" = "54"'
+sh -c 'grep -q "cargo clippy$" justfile'
+sh -c 'grep -A8 "^clippy-examples:" justfile | grep -q "cargo clippy$"'
+sh -c '! grep -A8 "^clippy-examples:" justfile | grep -q "D warnings"'
+grep -q 'just clippy-examples' .github/workflows/code_style.yaml
+grep -q 'Clippy (deny warnings)' .github/workflows/code_style.yaml
+grep -q '^Cargo.lock$' .gitignore
+sh -c 'git ls-files examples | grep -c "Cargo.lock" | grep -q "^4$"'
+sh -c 'tracked=$(git ls-files examples/derive-complex-types) && ! printf "%s\n" "$tracked" | grep -q "Cargo.lock"'
+sh -c 'tracked=$(git ls-files examples/external-state-machine) && ! printf "%s\n" "$tracked" | grep -q "Cargo.lock"'
+sh -c 'grep -q "features = \[\"cast_ints\", \"macros\"\]" examples/derive-complex-types/Cargo.toml'
+sh -c 'grep -A3 "^hiqlite = " examples/external-state-machine/Cargo.toml | grep -q "external-state-machine"'
+sh -c 'grep -q "default-features = false" examples/cache-only/Cargo.toml'
+test -f examples/cache-only/config
+test -f examples/sqlite-only/config
+sh -c 'test "$(ls examples/*/migrations/*.sql | wc -l | tr -d " ")" = "5"'
+grep -q 'examples/\*/src/\*.rs' spec-spine.toml
+grep -q 'standalone_rust_workspaces' spec-spine.toml
+spec-spine check --fail-on-unresolved --fail-on-warn
+spec-spine lint --fail-on-warn
+spec-spine index coverage
+sh -c '! grep -rl "$(printf "\342\200\224")" specs/017-examples-as-documentation'
+
+# --- `019`'s acceptance, carried forward. One command is strengthened (B-6, F-106);
+# every other one is unchanged. ---
+test -f dashboard/svelte.config.js
+test -f dashboard/package-lock.json
+sh -c 'spec-spine index owner dashboard/svelte.config.js | grep -q 019-dashboard-build-contract'
+sh -c 'spec-spine index owner dashboard/package.json | grep -q 019-dashboard-build-contract'
+sh -c 'spec-spine index owner dashboard/playwright.config.ts | grep -q 019-dashboard-build-contract'
+sh -c 'spec-spine registry relationships 019-dashboard-build-contract | grep -q 018-dashboard-service-and-ui'
+grep -q "pages: '../hiqlite/static'" dashboard/svelte.config.js
+grep -q "assets: '../hiqlite/static'" dashboard/svelte.config.js
+grep -q 'precompress: true' dashboard/svelte.config.js
+grep -q "base: '/dashboard'" dashboard/svelte.config.js
+grep -q 'wasm-unsafe-eval' dashboard/svelte.config.js
+sh -c '! grep -q "version:" dashboard/svelte.config.js'
+sh -c '! grep -q "version" dashboard/vite.config.ts'
+sh -c 'grep -q "\"build\": \"vite build\"" dashboard/package.json'
+sh -c 'grep -q "folder = \"static\"" hiqlite/src/dashboard/static_files.rs'
+sh -c 'grep -A3 "^build ty=" justfile | grep -q "hiqlite/static" || grep -q "rm -rf hiqlite/static" justfile'
+sh -c 'grep -A2 "^verify:" justfile | grep -q "#just build ui"'
+sh -c '! grep -q "npm run build" .github/workflows/code_style.yaml'
+sh -c '! grep -q "npm" .github/workflows/spec-spine.yaml'
+sh -c 'test "$(git ls-files hiqlite/static | wc -l | tr -d " ")" = "55"'
+sh -c 'test "$(git ls-files hiqlite/static | grep -c "\.br$")" = "18"'
+sh -c 'test "$(git ls-files hiqlite/static | grep -c "\.gz$")" = "18"'
+sh -c 'test -f hiqlite/static/_app/version.json'
+sh -c 'grep -q "^{\"version\":\"[0-9]\{13\}\"}$" hiqlite/static/_app/version.json'
+sh -c 'tracked=$(git ls-files hiqlite/static) && ! printf "%s\n" "$tracked" | grep -q "spow-wasm_bg.*\.wasm$"'
+sh -c 'git diff --quiet -- hiqlite/static'
+sh -c '! test -d dashboard/.svelte-kit'
+grep -q '/.svelte-kit' dashboard/.gitignore
+spec-spine check --fail-on-unresolved --fail-on-warn
+spec-spine lint --fail-on-warn
+spec-spine index coverage
+sh -c '! grep -rl "$(printf "\342\200\224")" specs/019-dashboard-build-contract'
+
+# --- this spec's own ---
 # --- 004's acceptance, carried forward unchanged ---
 test -f AGENTS.md
 test -f standards/spec/constitution.md

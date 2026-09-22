@@ -541,6 +541,93 @@ mod lease_tests {
             .expect("the handler must not drop the answer channel")
     }
 
+    /// Three awaiters queued on one key are each promoted in turn, and none is left parked.
+    ///
+    /// F-102: the cluster suite's distributed-lock phase queues three handles on one key and
+    /// awaits them, and one run stalled there for 120 seconds with no further output. Nothing
+    /// in this module drove more than one awaiter through a promotion chain, so the chain
+    /// `Release` walks (refresh `exp`, wake the front, drop a dead ticket and promote the next
+    /// in the same pass) was only ever exercised one link at a time.
+    ///
+    /// Every wait is bounded, so a lost wake is a failed assertion naming which link broke
+    /// rather than a hung test.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn three_queued_awaiters_are_each_promoted_in_turn() {
+        let tx = spawn();
+
+        assert_eq!(lock_bounded(&tx, "k", 1).await, LockState::Locked(1));
+        for id in 2..=4 {
+            assert_eq!(
+                lock_bounded(&tx, "k", id).await,
+                LockState::Queued(id),
+                "ticket {id} should be queued behind the holder"
+            );
+        }
+
+        // All three park before any release, which is the ordering the cluster phase produces.
+        let mut awaiting = Vec::new();
+        for id in 2..=4 {
+            let tx = tx.clone();
+            awaiting.push((
+                id,
+                tokio::spawn(async move { super::tests::await_lock(&tx, "k", id).await }),
+            ));
+        }
+
+        // Give the handler time to register all three awaits before the first release, so the
+        // test exercises promotion of a registered awaiter rather than the "has not awaited
+        // yet" path, which `023` B-3 keeps deliberately.
+        tokio::time::sleep(Duration::from_millis(200)).await;
+
+        let mut holder = 1;
+        for (id, handle) in awaiting {
+            release(&tx, "k", holder);
+
+            let state = tokio::time::timeout(Duration::from_secs(5), handle)
+                .await
+                .unwrap_or_else(|_| {
+                    panic!(
+                        "awaiter {id} was never woken after {holder} released: the promotion \
+                         chain stopped at this link"
+                    )
+                })
+                .expect("the awaiting task must not panic");
+
+            // The protocol has two ways to be granted, and `client::dlock` handles both:
+            // `Locked` directly, or `Released` meaning "your ticket was promoted, claim it".
+            // Anything else leaves a caller with no lock and nothing to re-request.
+            match state {
+                LockState::Locked(got) => assert_eq!(got, id, "the wrong ticket was granted"),
+                LockState::Released => {
+                    let claimed = tokio::time::timeout(
+                        Duration::from_secs(5),
+                        super::tests::acquire(&tx, "k", id),
+                    )
+                    .await
+                    .unwrap_or_else(|_| {
+                        panic!("awaiter {id} was promoted but could not then claim the lock")
+                    });
+                    assert_eq!(
+                        claimed,
+                        LockState::Locked(id),
+                        "a promoted ticket must be claimable with the same id"
+                    );
+                }
+                other => panic!("awaiter {id} got {other:?}, which is neither a grant nor a \
+                                 promotion it can act on"),
+            }
+            holder = id;
+        }
+
+        // And the key is usable afterwards: the last holder releases and a new caller gets it.
+        release(&tx, "k", holder);
+        assert_eq!(
+            lock_bounded(&tx, "k", 99).await,
+            LockState::Locked(99),
+            "after the whole chain drains, the key must be free"
+        );
+    }
+
     /// Register an await and then drop the receiver, which is what a cancelled `lock()` future
     /// does: a timeout, a `select!` arm losing, or an aborted task.
     fn await_then_abandon(tx: &flume::Sender<LockRequest>, key: &str, id: u64) {
