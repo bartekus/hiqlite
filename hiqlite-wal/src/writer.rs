@@ -1195,8 +1195,10 @@ mod tests {
                     "{label} / {case}: exactly one completion per dispatched append"
                 );
 
+                // F-114: a terminated writer keeps answering, so termination is observed as a
+                // refusal naming it, not as a closed channel (which used to strand queued work).
                 assert!(
-                    eventually(|| tx.is_disconnected()),
+                    later_append_is_refused_as_terminated(&tx).await,
                     "{label} / {case}: the writer must end after a truncated append"
                 );
             }
@@ -1239,8 +1241,9 @@ mod tests {
                 "{label}: exactly one completion"
             );
 
+            let (ack, _) = dispatch_append(&tx, 1, b"after an empty batch".to_vec());
             assert!(
-                !tx.is_disconnected(),
+                matches!(tokio::time::timeout(Duration::from_secs(5), ack).await, Ok(Ok(Ok(())))),
                 "{label}: an empty batch is not a failure and must not end the writer"
             );
 
@@ -1320,10 +1323,8 @@ mod tests {
             Ok(()),
             "the healthy append must complete successfully before an injection is armed"
         );
-        assert!(
-            !tx.is_disconnected(),
-            "the writer is serving before the injected failure"
-        );
+        // The healthy append acknowledged above is what shows the writer serving. A channel
+        // that is still connected no longer shows it: a terminated writer keeps its receiver.
 
         let _armed = fault::arm_persistence_failure(&base);
         let (ack_rx, note_rx) = dispatch_append(&tx, 2, b"entry".to_vec());
@@ -1342,26 +1343,24 @@ mod tests {
             "the notification must carry the injected cause, got: {notified}"
         );
 
-        // Failure policy preserved, observed positively. `run` owns the only `Receiver` for this
-        // channel and holds it for as long as it is on the stack, so the sender reporting a
-        // disconnect establishes that `run` has left: the writer can receive no further action.
-        // It does not establish that the OS thread has finished, because the thread closure runs
-        // its error report after `run` returns. That is a stronger claim than this test makes and
-        // than the runtime supports.
+        // Failure policy preserved, observed positively: a later append is refused, and the
+        // refusal names the termination. It used to be observed as a closed channel and a later
+        // append that was never acknowledged, which was F-114's defect seen from the side
+        // where it looked like the policy working.
         assert!(
-            eventually(|| tx.is_disconnected()),
-            "the writer must still stop serving after a persistence failure: its sole Action \
-            receiver is dropped when `run` returns"
+            later_append_is_refused_as_terminated(&tx).await,
+            "the writer must stop serving after a persistence failure"
         );
+    }
 
-        // And the consequence the policy is about: with the writer no longer receiving, a later
-        // append is never acknowledged. This is a corollary of the disconnect above, not the
-        // proof of it.
-        let (mut later_ack, _later_note) = dispatch_append(&tx, 3, b"later".to_vec());
-        assert!(
-            later_ack.try_recv().is_err(),
-            "a terminated writer must not acknowledge a later append"
+    /// A later append to a terminated writer is refused within five seconds, and says why.
+    async fn later_append_is_refused_as_terminated(tx: &flume::Sender<Action>) -> bool {
+        let (ack, note) = dispatch_append(tx, 999, b"later".to_vec());
+        let refused = matches!(
+            tokio::time::timeout(Duration::from_secs(5), ack).await,
+            Ok(Ok(Err(Error::Internal(reason)))) if reason.contains("terminated")
         );
+        refused && note.recv_timeout(Duration::from_secs(5)).is_ok_and(|r| r.is_err())
     }
 
     /// The termination itself is reported. The thread's `JoinHandle` is not retained; the report

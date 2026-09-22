@@ -253,6 +253,19 @@ receiver and, after a termination, answers every action with the terminal error
 a shutdown arrives or the last sender is gone. Both CI jobs also have a
 sixty-minute limit.
 
+**This supersedes how `008` section 4 observes the end of service.** `008`
+asserted that the writer's sender becomes disconnected, because `run` held the
+only receiver. The thread now keeps a receiver past a termination so it can
+refuse what is queued, so the channel no longer disconnects, and a disconnect
+was never what the policy was for. Two tests
+(`persistence_failure_notifies_then_terminates_the_writer` and
+`a_truncated_entry_stream_never_reports_success_in_any_log_sync_mode`) now
+observe termination as a later append refused within five seconds with a reason
+naming the termination, on both the acknowledgement and the completion. Two
+checks that a connected channel meant a running writer were replaced with a
+later append that succeeds, because a connected channel no longer shows it.
+`008`'s text is left as it was written; this is its amendment.
+
 `work_queued_behind_a_terminating_append_is_answered_not_stranded` reproduces
 the stall deterministically: it queues a second append behind one the writer is
 still reading, truncates the first, and requires the second to be refused
