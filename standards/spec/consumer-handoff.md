@@ -94,8 +94,9 @@ Things to know:
 - **An out-of-service node refuses its embedded client** with `Error::NodeFailed`
   on every query, execute, cache operation, lock and listen (F-110). Before, only
   the health checks refused. This is wired from source and not fault-injected
-  here; Rauthy's WAL-failure injection against the published build is the
-  confirming evidence.
+  here. Rauthy's WAL-failure injection against the published build confirmed
+  it: every operation after the failure, including the failing write and a
+  read, returned `NodeFailed`, and readiness went 503.
 - **`lock()` never waits more than one lease plus two seconds per await**, then
   re-requests. A caller queued behind a holder that died acquires after about
   one lease, where it used to fail after 120 seconds (F-102).
