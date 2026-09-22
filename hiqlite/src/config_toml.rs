@@ -194,6 +194,7 @@ impl NodeConfig {
 
         let tls_raft_key = t_str(&mut map, t_name, "tls_raft_key", "HQL_TLS_RAFT_KEY")?;
         let tls_raft_cert = t_str(&mut map, t_name, "tls_raft_cert", "HQL_TLS_RAFT_CERT")?;
+        let tls_raft_ca = t_str(&mut map, t_name, "tls_raft_ca", "HQL_TLS_RAFT_CA")?;
         let tls_raft_danger_tls_no_verify =
             t_bool(&mut map, t_name, "tls_raft_danger_tls_no_verify", "")?.unwrap_or(false);
         #[allow(clippy::unnecessary_unwrap)]
@@ -201,6 +202,8 @@ impl NodeConfig {
             Some(ServerTlsConfig::Specific(ServerTlsConfigCerts {
                 key: tls_raft_key.unwrap().into(),
                 cert: tls_raft_cert.unwrap().into(),
+                // F-043: the trust anchor a verifying client checks peers against.
+                ca: tls_raft_ca.map(std::borrow::Cow::from),
                 danger_tls_no_verify: tls_raft_danger_tls_no_verify,
             }))
         } else if tls_auto_certificates {
@@ -214,6 +217,7 @@ impl NodeConfig {
         // F-031: this read `"tls_raft_danger_tls_no_verify"` a second time, so the documented
         // `tls_api_danger_tls_no_verify` was never consumed and then failed the unknown-key
         // check, which refuses the whole configuration file. Fail-closed, and unusable.
+        let tls_api_ca = t_str(&mut map, t_name, "tls_api_ca", "HQL_TLS_API_CA")?;
         let tls_api_danger_tls_no_verify =
             t_bool(&mut map, t_name, "tls_api_danger_tls_no_verify", "")?.unwrap_or(false);
         #[allow(clippy::unnecessary_unwrap)]
@@ -221,6 +225,8 @@ impl NodeConfig {
             Some(ServerTlsConfig::Specific(ServerTlsConfigCerts {
                 key: tls_api_key.unwrap().into(),
                 cert: tls_api_cert.unwrap().into(),
+                // F-043: the trust anchor a verifying client checks peers against.
+                ca: tls_api_ca.map(std::borrow::Cow::from),
                 danger_tls_no_verify: tls_api_danger_tls_no_verify,
             }))
         } else if tls_auto_certificates {

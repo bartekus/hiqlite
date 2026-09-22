@@ -355,8 +355,14 @@ impl NodeConfig {
             #[cfg(feature = "cache")]
             cache_storage_disk,
             raft_config: Self::default_raft_config(logs_keep),
-            tls_raft: ServerTlsConfig::from_env("RAFT"),
-            tls_api: ServerTlsConfig::from_env("API"),
+            // The environment constructor is infallible, so a configuration error here still
+            // has to be a panic; `027` KD-1 carries that. What changed is that it is now a
+            // named `Error::Config` saying which variable is wrong, rather than an `expect`
+            // for one of the two booleans and a silent plaintext downgrade for the other.
+            tls_raft: ServerTlsConfig::from_env("RAFT")
+                .unwrap_or_else(|err| panic!("Invalid RAFT TLS configuration: {err}")),
+            tls_api: ServerTlsConfig::from_env("API")
+                .unwrap_or_else(|err| panic!("Invalid API TLS configuration: {err}")),
             secret_raft: env::var("HQL_SECRET_RAFT").expect("HQL_SECRET_RAFT not found"),
             secret_api: env::var("HQL_SECRET_API").expect("HQL_SECRET_API not found"),
             #[cfg(any(feature = "s3", feature = "dashboard"))]

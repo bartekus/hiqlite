@@ -10,7 +10,12 @@ use tokio::task;
 static IS_HASHING: LazyLock<RwLock<()>> = LazyLock::new(|| RwLock::new(()));
 
 pub async fn verify_password(plain: String, hash: String) -> Result<(), Error> {
-    let _ = IS_HASHING.write().await;
+    // F-084: this was `let _ = IS_HASHING.write().await;`. A `_` pattern drops its value at
+    // the end of the statement, so the guard was released immediately and the lock serialized
+    // nothing. The comment above it described a rate limit that did not exist, and the
+    // parameters below allocate 32 MiB and two threads per concurrent attempt, so N
+    // unauthenticated logins allocated N times that.
+    let _guard = IS_HASHING.write().await;
 
     task::spawn_blocking(move || {
         let parsed_hash = PasswordHash::new(&hash)?;
@@ -34,26 +39,61 @@ pub fn build_hasher<'a>() -> Argon2<'a> {
 mod tests {
     use super::*;
 
-    /// F-084. `verify_password` opens with `let _ = IS_HASHING.write().await;`.
-    /// A `_` pattern drops its value at the end of the statement, so the write
-    /// guard is released immediately and the lock serializes nothing. This
-    /// asserts both halves against the same static: the form the function uses,
-    /// and the binding form that would hold it.
+    /// Replaces `the_single_flight_lock_is_released_before_any_hashing`, which pinned F-084 by
+    /// asserting that the form `verify_password` used released its guard immediately. It does;
+    /// `verify_password` no longer uses it.
+    ///
+    /// The distinction is the whole defect, so both forms stay asserted: a `_` pattern drops
+    /// its value at the end of the statement, a named binding holds it to the end of the scope.
     #[tokio::test]
-    async fn the_single_flight_lock_is_released_before_any_hashing() {
-        // exactly the line `verify_password` opens with
-        let _ = IS_HASHING.write().await;
-        assert!(
-            IS_HASHING.try_write().is_ok(),
-            "F-084: `let _ = ...write().await` drops the guard at the end of the \
-             statement, so nothing is serialized"
-        );
+    async fn the_single_flight_lock_is_held_for_the_whole_hashing() {
+        // The form the function used to open with, and what it does.
+        {
+            let _ = IS_HASHING.write().await;
+            assert!(
+                IS_HASHING.try_write().is_ok(),
+                "`let _ = ...write().await` drops the guard at the end of the statement"
+            );
+        }
 
-        // the form that does hold it
-        let guard = IS_HASHING.write().await;
-        assert!(IS_HASHING.try_write().is_err());
-        drop(guard);
-        assert!(IS_HASHING.try_write().is_ok());
+        // The form it opens with now.
+        {
+            let _guard = IS_HASHING.write().await;
+            assert!(
+                IS_HASHING.try_write().is_err(),
+                "a named binding holds it, which is what makes this a single-flight lock"
+            );
+        }
+        assert!(IS_HASHING.try_write().is_ok(), "and releases it at the end");
+    }
+
+    /// The function itself holds the lock while it works.
+    ///
+    /// The point of F-084 is the parameters below: 32 MiB and two threads per concurrent
+    /// attempt, from an unauthenticated endpoint, with a lock that serialized nothing.
+    #[tokio::test]
+    async fn verify_password_holds_the_lock_while_it_runs() {
+        // A hash that will fail to verify, which is all this needs: the lock is taken before
+        // any of that.
+        let hash = "$argon2id$v=19$m=32768,t=2,p=2$c29tZXNhbHQ$\
+                    aGFzaGhhc2hoYXNoaGFzaGhhc2hoYXNoaGFzaGhhcw"
+            .to_string();
+
+        let task = tokio::spawn(verify_password("wrong".to_string(), hash));
+
+        // Give the task a moment to reach the lock, then assert it is held. Bounded, and the
+        // assertion is on the lock rather than on timing: if the task has not started yet the
+        // loop tries again, and if it never takes the lock the test fails at the end.
+        let mut held = false;
+        for _ in 0..200 {
+            if IS_HASHING.try_write().is_err() {
+                held = true;
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        }
+        let _ = task.await;
+        assert!(held, "verify_password must hold the single-flight lock");
     }
 
     /// The hashing parameters are part of the contract and are pinned here so a

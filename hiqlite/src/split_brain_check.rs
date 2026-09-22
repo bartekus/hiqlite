@@ -164,7 +164,11 @@ async fn check_compare_membership(
 
     let scheme = if tls { "https" } else { "http" };
 
-    let client = reqwest::Client::new();
+    // F-044: this was `reqwest::Client::new()`, which honours no override at all, while the
+    // scheme four lines above comes from the API endpoint's configuration. A node with a
+    // properly configured API endpoint could not have its split-brain checker verify it, and a
+    // node with `danger_tls_no_verify` could not have it accept one.
+    let client = crate::http_client::build_http_client(crate::tls::api_no_verify());
     for node in nodes_to_check {
         let url = format!("{}://{}/cluster/metrics/{}", scheme, node.addr_api, path);
         let res = client

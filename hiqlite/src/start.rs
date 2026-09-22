@@ -214,8 +214,31 @@ where
 
     let tls_api_client_config = node_config.tls_api.clone().map(|c| c.client_config());
     let tls_raft = node_config.tls_raft.is_some();
-    let tls_no_verify = node_config
-        .tls_raft
+
+    // F-044: `tls_no_verify` was derived from `node_config.tls_raft` and then handed to every
+    // caller that talks to `addr_api`, which is the **API** endpoint and has its own TLS
+    // configuration. Two of the four consumers of that value therefore took the raft channel's
+    // answer to a question about the API channel: a node with `danger_tls_no_verify` on the
+    // raft side and a properly verified API side did not verify the API side either, and the
+    // reverse combination could not be expressed at all.
+    //
+    // The scheme had the same problem, from the same line: `tls_raft` decided whether these
+    // clients said `https`, for a URL built from `addr_api`.
+    let tls_api = node_config.tls_api.is_some();
+    crate::tls::set_api_tls_facts(
+        node_config
+            .tls_api
+            .as_ref()
+            .and_then(|c| c.ca_path())
+            .map(|s| s.to_string()),
+        node_config
+            .tls_api
+            .as_ref()
+            .map(|c| c.danger_tls_no_verify())
+            .unwrap_or(false),
+    );
+    let tls_api_no_verify = node_config
+        .tls_api
         .as_ref()
         .map(|c| c.danger_tls_no_verify())
         .unwrap_or(false);
@@ -482,8 +505,9 @@ where
                 &crate::app_state::RaftType::Sqlite,
                 node_id,
                 &nodes,
-                tls_raft,
-                tls_no_verify,
+                // These reach `addr_api`, so they take the API endpoint's own answers.
+                tls_api,
+                tls_api_no_verify,
             )
             .await
         }))
@@ -501,8 +525,8 @@ where
                 &crate::app_state::RaftType::Cache,
                 node_id,
                 &nodes,
-                tls_raft,
-                tls_no_verify,
+                tls_api,
+                tls_api_no_verify,
             )
             .await
         }))
@@ -517,7 +541,7 @@ where
         state,
         tls_api_client_config,
         #[cfg(feature = "cache")]
-        tls_no_verify,
+        tls_api_no_verify,
         #[cfg(feature = "sqlite")]
         tx_client_stream,
         #[cfg(feature = "sqlite")]
