@@ -2747,6 +2747,26 @@ owner's direction of 2026-09-22 separates them:
 Earlier results are kept as evidence about the graph they ran on (`0.9.24`
 locally before 2026-09-22), not as evidence about the committed one.
 
+### F-116 `evidence`, confidence `high`
+
+**The cluster suite's health check sampled a membership that was still being
+replayed.** `hiqlite/tests/cluster/check.rs` waited for "healthy", which means a
+leader is known, and then asserted exactly three members. A node that rejoins
+from an empty volume replays the leader's log from its start, and the first
+membership entry in that log is the original single-node bootstrap, so a check
+taken during the replay sees one member.
+
+**Observed** on 2026-09-22 in PR #32's `Check`, in the "full volume loss on Node
+1" phase: `left: 1, right: 3`. The log shows node 1 rejoining correctly: removed
+from the stale SQLite membership, added as a learner and made a member, its
+SQLite join having waited about a second for the cache join to release the
+membership gate, the same serialization the old `raft_lock` imposed. The code
+under test was identical to three earlier green runs.
+
+**Repaired 2026-09-22:** the check waits up to thirty seconds for three members
+instead of sampling once. A test-fixture defect in an N=3 phase; nothing a
+consumer runs is involved, and no library behavior changed.
+
 ### F-115 `defect`, confidence `high`
 
 **Two acceptance commands needed a tool the acceptance runner does not have.**
