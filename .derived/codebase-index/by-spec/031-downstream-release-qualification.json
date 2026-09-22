@@ -26,6 +26,10 @@
         "source": "spec-edge"
       },
       {
+        "path": "hiqlite/tests/cluster/check.rs",
+        "source": "spec-edge"
+      },
+      {
         "path": "justfile",
         "source": "spec-edge"
       },
@@ -98,6 +102,19 @@
       {
         "locations": [
           {
+            "file": "hiqlite/tests/cluster/check.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/tests/cluster/check.rs"
+        }
+      },
+      {
+        "locations": [
+          {
             "file": "justfile"
           }
         ],
@@ -139,5 +156,5 @@
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "111c6a835b476b8e01b798b2c063fa306fd4348e1db719f44889e599ed004895"
+  "shardHash": "c4d06b95f661adb80db55eb612934fca5ab3bf0b2abf281c753c1d852d6240de"
 }
