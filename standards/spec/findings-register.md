@@ -2747,6 +2747,18 @@ owner's direction of 2026-09-22 separates them:
 Earlier results are kept as evidence about the graph they ran on (`0.9.24`
 locally before 2026-09-22), not as evidence about the committed one.
 
+### F-115 `defect`, confidence `high`
+
+**Two acceptance commands needed a tool the acceptance runner does not have.**
+`017`/`028`'s example-assertion count and `031`/`032`'s manifest-provenance count
+summed with `paste -sd+ - | bc`, and the `rauthy-builder` container has no `bc`.
+**Observed** on the first post-merge acceptance run ever, on `72f77a9`: eight
+spec ids failed, all on those two commands, because blocks carry other specs'
+acceptance; the other twenty-five passed. **Repaired 2026-09-22** in the running
+blocks (`028`, `032`) and in `031`'s inert copy by summing with `awk`. `017`'s own
+block is superseded by `028`'s and is left as written. No behavior was involved:
+the local sweep has `bc`, which is why every local run passed.
+
 ### F-114 `defect`, confidence `high`
 
 **A WAL adapter test could stall CI indefinitely, and the writer tests' helper
