@@ -1,16 +1,16 @@
 {
   "mapping": {
     "amends": [
-      "022-replicated-cache-command-compatibility"
+      "024-exclusive-storage-ownership"
     ],
     "dependsOn": [
       "000-hiqlite-ownership-bootstrap",
-      "006-cache-state-machine",
-      "022-replicated-cache-command-compatibility"
+      "002-snapshot-publication-and-recovery",
+      "024-exclusive-storage-ownership"
     ],
     "implementingPaths": [
       {
-        "path": "hiqlite/src/store/state_machine/memory/",
+        "path": "hiqlite/src/store/state_machine/sqlite/",
         "source": "spec-edge"
       },
       {
@@ -26,14 +26,14 @@
       {
         "locations": [
           {
-            "file": "hiqlite/src/store/state_machine/memory/"
+            "file": "hiqlite/src/store/state_machine/sqlite/"
           }
         ],
         "ownership": true,
         "sourceField": "extends",
         "unit": {
           "kind": "directory",
-          "path": "hiqlite/src/store/state_machine/memory/"
+          "path": "hiqlite/src/store/state_machine/sqlite/"
         }
       },
       {
@@ -63,9 +63,9 @@
         }
       }
     ],
-    "specId": "023-distributed-lock-lease-liveness",
+    "specId": "025-snapshot-crash-recovery-contract",
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "336e2a28aeaff1c37422045b220563d256391bd78cd0cd2f2fb3bfd227388168"
+  "shardHash": "2f021512f5f4cf516e9f77ec0869f4a58ece0743c7b8b407b974a6e93921d9e7"
 }

@@ -47,12 +47,25 @@ pub(crate) async fn start_raft_db(
     // that we are not pristine node and need cleanup.
     let is_raft_stopped = Arc::new(AtomicBool::new(true));
 
-    let log_store = hiqlite_wal::LogStore::<TypeConfigSqlite>::start(
+    let mut log_store = hiqlite_wal::LogStore::<TypeConfigSqlite>::start(
         logs::logs_dir_db(&node_config.data_dir),
         node_config.wal_sync.clone(),
         node_config.wal_size,
     )
     .await?;
+
+    // Read before the state machine is built, because the state machine needs it to decide
+    // whether falling back to an older snapshot is recoverable at all. The log store is started
+    // first anyway, so this costs one read and no reordering.
+    let recovery_bounds = {
+        let log_state = log_store.get_log_state().await.map_err(|err| {
+            Error::Error(format!("cannot read the WAL log state at startup: {err}").into())
+        })?;
+        crate::store::state_machine::sqlite::state_machine::SnapshotRecoveryBounds {
+            last_purged_index: log_state.last_purged_log_id.map(|id| id.index),
+        }
+    };
+
     let state_machine_store = StateMachineSqlite::new(
         &node_config.data_dir,
         &node_config.filename_db,
@@ -65,6 +78,7 @@ pub(crate) async fn start_raft_db(
         do_reset_metadata,
         #[cfg(feature = "backup")]
         node_config.backup_keep_days_local,
+        recovery_bounds,
     )
     .await
     .unwrap();
