@@ -75,6 +75,9 @@
       "B-5. Validation checks the image and returns errors",
       "B-6. The purge is bounded, the retry count is counted, and the S3 configuration names what is wrong",
       "B-7. The supported restore topology is N=1, and this says why",
+      "B-8. An interrupted restore is rolled forward, never onto a database without its WAL",
+      "B-9. A backup is finished and durable before it has its name",
+      "B-10. Retention never deletes the newest backup",
       "4. Evidence and its limits",
       "5. Known defects",
       "6. Resolved decisions",
@@ -86,6 +89,6 @@
     "summary": "Repairs F-056 through F-063. One predicate decides what a backup file is, a restore stages the replacement before destroying anything, a follower moves its state aside instead of deleting it on an environment variable alone, validation checks integrity and returns errors instead of panicking, the post-restore purge is bounded, the S3 configuration names the variable that is wrong and proves its credentials before a restore, and two reporting contradictions are corrected. States N=1 as the supported restore topology and says why N=3 is not.\n",
     "title": "Repair backup retention, restore ordering, validation and configuration failure"
   },
-  "shardHash": "7aa3ea0e6314ea2e81c7b860e8e2ace2d3f33e1cf821d0d3ee01c5a7df7a9f35",
+  "shardHash": "6be3ebfb9ef977c7005b0257d2424240b98911711f82053b339bbbdd108fe567",
   "specVersion": "1.3.0"
 }

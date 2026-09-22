@@ -2,14 +2,20 @@ use crate::client::helpers::await_channel_response;
 use crate::client::stream::{ClientKVPayload, ClientStreamReq};
 use crate::network::api::ApiStreamResponsePayload;
 use crate::store::state_machine::memory::dlock_handler::{
-    LockAwaitPayload, LockRequest, LockState,
+    LOCK_VALID_SECONDS, LockAwaitPayload, LockRequest, LockState,
 };
 use crate::store::state_machine::memory::state_machine::{CacheRequest, CacheResponse};
 use crate::{Client, Error};
 use std::borrow::Cow;
+use std::time::Duration;
 use tokio::sync::oneshot;
+use tokio::time;
 use tokio::task;
 use tracing::error;
+
+/// How long one await for a queued ticket lasts before it re-requests: the lease, plus margin for
+/// a wall clock that ticks over between the grant and the check.
+const AWAIT_BOUND: Duration = Duration::from_secs(LOCK_VALID_SECONDS as u64 + 2);
 
 /// A distributed lock with the feature `dlock`. Releases on drop automatically.
 #[derive(Clone)]
@@ -86,20 +92,25 @@ impl Client {
                     });
                 }
                 LockState::Queued(id) => {
-                    // Wait for our position. The lock may be granted directly while waiting if
-                    // the previous holder's lease expired.
-                    match self.lock_await(key.clone(), id).await? {
-                        LockState::Locked(id) => {
-                            return Ok(Lock {
-                                id,
-                                key,
-                                client: self.clone(),
-                            });
-                        }
-                        // Released: the handler promoted our ticket. Re-request with the same
-                        // ticket to claim it.
-                        LockState::Released => ticket = Some(id),
-                        s => unreachable!("{:?}", s),
+                    // F-102: wait for our position, for at most one lease. A waiter is woken
+                    // only by a release reaching the node it awaits on, and nothing wakes it
+                    // when a holder's lease runs out instead, so an unbounded wait sat out the
+                    // 120-second request timeout and then failed. Re-requesting with the same
+                    // ticket is what makes the leader look at the holder's lease.
+                    match time::timeout(AWAIT_BOUND, self.lock_await(key.clone(), id)).await {
+                        Ok(res) => match res? {
+                            LockState::Locked(id) => {
+                                return Ok(Lock {
+                                    id,
+                                    key,
+                                    client: self.clone(),
+                                });
+                            }
+                            // Released: our ticket may claim. Re-request with it.
+                            LockState::Released => ticket = Some(id),
+                            s => unreachable!("{:?}", s),
+                        },
+                        Err(_) => ticket = Some(id),
                     }
                 }
                 s => unreachable!("{:?}", s),

@@ -12,7 +12,6 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 use tokio::net::TcpListener;
-use tokio::sync::Mutex;
 use tokio::task;
 use tracing::{debug, info};
 
@@ -363,7 +362,7 @@ where
         raft_db,
         #[cfg(feature = "cache")]
         raft_cache,
-        raft_lock: Arc::new(Mutex::new(())),
+        membership: Default::default(),
         secret_api: node_config.secret_api,
         secret_raft: node_config.secret_raft,
         #[cfg(feature = "dashboard")]

@@ -2572,6 +2572,19 @@ are above it: the client stream, the cache Raft apply path, or the fixture. Stil
 of forty local runs and was a real defect. This entry is a narrowed open
 question.
 
+**Repaired 2026-09-22 by `023` B-6, from source, not from a reproduction.** The
+stall lasted 119.9 seconds, which is the client's 120-second request timeout, and
+the source has four mechanisms that each leave a queued waiter parked for exactly
+that long: nothing wakes a waiter when a lease expires; the waiter's only bound
+was the request timeout; the re-request (`Acquire`) never looked at the holder's
+lease and duplicated its ticket; and an await, which an embedded client sends to
+its own possibly-follower node, changed lock state outside Raft and could grant
+from a lagging view. Each is now closed and tested, each test observed failing
+against the old handler. **The consumer triage above was wrong:** the lock handler
+and client are library code, and Rahi enables `dlock`. What remains unproven is
+which mechanism produced the one observed run, and the client-side bound, which
+only the cluster suite executes.
+
 ### F-106 `defect`, confidence `high`
 
 **Three acceptance commands could not fail for the reason they exist.**
@@ -2632,11 +2645,19 @@ for node 3 arrived one millisecond later. Node 1 was no longer a voter and
 answered anyway.
 
 **It is a `debug_assert!`, and that cuts both ways.** It is compiled out of a
-release build, so a consumer does not get this panic; what a consumer gets
-instead is the unchecked version of the same thing, a membership append applied
-on a node openraft no longer considers entitled to make one. The assertion is
-**byte-identical in 0.9.24 and 0.9.25**, so the openraft version is not the
-variable.
+release build, so a consumer does not get this panic. Kept apart, as of the
+2026-09-22 revision below:
+
+- **Observed:** the panic, in debug builds, twice.
+- **Established from source (openraft 0.9.25):** both checks in
+  `append_membership` are `debug_assert!`, and in a release build the function
+  goes on to append the membership to the effective state and rebuild the
+  replication streams on a node whose server state is no longer `Leader`.
+- **Not established:** what that does to commit and to the cluster's
+  membership. It was never executed in a release build; `027` KD-9.
+
+The assertion is **byte-identical in 0.9.24 and 0.9.25**, so the openraft version
+is not the variable.
 
 **Repaired 2026-09-22 by `027-node-lifecycle-and-startup-errors`.** The decision
 is now a pure function, `membership_change_allowed`, which refuses on three
@@ -2657,11 +2678,30 @@ guard on a false premise.
 by a test, so all five input combinations are enumerated directly, and both
 tests were observed failing with the voter check removed.
 
+**Revised 2026-09-22: the decision alone did not close it.** Tracing every
+membership mutation and both shutdown paths found four gaps the repair above left
+open, read from source and not observed failing: the decision ran before
+`raft_lock` was taken; `post_membership` had neither the decision nor the lock;
+the raft stream's `RemoveMembershipCache` never asked the decision; and shutdown
+stopped both raft groups without the lock. **Repaired by `027` D-8**: one
+`MembershipGate` through which every change is admitted and decided under its
+lock, with the raft's `Leader` state now required as well; a shutdown that closes
+admission first, drains for at most five seconds, and **stops nothing** on
+timeout; every stop run under the gate in a task a caller's timeout cannot cancel;
+and bounded commit waits. Six deterministic interleaving tests, each of four
+mutations observed failing one. What remains untested is in `027` KD-7 to KD-9.
+
+The "first repair attempt was wrong" paragraph above stands: taking the lock
+around the shutdowns **alone** rested on a false premise about the observed
+sequence. D-8 synchronizes shutdown for a different reason, the in-flight change
+the source allows, and together with deciding under the lock rather than instead
+of it.
+
 **Consumer triage.** Reaches both named consumers in principle and neither as a
 crash: both embed a node and shut it down, and both ship release builds where
-the assertion is absent. What they were exposed to is the unchecked membership
-append on a node leaving the cluster, which is why this is an ordering defect
-rather than a durability one.
+the assertion is absent. What they were exposed to is the membership append on a
+node leaving the cluster, whose effect is not established (KD-9), which is why
+this is an ordering defect rather than a durability one.
 
 ### F-108 `evidence`, confidence `high`
 
@@ -2676,12 +2716,26 @@ against a dependency tree no consumer and no CI run would get.**
 Found 2026-09-22 by reading a CI panic's path, which named
 `openraft-0.9.25/src/...` where the local tree had `0.9.24`.
 
-Not repaired by tracking the lock: committing a `Cargo.lock` for a published
-library pins nothing for consumers, who resolve their own, and would only move
-the divergence rather than remove it. Handled instead by qualifying against what
-consumers resolve: the local tree was moved to `0.9.25` and the full gate and
-the whole acceptance sweep were re-run there. What the release states it was
-tested against is recorded in the handoff.
+First handled, not repaired, by moving the local tree to `0.9.25` and re-running
+the gate there, on the reasoning that committing a `Cargo.lock` for a library
+pins nothing for consumers. **That reasoning conflated two questions**, and the
+owner's direction of 2026-09-22 separates them:
+
+- **Is the qualification reproducible?** Only if local runs and CI build the same
+  graph. **Repaired 2026-09-22 by `031` B-8:** the workspace `Cargo.lock` is
+  tracked (force-added; `.gitignore` is `000`'s unit and is not edited), both CI
+  workflows refuse to start on a lock the manifests do not already satisfy
+  (`cargo metadata --locked`), print the toolchain and the lock's digest, and end
+  by proving no step changed it; `just qualify` is the local equivalent.
+- **What does a consumer resolve?** A different graph, qualified separately after
+  publication, from the registry with no workspace, path or Git override.
+  `openraft` is pinned exactly to `=0.9.25`, the only version this release was
+  qualified on, because F-107 showed a patch release of the consensus library
+  changing what a race does. Every other dependency keeps its range, and what a
+  future resolution can change there is stated in the handoff.
+
+Earlier results are kept as evidence about the graph they ran on (`0.9.24`
+locally before 2026-09-22), not as evidence about the committed one.
 
 ### F-103 `defect`, confidence `high`
 

@@ -32,6 +32,10 @@
         "source": "spec-edge"
       },
       {
+        "path": "hiqlite/src/membership_gate.rs",
+        "source": "spec-edge"
+      },
+      {
         "path": "hiqlite/src/network/",
         "source": "spec-edge"
       },
@@ -81,6 +85,19 @@
         "unit": {
           "kind": "file",
           "path": "hiqlite/src/lifecycle.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/membership_gate.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/membership_gate.rs"
         }
       },
       {
@@ -205,5 +222,5 @@
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "ad6a27b51185b2844fe767c0d3f00df97794ca58bf296d46bec23594e29fa277"
+  "shardHash": "6f21b20479cb60e078b288f573e362225ba714f370fc60019ffe6fccf1d40111"
 }

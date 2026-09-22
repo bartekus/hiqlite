@@ -4,7 +4,6 @@ use serde::Deserialize;
 use std::fmt::Debug;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
-use tokio::sync::Mutex;
 
 #[cfg(any(feature = "backup", feature = "dashboard"))]
 use crate::client::stream::ClientStreamReq;
@@ -123,7 +122,8 @@ pub(crate) struct AppState {
     pub raft_db: StateRaftDB,
     #[cfg(feature = "cache")]
     pub raft_cache: StateRaftCache,
-    pub raft_lock: Arc<Mutex<()>>,
+    /// F-107: every membership change and every shutdown goes through this.
+    pub(crate) membership: crate::membership_gate::MembershipGate,
     #[cfg(feature = "s3")]
     pub s3_config: Option<Arc<S3Config>>,
     pub secret_raft: String,

@@ -55,6 +55,8 @@ extra_hashed_inputs = [
   # already counts them in the coverage denominator, so only the freshness hash needs them.
   "hiqlite/src/lifecycle.rs",
   "hiqlite/src/bin/*.rs",
+  # The membership gate, claimed by 027 for F-107. Crate root, same reason as the two above.
+  "hiqlite/src/membership_gate.rs",
   "hiqlite/src/init.rs",
   "hiqlite/src/app_state.rs",
   "hiqlite/src/split_brain_check.rs",

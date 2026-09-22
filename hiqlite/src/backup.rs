@@ -181,20 +181,24 @@ async fn backup_cron_job(
             let threshold = Utc::now().sub(chrono::Duration::days(keep_days as i64));
 
             let list = s3_config.bucket.list("", None).await?;
-            for bucket in list {
+            let mut backups = Vec::new();
+            for bucket in list.iter() {
                 if bucket.name != s3_config.bucket.name {
                     info!("Found non-configured bucket {} - skipping", bucket.name);
                     continue;
                 }
-
                 for object in bucket.contents.iter() {
-                    if let Some(dt) = dt_from_backup_name(&object.key)
-                        && dt < threshold
-                    {
-                        info!("Deleting expired backup: {}", object.key);
-                        s3_config.bucket.delete(object.key.clone()).await?;
+                    if let Some(dt) = dt_from_backup_name(&object.key) {
+                        backups.push((object.key.as_str(), dt));
                     }
                 }
+            }
+            // The upload of the backup just taken runs in the background and may not have
+            // landed, or may never land. The newest remote copy is therefore never deleted,
+            // so uploads that keep failing cannot age every remote copy out.
+            for key in expired_backups(&backups, threshold) {
+                info!("Deleting expired backup: {}", key);
+                s3_config.bucket.delete(key.to_string()).await?;
             }
         }
     }
@@ -219,6 +223,7 @@ pub(crate) async fn backup_local_cleanup(backup_path: String, keep_days: u16) ->
 
     let path = Path::new(&backup_path);
     let mut dir_entries = tokio::fs::read_dir(path).await?;
+    let mut names = Vec::new();
 
     loop {
         let entry = match dir_entries.next_entry().await {
@@ -232,27 +237,30 @@ pub(crate) async fn backup_local_cleanup(backup_path: String, keep_days: u16) ->
         if entry.metadata().await?.is_dir() {
             continue;
         }
+        if let Some(s) = entry.file_name().to_str() {
+            names.push(s.to_string());
+        }
+    }
 
-        let name = entry.file_name();
-        if let Some(s) = name.to_str() {
-            // One predicate for what a backup file is, shared with the S3 sweep and with
-            // `Client::backup_list_local`. The guard here used to be
-            // `!starts_with(..) && !ends_with(..)`, which skips a file only when it matches
-            // **neither** half where the intent is to skip unless it matches both, so any
-            // `.sqlite` file whose trailing token parses as a plausible timestamp reached the
-            // deletion branch. Three predicates over one naming convention, no two the same.
-            let Some(dt) = dt_from_backup_name(s) else {
-                continue;
-            };
-            let ts = dt.timestamp();
+    // One predicate for what a backup file is, shared with the S3 sweep and with
+    // `Client::backup_list_local`. The guard here used to be `!starts_with(..) &&
+    // !ends_with(..)`, which skips a file only when it matches **neither** half where the
+    // intent is to skip unless it matches both, so any `.sqlite` file whose trailing token
+    // parses as a plausible timestamp reached the deletion branch.
+    let backups = names
+        .iter()
+        .filter_map(|s| dt_from_backup_name(s).map(|dt| (s.as_str(), dt)))
+        .filter(|(_, dt)| dt.timestamp() > ts_min)
+        .collect::<Vec<_>>();
+    let threshold = DateTime::from_timestamp(ts_threshold, 0).unwrap_or_default();
 
-            if ts > ts_min && ts < ts_threshold {
-                let p = format!("{backup_path}/{s}");
-                info!("Cleaning up local backup {s} ({p})");
-                if let Err(err) = tokio::fs::remove_file(p).await {
-                    error!(?err, "Error removing local backup");
-                }
-            }
+    // Never the newest: with a short `keep_days` the sweep runs right after the backup it
+    // follows, and that backup may still be the source of an S3 upload.
+    for s in expired_backups(&backups, threshold) {
+        let p = format!("{backup_path}/{s}");
+        info!("Cleaning up local backup {s} ({p})");
+        if let Err(err) = tokio::fs::remove_file(p).await {
+            error!(?err, "Error removing local backup");
         }
     }
 
@@ -264,6 +272,25 @@ pub(crate) async fn backup_local_cleanup(backup_path: String, keep_days: u16) ->
 /// `backup_node_{node_id}_{unix_seconds}.sqlite`. Every caller that has to decide "is this a
 /// backup" goes through this, so a name that does not parse is never a deletion candidate, on
 /// disk or in a bucket.
+/// Retention: the backups older than `threshold`, never including the newest one.
+///
+/// A floor of one copy means a backup that keeps failing, locally or on its way to S3, can never
+/// leave nothing behind, whatever `keep_days` says.
+fn expired_backups<'a>(
+    backups: &[(&'a str, DateTime<Utc>)],
+    threshold: DateTime<Utc>,
+) -> Vec<&'a str> {
+    let newest = backups
+        .iter()
+        .max_by_key(|(name, dt)| (*dt, *name))
+        .map(|(name, _)| *name);
+    backups
+        .iter()
+        .filter(|(name, dt)| *dt < threshold && Some(*name) != newest)
+        .map(|(name, _)| *name)
+        .collect()
+}
+
 pub(crate) fn dt_from_backup_name(name: &str) -> Option<DateTime<Utc>> {
     let backup = name.strip_prefix("backup_node_")?;
     // `{node_id}_{ts}.sqlite`
@@ -360,6 +387,14 @@ async fn quarantine_data_dir_contents(data_dir: &str) -> Result<(), Error> {
 /// Returns `Ok(true)` if backup has been applied.
 /// This will only run if the current node ID is `1`.
 pub(crate) async fn restore_backup_start(node_config: &NodeConfig) -> Result<bool, Error> {
+    // A restore that was interrupted after its image was staged is finished before anything
+    // else, whether or not the environment still asks for one: the previous database may
+    // already be missing its write-ahead log, and starting on it is not an option.
+    if finish_staged_restore(node_config).await? {
+        warn!("Completed a database restore that had been interrupted");
+        return Ok(true);
+    }
+
     if let Some(src) = BackupSource::from_env() {
         info!("Found backup restore request {:?}", src);
 
@@ -405,13 +440,8 @@ pub async fn restore_backup(node_config: &NodeConfig, src: BackupSource) -> Resu
         ));
     }
 
-    let (
-        PathDb(path_db),
-        PathBackups(path_backups),
-        PathSnapshots(path_snapshots),
-        PathLockFile(path_lock_file),
-    ) = StateMachineSqlite::build_folders(&node_config.data_dir, false).await;
-    let path_logs = logs::logs_dir_db(&node_config.data_dir);
+    let (PathDb(path_db), PathBackups(path_backups), _, _) =
+        StateMachineSqlite::build_folders(&node_config.data_dir, false).await;
 
     fs::create_dir_all(&path_backups).await?;
     set_path_access(&path_backups, 0o700).await?;
@@ -458,23 +488,66 @@ pub async fn restore_backup(node_config: &NodeConfig, src: BackupSource) -> Resu
     fs::create_dir_all(&path_db).await?;
     set_path_access(&path_db, 0o700).await?;
 
-    let path_db_full = format!("{}/{}", path_db, node_config.filename_db);
-    let path_db_staged = format!("{path_db_full}.restoring");
+    let (_, path_db_staged) = restore_paths(node_config, &path_db);
+    let path_db_staging = format!("{path_db_staged}.tmp");
+    let _ = fs::remove_file(&path_db_staging).await;
     let _ = fs::remove_file(&path_db_staged).await;
 
     info!(
         "Given backup check ok - staging it next to the database: {} -> {}",
         path_backup, path_db_staged
     );
-    fs::copy(&path_backup, &path_db_staged).await?;
-    set_path_access(&path_db_staged, 0o700).await?;
-    // The copied image is what the node will start on, so it is made durable before the rename
-    // that publishes it and before anything else is removed.
-    sync_file(&path_db_staged).await?;
+    fs::copy(&path_backup, &path_db_staging).await?;
+    set_path_access(&path_db_staging, 0o700).await?;
+    // The copied image is what the node will start on, so it is made durable before anything
+    // is removed. It is then renamed to the staged name, and that rename is the commit point
+    // of the restore: from here a crash is rolled forward on the next start, by
+    // `finish_staged_restore`, and never rolled back onto a database that may already have lost
+    // its write-ahead log.
+    sync_file(&path_db_staging).await?;
+    fs::rename(&path_db_staging, &path_db_staged).await?;
+    sync_parent_dir(&path_db).await?;
+
+    if !finish_staged_restore(node_config).await? {
+        return Err(Error::Error(
+            format!("the staged restore image {path_db_staged} disappeared before it was applied")
+                .into(),
+        ));
+    }
+    if remove_src {
+        info!("Cleaning up S3 backup from {}", path_backup);
+        fs::remove_file(path_backup).await?;
+    }
+
+    Ok(())
+}
+
+/// The database's final path and the staged restore image's path beside it.
+fn restore_paths(node_config: &NodeConfig, path_db: &str) -> (String, String) {
+    let path_db_full = format!("{}/{}", path_db, node_config.filename_db);
+    let path_db_staged = format!("{path_db_full}.restoring");
+    (path_db_full, path_db_staged)
+}
+
+/// Apply a staged restore image, if there is one: the destructive half of a restore.
+///
+/// Idempotent, so it is both the second half of `restore_backup` and the roll-forward of one
+/// that was interrupted. `Ok(false)` means nothing was staged. A leftover `.restoring.tmp` is an
+/// image whose staging never completed, before anything was removed, and is discarded.
+async fn finish_staged_restore(node_config: &NodeConfig) -> Result<bool, Error> {
+    let (PathDb(path_db), _, PathSnapshots(path_snapshots), PathLockFile(path_lock_file)) =
+        StateMachineSqlite::build_folders(&node_config.data_dir, false).await;
+    let path_logs = logs::logs_dir_db(&node_config.data_dir);
+    let (path_db_full, path_db_staged) = restore_paths(node_config, &path_db);
+
+    let _ = fs::remove_file(format!("{path_db_staged}.tmp")).await;
+    if !fs::try_exists(&path_db_staged).await.unwrap_or(false) {
+        return Ok(false);
+    }
 
     debug!("Removing old data");
-    // The database is published last of the four, and by rename rather than by deletion, so a
-    // crash anywhere in here leaves either the old file or the new one at the final name.
+    // The database is published last, and by rename rather than by deletion, so a crash
+    // anywhere in here leaves the staged image in place and this function runs again.
     remove_dir_all_reported(&path_snapshots).await?;
     remove_file_reported(&path_lock_file).await?;
     remove_dir_all_reported(&path_logs).await?;
@@ -486,8 +559,8 @@ pub async fn restore_backup(node_config: &NodeConfig, src: BackupSource) -> Resu
     // the cluster it was supposed to rejoin, so it never initialized itself, could not reach a
     // quorum on its own, and never served the endpoint its peers needed in order to rejoin it.
     //
-    // They are removed after the staged image is durable and before the rename, so the window
-    // in which the final name holds a database with a foreign WAL is never entered.
+    // They are removed before the rename, so the window in which the final name holds a
+    // database with a foreign WAL is never entered.
     for sidecar in [
         format!("{path_db_full}-wal"),
         format!("{path_db_full}-shm"),
@@ -499,13 +572,7 @@ pub async fn restore_backup(node_config: &NodeConfig, src: BackupSource) -> Resu
 
     fs::rename(&path_db_staged, &path_db_full).await?;
     sync_parent_dir(&path_db).await?;
-
-    if remove_src {
-        info!("Cleaning up S3 backup from {}", path_backup);
-        fs::remove_file(path_backup).await?;
-    }
-
-    Ok(())
+    Ok(true)
 }
 
 /// Establish that a candidate backup is a hiqlite database this node can start on.
@@ -824,6 +891,51 @@ mod tests {
         fs::remove_dir_all(&dir).await.unwrap();
     }
 
+    /// Retention never deletes the newest backup, whatever `keep_days` says.
+    ///
+    /// `keep_days = 0` is accepted, and the local sweep runs right after the backup it follows,
+    /// so it used to delete that backup, possibly while it was still being uploaded. On S3 the
+    /// sweep deleted expired copies whether or not the new upload had landed, so uploads that
+    /// kept failing for longer than `keep_days` aged every remote copy out.
+    #[test]
+    fn retention_never_deletes_the_newest_backup() {
+        let t = |secs: i64| DateTime::from_timestamp(secs, 0).unwrap();
+        let backups = [("a", t(1_800_000_000)), ("b", t(1_800_000_100)), ("c", t(1_800_000_200))];
+
+        // Everything is past the threshold: all but the newest go.
+        assert_eq!(expired_backups(&backups, t(1_900_000_000)), vec!["a", "b"]);
+        // A threshold in the middle: only what is older than it, and never the newest.
+        assert_eq!(expired_backups(&backups, t(1_800_000_150)), vec!["a", "b"]);
+        assert_eq!(expired_backups(&backups, t(1_800_000_050)), vec!["a"]);
+        // A single backup, however old, is kept.
+        assert!(expired_backups(&backups[..1], t(1_900_000_000)).is_empty());
+        assert!(expired_backups(&[], t(1_900_000_000)).is_empty());
+    }
+
+    /// The same floor through the local sweep, with `keep_days = 0`.
+    #[tokio::test]
+    async fn local_cleanup_with_zero_keep_days_keeps_the_backup_it_follows() {
+        let dir = std::env::temp_dir().join(format!(
+            "hiqlite-backup-floor-{}",
+            Utc::now().timestamp_nanos_opt().unwrap()
+        ));
+        fs::create_dir_all(&dir).await.unwrap();
+        let base = dir.to_str().unwrap().to_string();
+
+        let older = format!("backup_node_1_{}.sqlite", 1_704_153_600i64);
+        let newest = format!("backup_node_1_{}.sqlite", Utc::now().timestamp() - 5);
+        for name in [&older, &newest] {
+            fs::write(format!("{base}/{name}"), b"x").await.unwrap();
+        }
+
+        backup_local_cleanup(base.clone(), 0).await.unwrap();
+
+        let exists = |name: &str| Path::new(&format!("{base}/{name}")).exists();
+        assert!(!exists(&older), "an expired backup is deleted");
+        assert!(exists(&newest), "the newest backup is never deleted");
+        fs::remove_dir_all(&dir).await.unwrap();
+    }
+
     /// The retention floor is stated in the zone it is compared in.
     ///
     /// Every timestamp it guards comes from `Utc::now()`, and the constant was CET midnight
@@ -1019,6 +1131,62 @@ mod tests {
         assert!(
             !db_dir.join("hiqlite.db.restoring").exists(),
             "the staging name is consumed by the rename"
+        );
+
+        fs::remove_dir_all(&dir).await.unwrap();
+    }
+
+    /// A restore interrupted after its image was staged is rolled forward on the next start.
+    ///
+    /// The state below is the one a crash leaves after the previous write-ahead log, logs and
+    /// snapshots have been removed and before the rename: the old database without its WAL. A
+    /// normal start used to open it. Now the staged image is the commit record, and the start
+    /// finishes the restore. A staging copy that never completed is discarded instead, and
+    /// nothing else is touched.
+    #[cfg(feature = "sqlite")]
+    #[tokio::test]
+    async fn an_interrupted_restore_is_rolled_forward_on_the_next_start() {
+        let dir = std::env::temp_dir().join(format!(
+            "hiqlite-restore-rollforward-{}",
+            Utc::now().timestamp_nanos_opt().unwrap()
+        ));
+        let db_dir = dir.join("state_machine/db");
+        fs::create_dir_all(&db_dir).await.unwrap();
+        let mut node_config = NodeConfig::default();
+        node_config.data_dir = dir.to_string_lossy().into_owned().into();
+        node_config.filename_db = "hiqlite.db".into();
+
+        // An incomplete staging copy: discarded, and the database is left alone.
+        fs::write(db_dir.join("hiqlite.db"), b"the previous database")
+            .await
+            .unwrap();
+        fs::write(db_dir.join("hiqlite.db-wal"), b"its write-ahead log")
+            .await
+            .unwrap();
+        fs::write(db_dir.join("hiqlite.db.restoring.tmp"), b"half a copy")
+            .await
+            .unwrap();
+        assert!(!finish_staged_restore(&node_config).await.unwrap());
+        assert!(!db_dir.join("hiqlite.db.restoring.tmp").exists());
+        assert!(db_dir.join("hiqlite.db-wal").exists(), "nothing was destroyed");
+
+        // The crash state: staged image committed, the old WAL already gone.
+        fs::remove_file(db_dir.join("hiqlite.db-wal")).await.unwrap();
+        fs::write(db_dir.join("hiqlite.db.restoring"), b"the restored database")
+            .await
+            .unwrap();
+        assert!(
+            restore_backup_start(&node_config).await.unwrap(),
+            "the start reports the restore as applied"
+        );
+        assert_eq!(
+            fs::read(db_dir.join("hiqlite.db")).await.unwrap(),
+            b"the restored database"
+        );
+        assert!(!db_dir.join("hiqlite.db.restoring").exists());
+        assert!(
+            !restore_backup_start(&node_config).await.unwrap(),
+            "and it is not applied twice"
         );
 
         fs::remove_dir_all(&dir).await.unwrap();

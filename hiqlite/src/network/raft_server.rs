@@ -265,8 +265,21 @@ async fn handle_socket(
             RaftStreamRequest::RemoveMembershipCache(node_id) => {
                 debug!("Node drop membership request for Node: {}\n", node_id);
 
-                // we want to hold the lock until we finished to not end up with race conditions
-                let _lock = state.raft_lock.lock().await;
+                // F-107: this path changed membership without asking whether this node may.
+                // A refusal here is checked before any wait, so during shutdown it cannot queue
+                // behind the drain and hold up the appends this stream also carries.
+                let _held = match crate::network::management::admit_membership_change(
+                    &state,
+                    &RaftType::Cache,
+                )
+                .await
+                {
+                    Ok(held) => held,
+                    Err(err) => {
+                        error!("Refusing to remove remote Cache Member {node_id}: {err}");
+                        break;
+                    }
+                };
 
                 let metrics = helpers::get_raft_metrics(&state, &RaftType::Cache).await;
                 let members = metrics.membership_config;
@@ -279,7 +292,7 @@ async fn handle_socket(
                 }
 
                 if let Err(err) =
-                    helpers::change_membership(&state, &RaftType::Cache, nodes_set, false).await
+                    helpers::change_membership(&state, &RaftType::Cache, nodes_set, false, &_held).await
                 {
                     error!("Error removing remote Cache Member: {:?}", err);
                 }

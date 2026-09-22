@@ -1,4 +1,5 @@
 use crate::app_state::AppState;
+use crate::membership_gate::SHUTDOWN_DRAIN;
 use crate::client::stream::ClientStreamReq;
 use crate::helpers::deserialize;
 use crate::network::HEADER_NAME_SECRET;
@@ -8,7 +9,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::watch;
 use tokio::time;
-use tracing::{debug, info};
+use tracing::{debug, error, info};
 
 #[cfg(feature = "cache")]
 use crate::network::management::{self, ClusterLeaveReq};
@@ -303,7 +304,6 @@ impl Client {
         }
     }
 
-    #[allow(unused_assignments)]
     #[allow(unused_variables)]
     pub(crate) async fn shutdown_execute(
         state: &Arc<AppState>,
@@ -312,6 +312,35 @@ impl Client {
         #[cfg(feature = "cache")] tx_client_cache: &flume::Sender<ClientStreamReq>,
         #[cfg(feature = "sqlite")] tx_client_db: &flume::Sender<ClientStreamReq>,
         tx_shutdown: &Option<watch::Sender<bool>>,
+    ) -> Result<(), Error> {
+        // F-107: the sequence runs in its own task. Both callers bound how long they wait, and
+        // dropping this future used to cancel the sequence wherever it was, including between
+        // one raft group's stop and the next. A caller that stops waiting now only stops waiting.
+        tokio::spawn(Self::shutdown_run(
+            state.clone(),
+            #[cfg(feature = "cache")]
+            with_tls,
+            #[cfg(feature = "cache")]
+            tls_no_verify,
+            #[cfg(feature = "cache")]
+            tx_client_cache.clone(),
+            #[cfg(feature = "sqlite")]
+            tx_client_db.clone(),
+            tx_shutdown.clone(),
+        ))
+        .await
+        .map_err(|err| Error::Error(format!("the shutdown task did not complete: {err}").into()))?
+    }
+
+    #[allow(unused_assignments)]
+    #[allow(unused_variables)]
+    async fn shutdown_run(
+        state: Arc<AppState>,
+        #[cfg(feature = "cache")] with_tls: bool,
+        #[cfg(feature = "cache")] tls_no_verify: bool,
+        #[cfg(feature = "cache")] tx_client_cache: flume::Sender<ClientStreamReq>,
+        #[cfg(feature = "sqlite")] tx_client_db: flume::Sender<ClientStreamReq>,
+        tx_shutdown: Option<watch::Sender<bool>>,
     ) -> Result<(), Error> {
         info!("Starting Node shutdown");
 
@@ -346,6 +375,8 @@ impl Client {
         // components this shutdown is about to end as failures.
         state.lifecycle.begin_shutdown();
         state.is_shutting_down.store(true, Ordering::Relaxed);
+        // F-107: no membership change is admitted from here on, on either raft group.
+        state.membership.close();
 
         // This pre-shutdown delay is not strictly necessary, but it makes rolling releases
         // smoother, especially with ephemeral storage. It also allows to set a ready check
@@ -354,6 +385,25 @@ impl Client {
         if !is_single_instance {
             time::sleep(Duration::from_millis(9500)).await;
         }
+
+        // F-107: wait, bounded, for a membership change admitted before `close` to finish, and
+        // hold the gate until every component has stopped. On timeout nothing is stopped: see
+        // `membership_gate` for why that and not a stop under the running change.
+        let held = match state.membership.drain(SHUTDOWN_DRAIN).await {
+            Ok(Some(held)) => held,
+            Ok(None) => {
+                info!("This node has already been shut down");
+                return Ok(());
+            }
+            Err(err) => {
+                error!("{err}");
+                return Err(err);
+            }
+        };
+
+        // A component that fails to stop no longer returns early and leaves the ones after it
+        // running. Every stop is attempted; the first failure is returned.
+        let mut first_err: Option<Error> = None;
 
         #[cfg(feature = "cache")]
         {
@@ -377,21 +427,33 @@ impl Client {
                 let client = crate::http_client::build_http_client(tls_no_verify);
                 let scheme = if with_tls { "https" } else { "http" };
 
-                if metrics.current_leader == Some(state.id) {
+                // The same decision every other membership change takes, minus the closed
+                // gate, which this shutdown closed itself and holds.
+                let may_leave_locally = metrics.state == ServerState::Leader
+                    && management::membership_change_allowed(
+                    false,
+                    metrics.current_leader,
+                    state.id,
+                        metrics.membership_config.voter_ids().any(|id| id == state.id),
+                    )
+                    .is_ok();
+
+                if may_leave_locally {
                     if let Err(err) = management::leave_cluster_exec(
-                        state,
+                        &state,
                         &crate::app_state::RaftType::Cache,
                         ClusterLeaveReq {
                             node_id: state.id,
                             stay_as_learner: false,
                         },
+                        &held,
                     )
                     .await
                     {
                         tracing::error!("Error leaving the Cache cluster: {:?}", err);
                     }
                 } else if let Err(err) = crate::init::leave_remote_cluster(
-                    state,
+                    &state,
                     &crate::app_state::RaftType::Cache,
                     &client,
                     scheme,
@@ -417,9 +479,9 @@ impl Client {
                 .raft_cache
                 .is_raft_stopped
                 .store(true, Ordering::Relaxed);
-            state.raft_cache.raft.shutdown().await?;
+            note_stop(&mut first_err, "the cache raft", state.raft_cache.raft.shutdown().await);
             if let Some(handle) = &state.raft_cache.shutdown_handle {
-                handle.shutdown().await?;
+                note_stop(&mut first_err, "the cache log writer", handle.shutdown().await);
             }
             let _ = tx_client_cache.send_async(ClientStreamReq::Shutdown).await;
         };
@@ -448,28 +510,48 @@ impl Client {
 
             state.raft_db.is_raft_stopped.store(true, Ordering::Relaxed);
 
-            state.raft_db.raft.shutdown().await?;
+            note_stop(&mut first_err, "the sqlite raft", state.raft_db.raft.shutdown().await);
             info!("Shutting down sqlite logs writer");
-            state.raft_db.shutdown_handle.shutdown().await?;
+            note_stop(
+                &mut first_err,
+                "the sqlite WAL writer",
+                state.raft_db.shutdown_handle.shutdown().await,
+            );
 
             info!("Shutting down sqlite writer");
             let (tx_sm, rx_sm) = tokio::sync::oneshot::channel();
-            state
+            let writer_stopped = match state
                 .raft_db
                 .sql_writer
                 .send_async(WriterRequest::Shutdown(tx_sm))
                 .await
-                .expect("The state machine writer to always be listening");
-            rx_sm
-                .await
-                .expect("To always get an answer from SQL writer");
+            {
+                Ok(()) => rx_sm.await.map_err(|_| {
+                    Error::Error("the SQLite writer ended without acknowledging shutdown".into())
+                }),
+                Err(_) => Err(Error::Error(
+                    "the SQLite writer was no longer listening for shutdown".into(),
+                )),
+            };
+            note_stop(&mut first_err, "the SQLite writer", writer_stopped);
 
             let _ = tx_client_db.send_async(ClientStreamReq::Shutdown).await;
         }
 
+        // Recorded under the gate, and after every stop was attempted, so a second shutdown does
+        // not repeat the sequence against stopped components.
+        state.membership.mark_stopped(&held);
+
         if let Some(tx) = tx_shutdown {
             tx.send(true)
                 .expect("The global Hiqlite shutdown handler to always listen");
+        }
+
+        if let Some(err) = first_err {
+            // Storage ownership is deliberately kept: a component that did not stop cleanly may
+            // still touch the data directory. Dropping this state releases it.
+            error!("Shutdown finished with a component that did not stop cleanly: {err}");
+            return Err(err);
         }
 
         // Last, and the ordering is the point: every raft group, the WAL writer and the SQLite
@@ -478,6 +560,16 @@ impl Client {
         state.release_storage_ownership();
 
         info!("Shutdown complete");
+        drop(held);
         Ok(())
+    }
+}
+
+/// Record a component that did not stop cleanly, and keep going.
+fn note_stop<E: Into<Error>>(first: &mut Option<Error>, what: &str, res: Result<(), E>) {
+    if let Err(err) = res {
+        let err = err.into();
+        error!("Shutdown: {what} did not stop cleanly: {err}");
+        first.get_or_insert(err);
     }
 }

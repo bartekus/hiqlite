@@ -47,6 +47,17 @@ jobs:
           done
           echo "all three manifests are $tag"
 
+      - name: Qualification graph is the committed lockfile (F-108)
+        # Fails if the committed `Cargo.lock` does not already satisfy every manifest, instead of
+        # letting this runner resolve a graph of its own. Every later cargo step then builds that
+        # graph, and the last step proves none of them changed it.
+        run: |
+          set -euo pipefail
+          rustc -Vv
+          cargo -V
+          cargo metadata --locked --format-version 1 > /dev/null
+          sha256sum Cargo.lock
+
       - name: Clippy (deny warnings)
         run: cargo clippy -- -D warnings
 
@@ -70,6 +81,9 @@ jobs:
         run: |
           cargo package -p hiqlite-wal-patched
           cargo package -p hiqlite-derive-patched
+
+      - name: No step changed the qualification graph (F-108)
+        run: git diff --exit-code -- Cargo.lock
 
   publish:
     name: Publish (holds the registry token)

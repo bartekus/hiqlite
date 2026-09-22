@@ -207,6 +207,47 @@ is a design this spec does not attempt.
 
 Stated here so a release note can repeat it without inventing it.
 
+### B-8. An interrupted restore is rolled forward, never onto a database without its WAL
+
+B-3 staged before destroying, and F-100 removed the old write-ahead log before
+the rename. That left one window: a crash after the old WAL, logs and snapshots
+were removed and before the rename left the **old** database without its WAL,
+and a normal start opened it. Added 2026-09-22.
+
+The staged image is now the commit record of a restore. It is copied to
+`<db>.restoring.tmp`, synced, and renamed to `<db>.restoring`, and the directory
+is synced; only then is anything destroyed. `finish_staged_restore` performs the
+destructive half and is idempotent, and every start runs it **before** consulting
+`HQL_BACKUP_RESTORE`: a `.restoring` file means a committed restore, which is
+finished; a `.restoring.tmp` means a staging copy that never completed, before
+anything was removed, and is discarded.
+
+### B-9. A backup is finished and durable before it has its name
+
+`create_backup` ran `VACUUM INTO` a temp file, renamed it into place, and then
+reset the backup's metadata, ignoring the result, with nothing synced. A crash
+or a failure between the rename and the reset published a backup that still
+carried the live node's metadata, and a crash after the rename could leave the
+name without the bytes. The reset now runs on the temp file and fails the backup
+if it fails; the file is synced, renamed, and its directory synced. Added
+2026-09-22.
+
+### B-10. Retention never deletes the newest backup
+
+`keep_days = 0` is accepted (KD-7), and the local sweep runs right after the
+backup it follows, so it could delete that backup, possibly while it was still
+the source of an S3 upload. The S3 sweep deleted expired copies whether or not
+the new upload had landed, so uploads that failed for longer than `keep_days`
+aged every remote copy out. Both sweeps now go through `expired_backups`, which
+never returns the newest backup of the set it is given. Added 2026-09-22.
+
+**What an S3 upload's completion means.** `Client::backup` returning `Ok` means
+the local backup exists, is durable, and has its metadata reset. The upload runs
+afterwards in the background, because the backup is taken inside the SQLite
+state machine's writer and an upload there would stall every apply. It is
+retried up to ten times with linear backoff, and its outcome is reported only in
+the log (KD-8).
+
 ## 4. Evidence and its limits
 
 Eight tests in `backup.rs`, five of them added or replaced here. **Four fail
@@ -288,6 +329,16 @@ work.
 **KD-7. `keep_days` is still never range-checked**, including against zero, which
 `013` recorded and which this spec does not change.
 
+**KD-8. Nothing reports an upload's outcome to a caller.** B-10 ensures a
+failing upload never costs the last remote copy; it does not tell anyone the
+upload failed except the log. There is no metric and no status an application
+can poll.
+
+**KD-9. B-8 and B-10 are tested; B-9 is not.** The roll-forward and the
+retention floor have tests that fail against the previous code. The ordering and
+syncs in `create_backup` are read from source; no test injects a crash or a
+failed metadata reset there.
+
 ## 6. Resolved decisions
 
 **D-1 (2026-09-21, one predicate, not three consistent ones).** The alternative
@@ -328,6 +379,13 @@ thirty-four commands asserted the defective expressions this spec removed, and
 one named a test it replaces. Each is replaced below and marked with what it was.
 The rest are carried forward unchanged.
 
+**D-8 (2026-09-22, two acceptance greps follow the code, and why that is not
+drift).** B-8 and B-10 changed the syntax two greps matched: the local sweep's
+predicate is now a `filter_map`, and the staged image is synced under its
+staging name before the rename that commits it. The behaviors those greps stand
+for, one predicate (B-1) and a synced image before anything is destroyed (B-3),
+are unchanged and still asserted. Each replaced line is marked in the block.
+
 ## 7. Out of scope
 
 - **Coordinating a multi-node restore.** B-7, KD-2.
@@ -357,7 +415,8 @@ cargo test -p hiqlite-patched --lib backup::tests::the_remote_retention_filter_a
 cargo test -p hiqlite-patched --lib backup::tests::local_cleanup_only_deletes_files_that_are_actually_backups -- --exact
 grep -q 'backup_node_{node_id}_{ts}.sqlite' hiqlite/src/store/state_machine/sqlite/writer.rs
 # was a grep for the inverted `!starts_with && !ends_with` guard
-sh -c 'grep -q "let Some(dt) = dt_from_backup_name(s) else" hiqlite/src/backup.rs'
+# B-10 moved the local sweep's predicate into a `filter_map`; still the one predicate B-1 requires
+sh -c 'grep -q "filter_map(|s| dt_from_backup_name(s)" hiqlite/src/backup.rs'
 # was `let ts_min = 1704063600;` and its CET comment
 sh -c 'grep -q "const TS_MIN: i64 = 1_704_067_200;" hiqlite/src/backup.rs'
 # was a grep for the listing's prefix-only predicate
@@ -370,7 +429,8 @@ sh -c '! grep -q "let _ = fs::remove_dir_all(&path_db).await;" hiqlite/src/backu
 # was `fs::copy(&path_backup, &path_db_full).await?;`, the non-atomic replacement
 sh -c 'grep -q "fs::rename(&path_db_staged, &path_db_full).await?;" hiqlite/src/backup.rs'
 # was `! grep sync_data`: the restored image is now synced before it is published
-sh -c 'grep -q "sync_file(&path_db_staged).await?;" hiqlite/src/backup.rs'
+# B-8 syncs the staging copy and then commits it by rename; the staged image is still synced first
+sh -c 'grep -A1 "sync_file(&path_db_staging).await?;" hiqlite/src/backup.rs | grep -q "fs::rename(&path_db_staging, &path_db_staged)"'
 # was the exact-string comparison for HQL_BACKUP_SKIP_VALIDATION
 sh -c 'grep -q "eq_ignore_ascii_case(\"true\")" hiqlite/src/backup.rs'
 # was `let _meta: StateMachineData = deserialize(&bytes).unwrap();`
@@ -403,4 +463,12 @@ cargo test -p hiqlite-patched --lib --features sqlite,backup,s3 backup::tests::m
 cargo test -p hiqlite-patched --lib --features sqlite,backup backup::tests::a_restore_removes_the_previous_write_ahead_log_and_not_only_the_database -- --exact
 sh -c 'grep -q "{path_db_full}-wal" hiqlite/src/backup.rs'
 sh -c 'grep -B4 "fs::rename(&path_db_staged, &path_db_full)" hiqlite/src/backup.rs | grep -q "remove_file_reported(&sidecar)"'
+# B-8 / B-9 / B-10: roll-forward, durable backup, and a retention floor of one
+cargo test -p hiqlite-patched --lib --features sqlite,backup backup::tests::an_interrupted_restore_is_rolled_forward_on_the_next_start -- --exact
+cargo test -p hiqlite-patched --lib --features sqlite,backup backup::tests::retention_never_deletes_the_newest_backup -- --exact
+cargo test -p hiqlite-patched --lib --features sqlite,backup backup::tests::local_cleanup_with_zero_keep_days_keeps_the_backup_it_follows -- --exact
+sh -c 'grep -A6 "fn restore_backup_start" hiqlite/src/backup.rs | grep -q "finish_staged_restore(node_config)"'
+sh -c 'grep -q "expired_backups(&backups, threshold)" hiqlite/src/backup.rs'
+sh -c 'test "$(grep -c "expired_backups(&backups, threshold)" hiqlite/src/backup.rs)" -eq 2'
+sh -c 'grep -B3 "sync_file_blocking(&path_temp)" hiqlite/src/store/state_machine/sqlite/writer.rs | grep -q "persist_metadata(&conn_bkp, &StateMachineData::default())?;"'
 ```

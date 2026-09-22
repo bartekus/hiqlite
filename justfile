@@ -241,6 +241,19 @@ verify:
     just test
     just msrv-verify
 
+# F-108: the release qualification, on the committed graph and nothing else. `check` runs
+# `cargo update` first, which makes it a maintenance sweep and not a qualification.
+qualify:
+    #!/usr/bin/env bash
+    set -euxo pipefail
+    rustc -Vv
+    cargo -V
+    cargo metadata --locked --format-version 1 > /dev/null
+    cargo clippy --locked -- -D warnings
+    just clippy
+    TEST_SKIP_S3_RESTORE="true" cargo test --locked --features cache,counters,dlock,listen_notify,macros,toml,external-state-machine
+    git diff --exit-code -- Cargo.lock
+
 # makes sure everything is fine
 verify-is-clean: verify
     #!/usr/bin/env bash

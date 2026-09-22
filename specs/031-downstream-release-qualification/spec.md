@@ -199,6 +199,34 @@ pulls in `hiqlite-wal`'s test modules, which carry pre-existing lints unrelated
 to this release, and silencing those to widen a gate would be changing unrelated
 code to make it pass.
 
+### B-8. The qualification graph is committed, and the consumer graph is qualified separately
+
+Two graphs, and F-108 was the cost of treating them as one.
+
+**The qualification graph** is what local runs and CI build. It is the workspace
+`Cargo.lock`, now tracked. It is force-added rather than removed from
+`.gitignore`, because that file is `000`'s explicit unit and the tracked example
+lockfiles already work the same way. Both CI workflows that qualify a tree, the
+pull-request `Check` and the publish workflow's secret-free `build` job, begin by
+printing `rustc -Vv`, `cargo -V` and the lock's SHA-256 and refusing a lock the
+manifests do not already satisfy (`cargo metadata --locked`), and end by proving
+that no step changed it. `just qualify` is the local equivalent; `just check`
+still runs `cargo update` first and is a maintenance sweep, not a qualification.
+The toolchain is the one printed: CI's container and a local `+1.95.0` are not
+asserted to be identical, and the printed versions are the record.
+
+**The consumer graph** is what someone who adds `hiqlite-patched` to their own
+manifest resolves. The committed lock does not constrain it; nothing a library
+ships can. It is qualified after publication, from the registry, in a workspace
+with no `path`, Git or `[patch]` override (R-15), and recorded separately.
+
+**One range is narrowed.** `openraft` is `=0.9.25`, the only version this release
+was qualified on. F-107 showed a patch release of the consensus library changing
+what a membership race does, and an ordering defect in consensus code is the
+kind a caret range would let a consumer resolve into silently. Every other
+dependency keeps its range: a consumer may resolve newer compatible versions than
+the ones qualified, and the handoff lists what was qualified.
+
 ## 4. Evidence and its limits
 
 **Release state is in the ledger**, `standards/spec/release-ledger.md`, one row
@@ -262,6 +290,15 @@ tracked example lockfiles are stale and that the documented build rewrites them;
 the rename changes the package names those lockfiles contain. They are left as
 they are, so the first build of an example after this change rewrites them.
 
+**KD-7. Only `openraft` is pinned.** Every other dependency is a compatible
+range, so a fresh consumer can resolve versions newer than the committed lock's,
+and the consumer qualification covers the graph it resolved on the day it ran,
+not every graph the ranges admit.
+
+**KD-8. The pin has a maintenance cost.** A consumer cannot take an `openraft`
+0.9 patch release, including a security fix, without a new `-patched.N` release
+of this crate.
+
 **KD-6. Nothing prevents a second publication of a different tree under the same
 version.** The workflow skips a version the registry already serves, which makes
 a re-run safe; it does not compare what is on the registry with what is in the
@@ -304,6 +341,14 @@ Twenty of them are already held by a later spec, whose block was corrected as
 ordinary authoring; eight of those holders are specs this session authored. Two,
 `003` and `012`, have live blocks this session did not author, so they go through
 `amends_verification`. Nothing in either block changed except the package name.
+
+**D-7 (2026-09-22, commit the qualification lock and pin exactly one
+dependency).** The earlier reading of F-108 declined to track the lock because it
+pins nothing for consumers. That is true and beside the point: the qualification
+has to be reproducible whatever consumers resolve, and consumers are qualified on
+their own graph. Pinning every dependency exactly was declined as well; it would
+make the crate hard to combine with anything, and the evidence that a patch
+release changes behavior exists only for `openraft`.
 
 ## 7. Out of scope
 
@@ -372,6 +417,16 @@ spec-spine lint --fail-on-warn
 spec-spine index coverage
 sh -c '! grep -rl "$(printf "\342\200\224")" specs/012-cluster-integration-evidence'
 # --- what this release adds ---
+# B-8 / F-108: the qualification graph is committed and enforced, and openraft is exact
+git ls-files --error-unmatch Cargo.lock
+cargo metadata --locked --format-version 1 --no-deps
+sh -c 'grep -q "^openraft = { version = \"=0.9.25\"" Cargo.toml'
+sh -c 'grep -A1 "^name = \"openraft\"$" Cargo.lock | grep -q "^version = \"0.9.25\"$"'
+sh -c 'grep -q "cargo metadata --locked --format-version 1 > /dev/null" .github/workflows/code_style.yaml'
+sh -c 'grep -q "git diff --exit-code -- Cargo.lock" .github/workflows/code_style.yaml'
+sh -c 'grep -q "cargo metadata --locked --format-version 1 > /dev/null" .github/workflows/publish.yaml'
+sh -c 'grep -q "git diff --exit-code -- Cargo.lock" .github/workflows/publish.yaml'
+sh -c 'grep -q "^qualify:" justfile'
 # the three packages are renamed and the three libraries are not
 sh -c 'grep -q "^name = \"hiqlite-patched\"" hiqlite/Cargo.toml'
 sh -c 'grep -q "^name = \"hiqlite-wal-patched\"" hiqlite-wal/Cargo.toml'

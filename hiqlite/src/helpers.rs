@@ -74,6 +74,7 @@ pub async fn add_new_learner(
     state: &Arc<AppState>,
     raft_type: &RaftType,
     node: Node,
+    _held: &crate::membership_gate::MembershipHeld,
 ) -> Result<(), Error> {
     info!("Adding Node as new {:?} Learner: {:?}", raft_type, node);
     match raft_type {
@@ -100,6 +101,7 @@ pub async fn change_membership(
     raft_type: &RaftType,
     members: BTreeSet<u64>,
     retain: bool,
+    _held: &crate::membership_gate::MembershipHeld,
 ) -> Result<(), Error> {
     info!("Changing {:?} Raft membership to: {:?}", raft_type, members);
     match raft_type {
@@ -129,6 +131,7 @@ pub async fn remove_learner(
     state: &Arc<AppState>,
     raft_type: &RaftType,
     node_id: u64,
+    _held: &crate::membership_gate::MembershipHeld,
 ) -> Result<(), Error> {
     info!("Removing Node {} from {:?} Learners", node_id, raft_type);
     let mut set = BTreeSet::new();
@@ -202,6 +205,7 @@ pub async fn remove_voter(
     // new_members: BTreeMap<NodeId, Node>,
     node_id: u64,
     retain: bool,
+    _held: &crate::membership_gate::MembershipHeld,
 ) -> Result<(), Error> {
     // info!(
     //     "Removing Node from {:?} Voters, new members: {:?}",

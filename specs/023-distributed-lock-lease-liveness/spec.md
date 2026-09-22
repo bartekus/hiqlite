@@ -139,6 +139,36 @@ detection later. A configurable one moves the choice to the operator without
 changing what any value of it can promise. `006` KD-2 and F-026 stand exactly as
 recorded.
 
+### B-6. A waiter is bounded by the lease, and only replicated requests change lock state
+
+F-102, repaired 2026-09-22. Read from source, not reproduced: the stall measured
+119.9 seconds against the client's 120-second request timeout, and four things in
+the source explain a waiter lasting exactly that long.
+
+1. **Nothing wakes a parked waiter when a lease expires.** Expiry is noticed only
+   when a request arrives. A holder that dies, or whose release is lost, leaves
+   its waiters parked, and a parked waiter sends nothing.
+2. **The waiter's wait was bounded only by the request timeout.** It now lasts at
+   most one lease plus two seconds (`AWAIT_BOUND`, derived from
+   `LOCK_VALID_SECONDS`), and then the client re-requests with its own ticket.
+3. **That re-request (`Acquire`) never looked at `exp`**, so it was queued again
+   behind the dead holder, and it pushed a **second copy** of its ticket. It now
+   clears a holder whose lease is over, drops front tickets that had their window,
+   answers a retry for a lock it already holds with `Locked` again, and never
+   duplicates a ticket.
+4. **An await changed replicated state outside Raft.** An embedded client sends
+   its await to its **own** node's handler, which may be a follower. That path
+   evicted tickets and could grant `Locked` from the local view, so a follower
+   lagging the leader could grant a lock the leader had given to someone else.
+   An await now only registers, replacing any earlier registration of the same
+   ticket, or answers `Released`; every state change goes through `Lock`,
+   `Acquire` or `Release`, which every node applies in log order.
+
+**Consequence for callers.** A queued caller whose holder dies acquires within
+about one lease plus the await bound of the holder's grant, instead of failing
+after 120 seconds. A promoted awaiter now always claims through a replicated
+`Acquire`, one extra round trip.
+
 ## 4. Evidence and its limits
 
 Nine tests in `dlock_handler.rs`, in a module beside the six PR #352 left,
@@ -200,6 +230,24 @@ What the acceptance does **not** establish:
 - **The `Acquire` and `Await` undo paths in B-2 are not separately tested.** The
   `Lock` one is; the other two are the same change applied to the same shape.
 
+**B-6 (F-102), four tests, each observed failing against the handler as it
+was before the repair and passing after:** a waiter whose holder never releases
+claims with one re-request after the lease, where the original handler queued it
+again; an await that would have been granted changes nothing, where the original
+granted `Locked` itself; a re-request never duplicates its ticket, where the
+original left a stale copy in front of the next caller; and a timed-out await does
+not cost the live ticket its place, where the original dropped it. One existing
+test, `lock_release_roundtrip`, asserted the local grant and now asserts
+`Released` followed by a replicated `Acquire`; it asserted the behavior item 4
+removes, and is replaced rather than kept.
+
+**What B-6 does not establish.** The client's bounded await is not exercised by
+any unit test, because it needs a running node; the cluster suite's lock phase
+is the only thing that runs it. The F-102 stall was never reproduced on demand,
+so the claim is that the source explains a waiter lasting exactly the request
+timeout and that each mechanism is now tested closed, not that the observed run
+was caused by one particular mechanism.
+
 ## 5. Known defects
 
 **KD-1. This is a lease, not a fence, and a holder is never told it lost the
@@ -233,6 +281,16 @@ store (`007`), so a restarted node has no locks at all until a snapshot install
 or a new log entry arrives. What a peer believes about a lock and what this node
 believes can differ for that window.
 
+**KD-6. After a holder dies, the next grant goes to whoever re-requests first.**
+Every parked waiter's bounded await ends at about the same time, and the first
+re-request to reach the leader evicts the front tickets ahead of it. Liveness is
+bounded; order is not preserved across a dead holder.
+
+**KD-7. Nodes can still disagree about a lease.** `exp` is computed from each
+node's clock at apply time (the handler's own comment). B-6 removes the one path
+that acted on a follower's view without Raft; it does not make the lease a
+cluster-wide fact.
+
 **KD-5. A front ticket that never awaits still occupies the queue for a lease
 window.** B-3 keeps it deliberately, because "has not awaited yet" and "is gone"
 are indistinguishable at that moment. The refreshed deadline bounds it; nothing
@@ -265,6 +323,12 @@ is named so it cannot be mistaken for a knob.
 
 **D-5 (2026-09-21, this block is `022`'s acceptance).** Which is `006`'s through
 `022`. All twenty-six of `022`'s commands are carried forward unchanged.
+
+**D-6 (2026-09-22, bound the waiter in the client, not with a timer in the
+handler).** A handler timer would have to change lock state on every node on
+that node's clock, which is the non-replicated change B-6 removes from the await
+path. A client that re-requests puts the decision in a Raft entry, where every
+node applies it in the same order.
 
 ## 7. Out of scope
 
@@ -323,6 +387,13 @@ cargo test -p hiqlite-patched --lib --no-default-features --features dlock store
 cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::a_fully_released_lock_wakes_its_stragglers -- --exact
 # F-102: the promotion chain, driven more than one link at a time
 cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::three_queued_awaiters_are_each_promoted_in_turn -- --exact
+# B-6 / F-102: a waiter is bounded by the lease, and an await changes nothing
+cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::a_waiter_whose_holder_never_releases_claims_after_one_lease -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::an_await_changes_no_lock_state -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::a_re_request_never_duplicates_its_ticket -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::a_timed_out_await_does_not_cost_the_live_ticket_its_place -- --exact
+sh -c 'grep -q "time::timeout(AWAIT_BOUND, self.lock_await(" hiqlite/src/client/dlock.rs'
+sh -c 'grep -q "LOCK_VALID_SECONDS as u64 + 2" hiqlite/src/client/dlock.rs'
 # no acknowledgement in the lock handler may panic its own task
 sh -c '! grep -q "ack.send(LockState::" hiqlite/src/store/state_machine/memory/dlock_handler.rs'
 sh -c 'grep -q "fn answer(" hiqlite/src/store/state_machine/memory/dlock_handler.rs'

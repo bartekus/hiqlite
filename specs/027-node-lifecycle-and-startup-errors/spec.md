@@ -22,6 +22,7 @@ amends_sections:
 establishes:
   - "hiqlite/src/lifecycle.rs"
   - "hiqlite/src/bin/abort_probe.rs"
+  - "hiqlite/src/membership_gate.rs"
 extends:
   - spec: "010-node-lifecycle-and-split-brain"
     unit: { kind: file, path: "hiqlite/src/start.rs" }
@@ -271,6 +272,63 @@ that a shutting-down leader legitimately performs is untouched.
 F-107. The sequence that exposed it spans two milliseconds and cannot be
 scheduled by a test, so section 4 says how it is tested instead.
 
+**The decision alone did not close F-107** (D-8). Tracing every membership
+mutation and both shutdown paths found four more gaps, none of them observed
+failing, all of them read from source:
+
+1. the decision ran in `are_we_leader`, **before** `raft_lock` was taken, so a
+   request authorized against one membership could act on another after waiting
+   for the lock;
+2. `post_membership` changed membership with neither the decision nor the lock;
+3. the raft stream's `RemoveMembershipCache` took the lock but never asked
+   whether this node was leader, voter, or shutting down;
+4. shutdown stopped both raft groups without the lock, so a stop could run while
+   a membership change admitted earlier was still in flight on the same node.
+
+`membership_gate` is now the only way to change membership, and the ordering it
+enforces is the same for both raft groups, which share one gate:
+
+- **Admission closes first.** Shutdown closes the gate before its pre-shutdown
+  delay. A request arriving afterwards is refused **before** it waits for the
+  lock, with `LeaderChange` (`409`, "ask another node").
+- **Every change is decided under the lock.** The decision reads the metrics the
+  change will act on, and requires the reported leader to be this node, its raft
+  to be in the `Leader` state, and this node to be a voter. A request that queued
+  before the gate closed and is served after it is refused.
+- **Shutdown drains, bounded.** It waits at most five seconds for an admitted
+  change to finish. On timeout it returns `Error::Timeout` and **stops nothing**:
+  the gate stays closed, the node keeps serving everything except membership
+  changes, and the caller may shut down again or end the process. A process that
+  ends is a crash, which Raft tolerates; a raft group stopped under a running
+  membership change is what this ordering prevents. It does not fall through to
+  the unsynchronized stop.
+- **Every stop runs under the gate.** The shutdown holds it until both raft
+  groups, the WAL writer and the SQLite writer have been asked to stop. A stopped
+  gate stays closed, and a second shutdown is a no-op.
+- **Cancellation cannot split the stop.** The sequence runs in its own task.
+  `Client::shutdown` and `ShutdownHandle::wait` still bound how long they wait,
+  but a caller that stops waiting no longer cancels the sequence between one raft
+  group's stop and the next.
+- **A failing stop no longer skips the rest.** Each component's stop is
+  attempted; the first failure is returned, and storage ownership is then kept
+  rather than released, because a component that did not stop may still hold the
+  data directory.
+- **Commit waits are bounded.** The loops that waited, under the lock, for local
+  metrics to show a committed change had no bound. Each now gives up after ten
+  seconds with `Error::Timeout`.
+
+The membership helpers in `helpers.rs` take a `&MembershipHeld`, which only the
+gate produces, so a new call site that bypasses the gate does not compile.
+
+**Deadlock.** While shutdown holds the gate it waits on the cache self-leave (a
+local change, or an HTTP call to another node's leader), `Raft::shutdown` for
+both groups, the WAL writer and the SQLite writer. None of them takes the gate.
+The only inbound path that does is a membership request, and every one checks
+the closed gate before it waits, so none can queue behind the drain and stall the
+raft stream that carries the replication a remote leave needs. `Raft::initialize`
+is outside the gate: it runs only on a pristine node during startup, before the
+API serves.
+
 ## 4. Evidence and its limits
 
 **The abort-profile half is real and is the unusual part.**
@@ -304,6 +362,18 @@ Under unwind, four unit tests:
   survives it. Added 2026-09-22 for F-101, and observed failing against this
   spec's first implementation, which recorded every clean shutdown as a WAL
   writer that had ended without reporting a reason.
+- the membership gate, six tests with tokio's clock paused and every interleaving
+  driven explicitly, so the schedule is the same on every run. Added 2026-09-22
+  for D-8. They show: the original check-then-lock ordering acting as a non-voter
+  on an authorization given to a voter, and the same schedule refused through the
+  gate; shutdown waiting for an admitted change and admitting nothing after,
+  including a request that queued before it; a drain that times out after exactly
+  its bound, stops nothing, keeps admission closed and succeeds when retried; a
+  cancelled drain that leaves nothing held; a bounded admission wait shared by
+  both raft groups; and a refused decision that holds nothing. **Each of four
+  mutations was observed failing a test**: deciding before the lock; dropping the
+  closed check under the lock; letting a drain timeout fall through to a stop;
+  and draining without closing admission.
 - a node leaving its own cluster may not commit a membership change, and every
   refusal is one the caller can retry elsewhere. Added 2026-09-22 for F-107.
   All five input combinations are enumerated, because the sequence that produced
@@ -358,6 +428,25 @@ channel means "the thread is gone without a reason", and a panic is one way to
 get there. `008` section 3.6 already stated that an abort or a signal is reported
 by nothing, and that is unchanged.
 
+**KD-7. The gate is tested as a gate, not on a running node.** The six D-8
+tests drive the real `MembershipGate` with a stand-in for the raft state. No test
+starts a node and interleaves an HTTP membership request with `Client::shutdown`,
+so the wiring of every path through the gate rests on the compile-time token and
+on review, not on execution. The cluster suite exercises shutdown and leave, but
+does not schedule the race.
+
+**KD-8. openraft's `add_learner` is unbounded under the gate.** A learner that
+never catches up keeps `add_learner(.., blocking = true)` waiting while it holds
+the gate, so a shutdown in that window returns its drain timeout and stops
+nothing. That is the designed outcome, not a hang, but the node cannot shut down
+cleanly until the join completes or the process ends.
+
+**KD-9. The release-build consequence of F-107 is not established.** In
+openraft 0.9.25 both checks in `append_membership` are `debug_assert!`. Read from
+source, a release build appends the membership to the effective state and
+rebuilds replication streams on a node whose server state is no longer `Leader`.
+What that does to commit and to the cluster's membership was never executed.
+
 **KD-6. `010` KD-1 and KD-2 are untouched.** The bracketed IPv6 listen address
 and the two meanings of `node_id` are not repaired here. The IPv6 one is now a
 **returned** error rather than a panic in a detached task, which is a smaller
@@ -400,6 +489,17 @@ is worse than not having one, because it reads as coverage.
 **D-7 (2026-09-21, this block is `010`'s acceptance).** Eleven of `010`'s
 thirty-six commands asserted the defective expressions this spec removes. Each is
 replaced below and marked with what it was; the rest are carried forward.
+
+**D-8 (2026-09-22, one gate, decided under its lock, and a shutdown that
+stops nothing it cannot synchronize).** B-9's first form repaired the decision and
+left where it ran. The alternatives were to keep the pre-lock check and add a
+second check under the lock, or to take the lock around the raft shutdowns only.
+Declined: the first keeps two decisions that can disagree, and the second was
+already tried and reverted for F-107 on a false premise, and would still let
+`post_membership` and `RemoveMembershipCache` bypass everything. A drain timeout
+returns an error rather than stopping anyway, because stopping under a running
+change is exactly the unsynchronized shutdown, and a caller that needs the
+process gone can end it, which Raft already treats as a crash.
 
 ## 7. Out of scope
 
@@ -487,6 +587,19 @@ cargo test -p hiqlite-patched --lib --no-default-features --features cache netwo
 sh -c 'grep -q "fn membership_change_allowed" hiqlite/src/network/management.rs'
 sh -c 'grep -q "Some(_) if !this_node_is_voter" hiqlite/src/network/management.rs'
 sh -c 'grep -q "membership_change_allowed(" hiqlite/src/network/management.rs'
+# D-8: one gate, decided under its lock, and a bounded shutdown drain that stops nothing
+cargo test -p hiqlite-patched --lib --no-default-features --features sqlite,cache membership_gate::tests::a_decision_taken_before_the_lock_acts_on_a_membership_it_did_not_see -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features sqlite,cache membership_gate::tests::shutdown_waits_for_an_admitted_change_and_admits_nothing_after -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features sqlite,cache membership_gate::tests::a_shutdown_that_cannot_drain_stops_nothing_and_can_be_retried -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features sqlite,cache membership_gate::tests::a_cancelled_shutdown_wait_holds_nothing_and_keeps_admission_closed -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features sqlite,cache membership_gate::tests::admission_waits_for_a_bounded_time_across_both_raft_groups -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features sqlite,cache membership_gate::tests::a_refused_decision_holds_nothing -- --exact
+sh -c '! grep -rnE "\.raft_lock|raft_lock:" hiqlite/src'
+sh -c 'test "$(grep -c "_held: &crate::membership_gate::MembershipHeld" hiqlite/src/helpers.rs)" -eq 4'
+sh -c 'grep -q "state.membership.drain(SHUTDOWN_DRAIN)" hiqlite/src/client/mgmt.rs'
+sh -c 'grep -q "state.membership.close();" hiqlite/src/client/mgmt.rs'
+sh -c 'grep -q "admit_membership_change(&state, &raft_type)" hiqlite/src/network/management.rs'
+sh -c 'grep -q "admit_membership_change(" hiqlite/src/network/raft_server.rs'
 # the abort-profile half. The build is what puts it under `panic = "abort"`; these two are a
 # pair and running a stale binary would prove nothing.
 cargo build --release -p hiqlite-patched --features __abort-probe,s3 --bin hiqlite-abort-probe
