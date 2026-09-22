@@ -40,6 +40,10 @@ extends:
   - spec: "005-adoption-assessment-and-plan"
     unit: { kind: file, path: "standards/spec/adoption-plan.md" }
     nature: additive
+  # F-116: the cluster health check waits for the membership instead of sampling it.
+  - spec: "012-cluster-integration-evidence"
+    unit: { kind: file, path: "hiqlite/tests/cluster/check.rs" }
+    nature: additive
 summary: >
   Renames the three packages so nothing resolves under an upstream name,
   versions them at 0.15.0-patched.1 because the public API changed, keeps the
@@ -327,6 +331,15 @@ code. The review step now runs the Claude Code CLI the action wraps, pinned to
 `Glob`, and `git log`, `git show`, `git diff`), and writes the review to the job
 summary. The CLI authenticates from `CLAUDE_CODE_OAUTH_TOKEN`, so this is also
 the first use of that credential.
+
+**KD-11. The cluster suite's health check sampled a membership mid-replay
+(F-116).** `012` owns `hiqlite/tests/cluster/check.rs`; this spec extends it
+additively, because `012` is amended here and its text is not edited. The check
+waited for "healthy", a known leader, then asserted three members, and a node
+rejoining from an empty volume replays the leader's log from its start, whose
+first membership entry is the single-node bootstrap. Observed once in CI with one
+member reported; the log shows the rejoin itself was correct. It now waits up to
+thirty seconds for the membership.
 
 **KD-9. This spec's own `## Verification` block does not run.** `032` declares
 `amends_verification` on it, so `just spine-verify 031` executes `032`'s block.
