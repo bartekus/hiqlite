@@ -265,7 +265,7 @@ sh -c 'grep -q "hiqlite-derive = { package = \"hiqlite-derive-patched\", version
 sh -c 'grep -q "auto-heal = \[\"hiqlite-wal/auto-heal\"\]" hiqlite/Cargo.toml'
 sh -c 'grep -q "\"dep:hiqlite-wal\"," hiqlite/Cargo.toml'
 # every manifest points at the fork and says it is not upstream
-sh -c 'test "$(grep -hc "bartekus/hiqlite" hiqlite/Cargo.toml hiqlite-wal/Cargo.toml hiqlite-derive/Cargo.toml | paste -sd+ - | bc)" -ge 3'
+sh -c 'test "$(grep -hc "bartekus/hiqlite" hiqlite/Cargo.toml hiqlite-wal/Cargo.toml hiqlite-derive/Cargo.toml | awk '\''{s+=$1} END {print s}'\'')" -ge 3'
 sh -c 'test "$(grep -l "Not affiliated with or endorsed by the upstream project" hiqlite/Cargo.toml hiqlite-wal/Cargo.toml hiqlite-derive/Cargo.toml | wc -l | tr -d " ")" = "3"'
 sh -c 'grep -qi "not affiliated with or endorsed by the upstream project" hiqlite/README.md'
 # the two leaf crates package, which is as far as this can be verified before publication

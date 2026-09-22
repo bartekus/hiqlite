@@ -348,7 +348,8 @@ sh -c 'spec-spine index owner examples/bench/src/bench.rs | grep -q 017-examples
 sh -c 'spec-spine index owner examples/external-state-machine/src/main.rs | grep -q 017-examples-as-documentation'
 sh -c 'spec-spine registry relationships 017-examples-as-documentation | grep -q 016-derive-macros'
 sh -c 'test "$(ls -d examples/*/ | wc -l | tr -d " ")" = "6"'
-sh -c 'test "$(grep -h -c "assert" examples/*/src/*.rs | paste -sd+ - | bc)" = "54"'
+# F-115: the CI container has no `bc`; the first post-merge run failed on it, so the sum is awk's
+sh -c 'test "$(grep -h -c "assert" examples/*/src/*.rs | awk '\''{s+=$1} END {print s}'\'')" = "54"'
 sh -c 'grep -q "cargo clippy$" justfile'
 sh -c 'grep -A8 "^clippy-examples:" justfile | grep -q "cargo clippy$"'
 sh -c '! grep -A8 "^clippy-examples:" justfile | grep -q "D warnings"'
