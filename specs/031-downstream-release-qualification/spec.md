@@ -318,6 +318,16 @@ with the same write access, from the tagged commit, with the same ancestor
 check. Changing the default branch was the other option; it is a repository
 setting and was not taken.
 
+The tag-triggered run then failed differently: `anthropics/claude-code-action`
+accepts only issue, pull-request, dispatch, schedule and `workflow_run` events,
+and each of those except pull requests runs the workflow from the default
+branch; a pull-request trigger would hand the review credential to proposed
+code. The review step now runs the Claude Code CLI the action wraps, pinned to
+`2.1.280`, from the tagged checkout, with only read tools (`Read`, `Grep`,
+`Glob`, and `git log`, `git show`, `git diff`), and writes the review to the job
+summary. The CLI authenticates from `CLAUDE_CODE_OAUTH_TOKEN`, so this is also
+the first use of that credential.
+
 **KD-9. This spec's own `## Verification` block does not run.** `032` declares
 `amends_verification` on it, so `just spine-verify 031` executes `032`'s block.
 The F-108 and F-109 checks were first written here, where they never ran, and

@@ -51,45 +51,66 @@ jobs:
             exit 1
           fi
 
-      - name: Review
-        uses: anthropics/claude-code-action@v1
+      - uses: actions/setup-node@v4
         with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          prompt: |
-            Review this release candidate of the hiqlite fork. Report findings; change nothing.
+          node-version: 22
 
-            Focus, in this order:
+      # 031 KD-10: `anthropics/claude-code-action` accepts only issue, pull-request, dispatch,
+      # schedule and workflow_run events, and every one of those except pull requests runs the
+      # workflow from the default branch, which does not carry this file. The first tag-triggered
+      # run failed with "Unsupported event type: push". The CLI the action wraps has no event
+      # at all: it reads this checkout and the prompt below, with read-only tools only.
+      - name: Review
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          REVIEW_PROMPT: |
+                Review this release candidate of the hiqlite fork. Report findings; change nothing.
 
-            1. **Durability and crash recovery.** `hiqlite-wal/src/writer.rs`,
-               `hiqlite/src/store/state_machine/sqlite/`. Is anything reported as persisted
-               that is only queued? Can a crash between two operations leave a state that is
-               selected at restart? Specs 021 and 025 state the intended contracts.
-            2. **Deadlocks and lock ordering.** `hiqlite/src/store/logs/memory.rs` (spec 020
-               states one order: data, then logs), `hiqlite/src/store/state_machine/memory/`.
-            3. **Publication provenance.** The three `Cargo.toml` manifests: do the package
-               renames, the `[lib] name` fields and the dependency keys compose so a consumer
-               writing `hiqlite = { package = "hiqlite-patched" }` gets working
-               `::hiqlite::` paths from the derive macros?
-            4. **API compatibility.** Every new public item and every changed signature against
-               what `0.14.0` exposed. Spec 027 B-7 states what this release intends to freeze.
-            5. **Consumer behavior.** The feature sets in spec 029 section 4. Is anything
-               excluded there actually reachable under them?
-            6. **The repairs this candidate made last, which have had the least review.**
-               `hiqlite/src/membership_gate.rs`, `hiqlite/src/network/management.rs`,
-               `hiqlite/src/network/raft_server.rs` and `hiqlite/src/client/mgmt.rs` (F-107,
-               spec 027 D-8: is there any membership change that bypasses the gate; can the
-               shutdown, which holds the gate while it stops both raft groups, deadlock or be
-               cut short; does a drain timeout ever stop anything?);
-               `hiqlite/src/store/state_machine/memory/dlock_handler.rs` and
-               `hiqlite/src/client/dlock.rs` (F-102, spec 023 B-6: is every waiter answered
-               exactly once, can two tickets hold one lock in the leader's view, can a waiter
-               livelock?); `hiqlite/src/backup.rs` and `create_backup` in
-               `hiqlite/src/store/state_machine/sqlite/writer.rs` (spec 026 B-8 to B-10: is
-               there a crash point that leaves the final name holding a database with a
-               foreign write-ahead log, loses both the old and the new database, or leaves
-               no backup at all?); and the qualification graph (F-108, spec 031 B-8: does
-               anything in CI resolve a graph other than the committed `Cargo.lock`?).
+                Focus, in this order:
 
-            Say what you verified and what you could not. Do not repeat a specification's own
-            claims back as findings.
-          claude_args: "--max-turns 60"
+                1. **Durability and crash recovery.** `hiqlite-wal/src/writer.rs`,
+                   `hiqlite/src/store/state_machine/sqlite/`. Is anything reported as persisted
+                   that is only queued? Can a crash between two operations leave a state that is
+                   selected at restart? Specs 021 and 025 state the intended contracts.
+                2. **Deadlocks and lock ordering.** `hiqlite/src/store/logs/memory.rs` (spec 020
+                   states one order: data, then logs), `hiqlite/src/store/state_machine/memory/`.
+                3. **Publication provenance.** The three `Cargo.toml` manifests: do the package
+                   renames, the `[lib] name` fields and the dependency keys compose so a consumer
+                   writing `hiqlite = { package = "hiqlite-patched" }` gets working
+                   `::hiqlite::` paths from the derive macros?
+                4. **API compatibility.** Every new public item and every changed signature against
+                   what `0.14.0` exposed. Spec 027 B-7 states what this release intends to freeze.
+                5. **Consumer behavior.** The feature sets in spec 029 section 4. Is anything
+                   excluded there actually reachable under them?
+                6. **The repairs this candidate made last, which have had the least review.**
+                   `hiqlite/src/membership_gate.rs`, `hiqlite/src/network/management.rs`,
+                   `hiqlite/src/network/raft_server.rs` and `hiqlite/src/client/mgmt.rs` (F-107,
+                   spec 027 D-8: is there any membership change that bypasses the gate; can the
+                   shutdown, which holds the gate while it stops both raft groups, deadlock or be
+                   cut short; does a drain timeout ever stop anything?);
+                   `hiqlite/src/store/state_machine/memory/dlock_handler.rs` and
+                   `hiqlite/src/client/dlock.rs` (F-102, spec 023 B-6: is every waiter answered
+                   exactly once, can two tickets hold one lock in the leader's view, can a waiter
+                   livelock?); `hiqlite/src/backup.rs` and `create_backup` in
+                   `hiqlite/src/store/state_machine/sqlite/writer.rs` (spec 026 B-8 to B-10: is
+                   there a crash point that leaves the final name holding a database with a
+                   foreign write-ahead log, loses both the old and the new database, or leaves
+                   no backup at all?); and the qualification graph (F-108, spec 031 B-8: does
+                   anything in CI resolve a graph other than the committed `Cargo.lock`?).
+
+                Say what you verified and what you could not. Do not repeat a specification's own
+                claims back as findings.
+        run: |
+          set -euo pipefail
+          npm install -g @anthropic-ai/claude-code@2.1.280
+          claude -p "$REVIEW_PROMPT" \
+            --max-turns 60 \
+            --output-format text \
+            --allowedTools "Read" "Grep" "Glob" "Bash(git log:*)" "Bash(git show:*)" "Bash(git diff:*)" \
+            | tee review.md
+          {
+            echo "## AI review of $REVIEW_REF"
+            echo
+            cat review.md
+          } >> "$GITHUB_STEP_SUMMARY"
+          test -s review.md

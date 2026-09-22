@@ -93,6 +93,6 @@
     "summary": "Renames the three packages so nothing resolves under an upstream name, versions them at 0.15.0-patched.1 because the public API changed, keeps the library names and the internal dependency keys so consumers and the feature table need no rewriting, and adds a publication workflow and an independent review workflow with separate triggers and separate credentials. Records the release work ledger, and the acceptance corrections the rename forced.\n",
     "title": "Qualify and publish the downstream release under distinct package names"
   },
-  "shardHash": "6cd3e3ea2c957b93efef2ae264bbd3dccb22dd50c6dff6b80c19f4f978debbc9",
+  "shardHash": "d78b55c559e2d38336e92d4ca176f63fd8cc34a5db113391f6c13549d3bfe099",
   "specVersion": "1.3.0"
 }

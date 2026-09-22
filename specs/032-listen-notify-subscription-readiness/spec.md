@@ -290,6 +290,9 @@ sh -c 'grep -q "merge-base --is-ancestor" .github/workflows/ai-review.yaml'
 sh -c 'grep -q "      - \"review-\*\"" .github/workflows/ai-review.yaml'
 sh -c '! grep -q "\${{ inputs.ref }}\"" .github/workflows/ai-review.yaml'
 sh -c '! grep -qE "^ *pull_request" .github/workflows/ai-review.yaml'
+sh -c '! grep -q "anthropics/claude-code-action" .github/workflows/ai-review.yaml'
+sh -c 'grep -q "npm install -g @anthropic-ai/claude-code@2.1.280" .github/workflows/ai-review.yaml'
+sh -c 'grep -q "\"Bash(git diff:\*)\"" .github/workflows/ai-review.yaml'
 # the ledger
 test -f standards/spec/release-ledger.md
 sh -c 'grep -q "hiqlite-patched" standards/spec/release-ledger.md'
