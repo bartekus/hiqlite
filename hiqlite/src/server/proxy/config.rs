@@ -41,7 +41,8 @@ impl Config {
                 .into_iter()
                 .map(|n| n.addr_api)
                 .collect::<Vec<_>>(),
-            tls_config: ServerTlsConfig::from_env("API"),
+            tls_config: ServerTlsConfig::from_env("API")
+                .unwrap_or_else(|err| panic!("Invalid API TLS configuration: {err}")),
             // F-009's shape, in the proxy. Left as a panic here and recorded as such: the
             // proxy's configuration constructor is infallible and making it fallible is a
             // change to `015`'s surface, not this spec's.

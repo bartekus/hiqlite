@@ -25,13 +25,21 @@ pub async fn handler(uri: Uri, req: Request) -> response::Response {
     // }
 
     // skip encoding on already compressed data types
-    let path_ending = &path[path.len().saturating_sub(4)..];
-    let (path, encoding) = if path_ending == ".png"
-        || path_ending == ".ico"
-        || path_ending == ".jpg"
-        || path_ending == ".svg"
-        || path_ending == "jpeg"
-    {
+    //
+    // F-085: this was `&path[path.len().saturating_sub(4)..]`, a byte slice four bytes from
+    // the end, which panics when that offset is not a UTF-8 character boundary. The handler is
+    // the `/dashboard` fallback and sits **outside** the `Session` extractor, so any
+    // unauthenticated request for a path ending in a multi-byte character reached it. Under a
+    // consumer's unwinding profile that is a dropped connection; under `panic = "abort"` it is
+    // the node.
+    //
+    // The extension is what the check is about, so ask for the extension.
+    let ext = std::path::Path::new(path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    let (path, encoding) = if matches!(ext.as_str(), "png" | "ico" | "jpg" | "svg" | "jpeg") {
         (Cow::from(path), "none")
     } else {
         let accept_encoding = req
@@ -107,15 +115,41 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::NOT_FOUND);
     }
 
-    /// F-085: the compression suffix check slices the path at
-    /// `len().saturating_sub(4)` without asking whether that byte index is a
-    /// character boundary. `http::Uri` accepts raw UTF-8 in a path, so a request
-    /// whose last four bytes split a multi-byte character panics this handler,
-    /// which is the unauthenticated `/dashboard` fallback.
+    /// Replaces `a_multibyte_path_panics_the_fallback`, which pinned F-085: the compression
+    /// suffix check sliced the path at `len().saturating_sub(4)` without asking whether that
+    /// byte index is a character boundary. `http::Uri` accepts raw UTF-8 in a path, so a
+    /// request whose last four bytes split a multi-byte character panicked this handler, which
+    /// is the **unauthenticated** `/dashboard` fallback: no credential is needed to reach it.
     #[tokio::test]
-    #[should_panic(expected = "byte index 2 is not a char boundary")]
-    async fn a_multibyte_path_panics_the_fallback() {
-        let (uri, req) = request_for("/\u{20ac}abc");
-        let _ = handler(uri, req).await;
+    async fn a_multibyte_path_is_served_or_missing_but_never_a_panic() {
+        for path in [
+            "/\u{20ac}abc",
+            "/\u{20ac}",
+            "/caf\u{e9}.png",
+            "/\u{1f600}\u{1f600}",
+            "/a",
+            "/",
+        ] {
+            let (uri, req) = request_for(path);
+            let resp = handler(uri, req).await;
+            assert!(
+                resp.status() == StatusCode::NOT_FOUND || resp.status() == StatusCode::OK,
+                "{path} must be answered, not panicked: {}",
+                resp.status()
+            );
+        }
+    }
+
+    /// The extension check still does what it is for: an already-compressed type is served
+    /// without a content encoding.
+    #[tokio::test]
+    async fn an_already_compressed_type_is_not_encoded_again() {
+        let (uri, req) = request_for("/favicon.ico");
+        let resp = handler(uri, req).await;
+        // Present or absent, what matters is that it was not served with an encoding.
+        assert!(
+            resp.headers().get(header::CONTENT_ENCODING).is_none(),
+            "an .ico must not be content-encoded"
+        );
     }
 }

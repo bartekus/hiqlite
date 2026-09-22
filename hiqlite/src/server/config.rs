@@ -247,10 +247,18 @@ data_dir = "{data_dir}"
 # values are optional, overwritten by: HQL_TLS_{{RAFT|API}}_{{KEY|CERT}}
 #tls_raft_key = "tls/key.pem"
 #tls_raft_cert = "tls/cert-chain.pem"
+# A PEM file of trust anchors this node's raft clients verify peers against.
+# Without it the client trust store is empty and verification fails every
+# handshake, which is what made the safe setting unreachable (F-043).
+#tls_raft_ca = "tls/ca-chain.pem"
 #tls_raft_danger_tls_no_verify = true
 
 #tls_api_key = "tls/key.pem"
 #tls_api_cert = "tls/cert-chain.pem"
+# The same, for the API endpoint. Every /cluster, /listen and /backup call sends
+# `secret_api` in an X-API-SECRET header inside the TLS session, so an unverified
+# API endpoint exposes that secret to an on-path attacker (F-045).
+#tls_api_ca = "tls/ca-chain.pem"
 #tls_api_danger_tls_no_verify = true
 
 # Secrets for Raft internal authentication as well as for the API.

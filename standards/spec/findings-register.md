@@ -1060,6 +1060,13 @@ Consequence: one misspelled variable name yields a running node with weaker
 transport than was configured, and the only way to notice is to inspect the
 wire. `011` KD-1.
 
+
+**Repaired 2026-09-21 by `030-transport-security-and-dashboard-repairs`.** Half a
+certificate pair is a configuration error naming both variables, in both orders,
+and it is an error with auto-certificates on too, where it used to downgrade to
+a certificate nobody verifies. A warning was considered and declined (`030` D-3):
+the outcome it warns about is a plaintext endpoint an operator believes is
+encrypted.
 ### F-042 `defect`, confidence `high`
 
 **Two booleans four lines apart disagree about whether a typo is fatal.**
@@ -1081,6 +1088,10 @@ panics out of `start_node_inner` rather than through F-040's detached-task route
 That is the better of the two outcomes and is written down nowhere. Same class as
 F-009. `011` KD-2.
 
+
+**Repaired 2026-09-21 by `030-transport-security-and-dashboard-repairs`.** Both
+booleans answer a malformed value the same way, which is `027` B-1's policy for
+the whole crate: a configuration error, returned.
 ### F-043 `defect`, confidence `high`
 
 **A verifying client has nothing to verify against.**
@@ -1106,6 +1117,19 @@ either. The only configuration in which specific certificates and a working
 connection coexist is the one named `danger`. Fail-closed, so nothing is
 weakened; the safe setting simply has no reachable use. `011` KD-3.
 
+
+**Repaired 2026-09-21 by `030-transport-security-and-dashboard-repairs`, and it
+is the load-bearing one of the three.** `ServerTlsConfigCerts` gains a `ca`
+field, readable from `HQL_TLS_{RAFT,API}_CA` or `tls_{raft,api}_ca`, and both the
+rustls and the reqwest client load it.
+
+Enabling `webpki-roots` was the obvious-looking alternative and is the wrong one
+(`030` D-1): the public web roots do not sign an internal cluster's
+certificates, so it makes the store non-empty without making verification work.
+What was missing is the anchor.
+
+Carried as `030` KD-3: a remote client has no node configuration to take an
+anchor from, so it still verifies against the webpki bundle or against nothing.
 ### F-044 `defect`, confidence `high`
 
 **The API channel's no-verify flag is read from the raft configuration.** Four
@@ -1134,6 +1158,14 @@ connection errors on an interval instead of memberships. And the API side's own
 `danger_tls_no_verify` is doubly dead: unreachable from TOML (F-031) and ignored
 by two of the four consumers. `011` KD-4.
 
+
+**Repaired 2026-09-21 by `030-transport-security-and-dashboard-repairs`.** The
+API endpoint's no-verify flag and its trust anchor are node-level facts set
+together at startup from `tls_api`, and every REST client in the process reads
+them. The split-brain checker's `reqwest::Client::new()`, which honoured no
+override at all, goes through the same builder. Carried as `030` KD-4: they are
+process-wide, so a process running two nodes with different API TLS
+configurations would have the second take the first's.
 ### F-045 `contradiction`, confidence `high`
 
 **The stated reason for not verifying certificates does not cover the endpoints
@@ -1160,6 +1192,16 @@ channel, or move the REST endpoints onto the challenge-response is a security
 design decision with three different costs and no default here.
 **Source-established.** `011` KD-5.
 
+
+**Corrected 2026-09-21 by `030-transport-security-and-dashboard-repairs`, as a
+documentation repair and nothing else.** The claim is kept where it is true, the
+raft WebSocket channel, and the exception is stated beside it in the type's
+documentation, in `hiqlite.toml` and in `hiqlite.env`, each pointing at the trust
+anchor F-043's repair added as what to do instead.
+
+**No behavior changed, and that is recorded rather than glossed** (`030` D-5).
+Sending the secret in a header inside TLS is fine when the TLS is verified. What
+was wrong is a sentence telling an operator that verifying it does not matter.
 ### F-046 `evidence`, confidence `high`
 
 **`HQL_TLS_AUTO_CERTS` was documented in one reference file only.** It appeared
@@ -1974,6 +2016,11 @@ is unbounded. The fix is `let _guard =`.
 acquires the lock exactly as `verify_password` does, then acquires it again.
 `018` KD-1.
 
+
+**Repaired 2026-09-21 by `030-transport-security-and-dashboard-repairs`.** One
+binding. The test that pinned the released guard was replaced by one that
+asserts the difference between the two forms and one that asserts
+`verify_password` itself holds it.
 ### F-085 `defect`, confidence `high`
 
 **The unauthenticated dashboard fallback panics on a multi-byte path.**
@@ -1995,6 +2042,11 @@ The dashboard tree exists only when `password_dashboard.is_some()`
 (`dashboard::static_files::tests::a_multibyte_path_panics_the_fallback`).
 `018` KD-2.
 
+
+**Repaired 2026-09-21 by `030-transport-security-and-dashboard-repairs`.** The
+check is about the extension, so it asks for the extension. This was the only one
+of the dashboard findings reachable with **no credential at all**: the fallback
+is mounted outside the `Session` extractor.
 ### F-086 `defect`, confidence `high`
 
 **The same character-boundary mistake in the dashboard query classifier.**
@@ -2010,6 +2062,11 @@ is separated from F-085 rather than folded into it. Recorded because it is the
 same defect in the same module, which makes it a pattern rather than a slip.
 Source-established. `018` KD-3.
 
+
+**Repaired 2026-09-21 by `030-transport-security-and-dashboard-repairs`,
+together with F-088: they are one line.** The classifier asks for the first
+keyword token past whitespace and comments, which is character-boundary safe by
+construction.
 ### F-087 `defect`, confidence `high`
 
 **The global login cooldown is a denial of service against the operator.**
@@ -2031,6 +2088,18 @@ answer is a policy choice with at least three forms (per-client cooldown,
 exponential backoff, accepting the exposure), which is why `018` D-1 does not
 pick one. Source-established; no availability test was written. `018` KD-4.
 
+
+**Recorded, not repaired, 2026-09-21 by
+`030-transport-security-and-dashboard-repairs` (`030` KD-1, D-6).** The
+alternative is worse in the way the authored comment says: per-client state needs
+a client identity, and behind a proxy that is a header anyone can set, so keying
+on it buys spoofable state and an unbounded map in exchange for a denial of
+service already bounded by "the attacker can reach the dashboard". Repairing it
+properly is a design decision about dashboard authentication that this release
+does not take.
+
+**An operator who exposes the dashboard to an untrusted network should expect
+this**, and the release notes say so.
 ### F-088 `defect`, confidence `high`
 
 **A dashboard read that does not begin with one of three keywords is replicated
@@ -2046,6 +2115,10 @@ Raft, and be rejected by the non-deterministic-function guard for containing a
 function that would have been accepted on the read path. Nothing is corrupted; a
 read is charged as a cluster-wide write. Source-established. `018` KD-5.
 
+
+**Repaired 2026-09-21 by `030-transport-security-and-dashboard-repairs`.** See
+F-086: one line, two defects. A CTE, a bare `VALUES` and anything behind a
+comment are reads again.
 ### F-089 `defect`, confidence `high`
 
 **A malformed dashboard password ends the process at startup.**
@@ -2059,6 +2132,10 @@ disabling the dashboard with a warning, so two adjacent cases of the same
 misconfiguration are handled in opposite ways. Same class as F-009, F-042 and
 F-061, and part of W-22. Source-established. `018` KD-6.
 
+
+**Repaired 2026-09-21 by `030-transport-security-and-dashboard-repairs`.** A
+malformed value disables the dashboard exactly as an absent one does, and says
+which it was.
 ### F-090 `evidence`, confidence `high`
 
 **The dashboard UI has one test and nothing runs it.**
@@ -2087,6 +2164,12 @@ every encrypted value in the process and not only sessions. Classed as a limit: 
 stateless one-hour session on an ops surface is a defensible design, and what is
 missing is the statement of what it costs. Source-established. `018` KD-8.
 
+
+**Recorded, not repaired, 2026-09-21 by
+`030-transport-security-and-dashboard-repairs` (`030` KD-2).** Revoking a session
+needs server-side session state the dashboard does not have. Rotating
+`HQL_PASSWORD_DASHBOARD` still does not invalidate a live session, and the
+one-hour lifetime is the only bound.
 ### F-094 `defect`, confidence `high`
 
 **A local dashboard build inflates the coverage denominator and stales the

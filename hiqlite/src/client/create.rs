@@ -140,7 +140,10 @@ impl Client {
         }
 
         let tls_config = if tls {
-            Some(tls::build_tls_config(tls_no_verify))
+            // A remote client has no `ServerTlsConfig` to take a trust anchor from, so it
+            // still verifies against whatever the `webpki-roots` feature provides, or against
+            // nothing. `030` KD-2 records that.
+            Some(tls::build_tls_config(tls_no_verify, None))
         } else {
             None
         };

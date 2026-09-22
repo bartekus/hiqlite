@@ -7,11 +7,43 @@ use tokio::sync::oneshot;
 use tokio::task;
 use tracing::debug;
 
+
+/// The first SQL keyword token, lowercased, with leading whitespace and comments skipped.
+///
+/// Returns an empty string when there is no token. Character-boundary safe by construction: it
+/// never slices by byte offset.
+fn first_keyword(sql: &str) -> String {
+    let mut rest = sql.trim_start();
+    loop {
+        if let Some(after) = rest.strip_prefix("--") {
+            // a line comment runs to the end of the line
+            rest = match after.find('\n') {
+                Some(i) => after[i + 1..].trim_start(),
+                None => "",
+            };
+            continue;
+        }
+        if let Some(after) = rest.strip_prefix("/*") {
+            rest = match after.find("*/") {
+                Some(i) => after[i + 2..].trim_start(),
+                None => "",
+            };
+            continue;
+        }
+        break;
+    }
+
+    rest.chars()
+        .take_while(|c| c.is_alphanumeric() || *c == '_')
+        .flat_map(|c| c.to_lowercase())
+        .collect()
+}
+
 pub(crate) async fn dashboard_query_dynamic(
     state: AppStateExt,
     sql: String,
 ) -> Result<Vec<RowOwned>, Error> {
-    if sql.len() < 8 {
+    if sql.trim().is_empty() {
         return Err(Error::BadRequest("invalid query".into()));
     }
 
@@ -21,10 +53,19 @@ pub(crate) async fn dashboard_query_dynamic(
 
     // we need to check if we can do a local select query or if it is
     // modifying and needs to go through the raft
-    let sql_start = sql[..7].to_lowercase();
-    let is_select = sql_start.starts_with("select")
-        || sql_start.starts_with("explain")
-        || sql_start.starts_with("pragma");
+    //
+    // F-086: `sql[..7]` is a byte slice, which panics when byte 7 is not a UTF-8 character
+    // boundary, and the body it slices comes from `String::from_utf8_lossy` over the raw
+    // request. F-088: a seven-byte prefix also misclassifies every read that does not begin
+    // with one of the three keywords, so `WITH x AS (SELECT 1) SELECT ...`, `VALUES (1)` and
+    // anything preceded by a comment took the **raft write** path: a read charged as a
+    // replicated write, and refused by the non-determinism guard.
+    //
+    // Both go away by asking for the first keyword token instead of a fixed number of bytes.
+    let is_select = matches!(
+        first_keyword(&sql).as_str(),
+        "select" | "explain" | "pragma" | "with" | "values"
+    );
 
     if is_select {
         let conn = state.raft_db.read_pool.get().await?;
@@ -220,6 +261,43 @@ fn find_forbidden_non_det_fn(sql: &str) -> Option<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// F-086 and F-088 are one line and two defects.
+    ///
+    /// F-086: `sql[..7]` is a **byte** slice over a body that came from
+    /// `String::from_utf8_lossy`, so a query whose byte 7 is inside a multi-byte character
+    /// panicked the handler. F-088: a seven-byte prefix also misclassifies every read that does
+    /// not begin with one of three keywords, so a CTE, a bare `VALUES`, or anything preceded by
+    /// a comment took the **raft write** path: a read charged as a replicated write.
+    #[test]
+    fn the_first_keyword_is_found_past_whitespace_and_comments() {
+        // Reads the old prefix check got right.
+        assert_eq!(first_keyword("SELECT 1"), "select");
+        assert_eq!(first_keyword("explain query plan select 1"), "explain");
+        assert_eq!(first_keyword("PRAGMA table_info(x)"), "pragma");
+
+        // Reads it sent through the raft (F-088).
+        assert_eq!(first_keyword("WITH x AS (SELECT 1) SELECT * FROM x"), "with");
+        assert_eq!(first_keyword("VALUES (1)"), "values");
+        assert_eq!(first_keyword("   \n\t SELECT 1"), "select");
+        assert_eq!(first_keyword("-- a note\nSELECT 1"), "select");
+        assert_eq!(first_keyword("/* a note */ SELECT 1"), "select");
+        assert_eq!(first_keyword("/* one */ -- two\n SELECT 1"), "select");
+
+        // Writes stay writes.
+        assert_eq!(first_keyword("INSERT INTO t VALUES (1)"), "insert");
+        assert_eq!(first_keyword("update t set a = 1"), "update");
+        assert_eq!(first_keyword("DELETE FROM t"), "delete");
+
+        // Multi-byte input is answered, not panicked (F-086). Byte 7 of each of these is
+        // inside a character.
+        assert_eq!(first_keyword("\u{20ac}\u{20ac}\u{20ac}"), "");
+        assert_eq!(first_keyword("SELECT \u{20ac}"), "select");
+        assert_eq!(first_keyword(""), "");
+        assert_eq!(first_keyword("   "), "");
+        assert_eq!(first_keyword("--"), "");
+        assert_eq!(first_keyword("/* unterminated"), "");
+    }
 
     #[test]
     fn forbidden_fn_scan_catches_only_real_calls() {
