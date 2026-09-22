@@ -227,8 +227,10 @@ acknowledgement were `unwrap`ped, so a requester cancelled during a teardown
 ended the writer, and under `panic = "abort"` the process. They are now sends
 whose failure means only that nobody is listening. `ShutdownHandle::shutdown`
 built the reader's shutdown message with `send_async` and never awaited it, so
-the message was never sent; it is now a `try_send`, because the reader also ends
-when its last sender drops and a shutdown must not wait on it.
+the message was never sent. It is still not sent, now on purpose and said so: a
+reader that exits while the store holds senders strands every read queued
+behind the message (the mechanism below), and the reader already ends when its
+last sender drops.
 
 **F-114.** CI's `Check` on `d45826c` stalled in
 `a_truncated_append_leaves_a_recoverable_prefix_in_every_log_sync_mode` until it
@@ -237,10 +239,26 @@ runs, one of them that stall and one a race in the writer tests' `append` helper
 which `unwrap`ped an end-of-stream send into a receiver the writer had already
 dropped by rejecting the entry. The helper no longer treats that send as
 mandatory, and every wait in the stalling test is bounded and names its step.
-After both changes the full suite ran 400 times without a failure. **The stalled
-step was never identified**, so this is evidence that the stall no longer
-appears, not a diagnosis; a recurrence now fails naming its step instead of
-holding a runner, and both CI jobs have a sixty-minute limit.
+The bounded test then named the stall on its 162nd full-suite run:
+`immediate_async: stalled at: an append to the terminal writer`. **The defect was
+in the writer, not the test.** A terminated writer stopped reading its channel,
+but the adapter still held senders, and a queued message lives as long as any
+sender does. An `Append` that reached the one-slot queue just before the
+termination was never read and never dropped, so the entry channel inside it
+stayed open and the adapter blocked sending into it forever. The same mechanism
+hung `ShutdownHandle::shutdown` on a terminated writer, which waited for an
+acknowledgement nobody would send. The writer thread now keeps a clone of its
+receiver and, after a termination, answers every action with the terminal error
+(an `Append` drops its entry receiver first, releasing a blocked producer) until
+a shutdown arrives or the last sender is gone. Both CI jobs also have a
+sixty-minute limit.
+
+`work_queued_behind_a_terminating_append_is_answered_not_stranded` reproduces
+the stall deterministically: it queues a second append behind one the writer is
+still reading, truncates the first, and requires the second to be refused
+without blocking its producer, and a shutdown to be answered. Against the
+writer without the post-termination loop it fails with "the producer of an
+append queued behind a termination blocked".
 
 ### B-7. A rejected append reports why, not that a channel closed
 
@@ -422,7 +440,10 @@ cargo test -p hiqlite-wal-patched --lib wal::tests::a_torn_record_inside_the_hea
 cargo test -p hiqlite-wal-patched --lib --features auto-heal wal::tests::a_torn_record_inside_the_header_is_rolled_back_or_refused -- --exact
 # B-9: no acknowledgement ends a thread, and the stalling test is bounded
 sh -c '! grep -nE "ack\.send\(.*\)\.unwrap\(\)|Shutdown handler to always wait" hiqlite-wal/src/writer.rs hiqlite-wal/src/reader.rs'
-sh -c 'grep -q "self.tx_read.try_send(reader::Action::Shutdown)" hiqlite-wal/src/shutdown.rs'
+sh -c '! grep -q "tx_read.send_async(reader::Action::Shutdown)" hiqlite-wal/src/shutdown.rs'
+cargo test -p hiqlite-wal-patched --lib writer::tests::work_queued_behind_a_terminating_append_is_answered_not_stranded -- --exact
+sh -c 'grep -q "fn refuse_after_termination" hiqlite-wal/src/writer.rs'
+sh -c 'grep -q "while let Ok(action) = rx_after.recv()" hiqlite-wal/src/writer.rs'
 sh -c 'grep -q "stalled at: {step}" hiqlite-wal/src/log_store_impl.rs'
 sh -c 'grep -q "timeout-minutes: 60" .github/workflows/code_style.yaml'
 # the three endings, pinned at the expressions. The `while let Ok(Some(..))` that collapsed

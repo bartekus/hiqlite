@@ -177,6 +177,8 @@ pub fn spawn(
         // this line and is reported by the panic hook instead, and an abort or a process kill is
         // reported by neither. This is an error report for the one termination the writer can
         // describe, not process supervision.
+        // Kept past `run`, so the thread can still answer what is queued after a termination.
+        let rx_after = rx.clone();
         if let Err(err) = run(lockfile, meta, wal, set, rx, snc, wal_size) {
             let reason = format!(
                 "Raft logs WAL writer for `{reported_path}` terminated with an unrecoverable \
@@ -184,7 +186,20 @@ pub fn spawn(
             );
             error!("{reason}");
             // Best effort: if nobody is watching, the log line is still the report.
-            let _ = _failure_tx.send(Some(reason));
+            let _ = _failure_tx.send(Some(reason.clone()));
+
+            // F-114. A terminated writer used to stop reading its channel, but the adapter
+            // still held senders, and a queued message is kept alive for as long as any sender
+            // is. An `Append` that reached the one-slot queue just before the termination was
+            // never read and never dropped, so the entry channel inside it stayed open and the
+            // adapter blocked on it forever: "a terminal writer fails its callers" held for
+            // every interleaving except that one. The thread now answers every action with the
+            // termination until the last sender is gone or a shutdown arrives.
+            while let Ok(action) = rx_after.recv() {
+                if !refuse_after_termination(action, &reason) {
+                    break;
+                }
+            }
         }
     });
 
@@ -194,6 +209,28 @@ pub fn spawn(
     }
 
     Ok((tx, wal_locked, failure_rx))
+}
+
+/// Answer one action that reached a writer after it terminated. `false` ends the thread.
+fn refuse_after_termination(action: Action, reason: &str) -> bool {
+    let err = || Error::Internal(reason.to_string().into());
+    match action {
+        Action::Append { rx, callback, ack } => {
+            // Dropping the entry receiver first releases a producer that is blocked sending.
+            drop(rx);
+            let _ = ack.send(Err(err()));
+            callback(Err(err().as_io_error()));
+        }
+        Action::Remove { ack, .. } | Action::Vote { ack, .. } => {
+            let _ = ack.send(Err(err()));
+        }
+        Action::Sync => {}
+        Action::Shutdown(ack) => {
+            let _ = ack.send(());
+            return false;
+        }
+    }
+    true
 }
 
 /// Flush the active WAL file so that everything written to it is on disk.
@@ -1040,6 +1077,82 @@ mod tests {
     /// truncation, and the writer has ended. The last one is the adopted policy: the writer
     /// holds a prefix of a batch whose extent it cannot know, so it must not serve a later
     /// append that could be a continuation of a batch that never fully arrived.
+    /// F-114, deterministically. An append queued behind one the writer is still reading, which
+    /// then turns out truncated, used to be stranded: the writer terminated without reading it,
+    /// the adapter's senders kept it alive in the queue, and whoever was sending its entries
+    /// blocked forever. The same held for a shutdown sent to a terminated writer. Both must now
+    /// be answered, and every wait here is bounded so the unrepaired writer fails rather than
+    /// hangs.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn work_queued_behind_a_terminating_append_is_answered_not_stranded() {
+        let base = "test_data/queued_behind_termination".to_string();
+        let tx = start_writer(&base, LogSync::ImmediateAsync);
+        let bound = Duration::from_secs(5);
+
+        // A: the writer takes it and waits for entries.
+        let (ack_a_tx, ack_a) = oneshot::channel();
+        let (entries_a, rx_a) = flume::bounded::<Option<(u64, Vec<u8>)>>(1);
+        tx.send_async(Action::Append {
+            rx: rx_a,
+            callback: Box::new(|_| {}),
+            ack: ack_a_tx,
+        })
+        .await
+        .unwrap();
+        entries_a.send_async(Some((1, b"first".to_vec()))).await.unwrap();
+
+        // B: queued behind A in the one-slot channel while the writer is still inside A.
+        let (ack_b_tx, ack_b) = oneshot::channel();
+        let (entries_b, rx_b) = flume::bounded::<Option<(u64, Vec<u8>)>>(1);
+        let (note_b_tx, note_b) = std::sync::mpsc::channel();
+        tx.send_async(Action::Append {
+            rx: rx_b,
+            callback: Box::new(move |res| {
+                let _ = note_b_tx.send(res);
+            }),
+            ack: ack_b_tx,
+        })
+        .await
+        .unwrap();
+
+        // A is truncated: the writer terminates.
+        drop(entries_a);
+        let a = tokio::time::timeout(bound, ack_a)
+            .await
+            .expect("A must be acknowledged")
+            .unwrap();
+        assert!(matches!(a, Err(Error::IncompleteAppend(_))), "got {a:?}");
+
+        // B's producer must not block, and B must be refused, once, on both channels.
+        let sent = tokio::time::timeout(bound, async {
+            for id in 2..=4u64 {
+                if entries_b.send_async(Some((id, b"more".to_vec()))).await.is_err() {
+                    break;
+                }
+            }
+            let _ = entries_b.send_async(None).await;
+        })
+        .await;
+        assert!(sent.is_ok(), "the producer of an append queued behind a termination blocked");
+        let b = tokio::time::timeout(bound, ack_b)
+            .await
+            .expect("an append queued behind a termination must be answered")
+            .expect("the answer must not be a dropped channel");
+        assert!(b.is_err(), "a terminated writer must refuse queued work, got {b:?}");
+        assert!(
+            note_b.recv_timeout(bound).expect("one completion").is_err(),
+            "the completion is a failure too"
+        );
+
+        // And a shutdown sent to the terminated writer is answered rather than awaited forever.
+        let (sd_tx, sd_rx) = oneshot::channel();
+        tx.send_async(Action::Shutdown(sd_tx)).await.unwrap();
+        tokio::time::timeout(bound, sd_rx)
+            .await
+            .expect("a shutdown of a terminated writer must be answered")
+            .unwrap();
+    }
+
     #[tokio::test(flavor = "multi_thread")]
     async fn a_truncated_entry_stream_never_reports_success_in_any_log_sync_mode() {
         for (mode, label) in [

@@ -29,12 +29,13 @@ impl ShutdownHandle {
         ack.await?;
         info!("WAL writer Shutdown complete");
 
-        debug!("Sending Action::Shutdown to WAL reader");
-        // This was `send_async(..)` without `.await`: the future was built and dropped, so the
-        // reader was never told. `try_send` because a reader that is busy, or already gone,
-        // still ends once every sender is dropped; the message is a courtesy, not a
-        // precondition, and a shutdown must not wait on it (found in review).
-        let _ = self.tx_read.try_send(reader::Action::Shutdown);
+        // The reader is deliberately **not** sent `Action::Shutdown`. This line used to be
+        // `send_async(..)` without `.await`, which built the message and dropped it unsent.
+        // Sending it for real would be worse: a reader that exits while the store still holds
+        // senders strands any read queued behind the message, because a queued message lives
+        // as long as any sender does (F-114, the same mechanism as the writer's). The reader
+        // ends when its last sender is dropped, which is when nothing can ask it anything.
+        let _ = &self.tx_read;
 
         Ok(())
     }

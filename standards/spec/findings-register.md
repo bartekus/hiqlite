@@ -2747,7 +2747,7 @@ owner's direction of 2026-09-22 separates them:
 Earlier results are kept as evidence about the graph they ran on (`0.9.24`
 locally before 2026-09-22), not as evidence about the committed one.
 
-### F-114 `defect`, confidence `medium`
+### F-114 `defect`, confidence `high`
 
 **A WAL adapter test could stall CI indefinitely, and the writer tests' helper
 raced the writer.** CI's `Check` on `d45826c` stalled in
@@ -2757,12 +2757,19 @@ locally in the full `hiqlite-wal` suite: two failures in 177 runs, one that stal
 and one a panic in `writer::tests::append`, which `unwrap`ped an end-of-stream
 send into a receiver the writer had dropped by rejecting the entry.
 
-**Repaired as far as it was diagnosed, 2026-09-22, `021` B-9:** the helper's race
-is fixed, every wait in the stalling test is bounded and names its step, and CI
-jobs have a sixty-minute limit. Four hundred consecutive full-suite runs then
-passed. **Confidence medium because the stalled step was never identified**: it
-did not recur once the test was instrumented. A recurrence now fails and names
-where. Whether the stall was in the test or in the adapter is not established.
+**Diagnosed and repaired 2026-09-22, `021` B-9.** With every wait bounded and
+named, the stall recurred on the 162nd full-suite run as `immediate_async:
+stalled at: an append to the terminal writer`: a library defect. A terminated WAL
+writer stopped reading its channel while the adapter still held senders, so an
+`Append` queued just before the termination was never read and never dropped, and
+the adapter blocked on the entry channel inside it forever. The same mechanism
+hung a shutdown of a terminated writer. The writer now answers every action after
+a termination with the terminal error. The helper race is fixed separately and
+CI jobs have a sixty-minute limit.
+
+**Consumer triage.** Reaches both named consumers: any node whose WAL writer
+terminates (F-110's out-of-service state) could hang an in-flight append or its
+own shutdown instead of failing them.
 
 ### F-111 `contradiction`, confidence `high`
 
