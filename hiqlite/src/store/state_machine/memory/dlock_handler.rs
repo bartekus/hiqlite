@@ -180,9 +180,14 @@ async fn handler(rx: flume::Receiver<LockRequest>, lease_seconds: i64) {
                 // `Await` registration is still in `queues`. Nothing answers it once this ticket
                 // is granted, so it stayed until the key's queue emptied completely, which on a
                 // key that is never idle is never (found by the AI review of `b5039d2`). The
-                // client is no longer listening on it; drop it.
+                // client is no longer listening on it. It is answered `Released` rather than
+                // dropped, as a replaced registration is in `Await`: for a remote client the
+                // receiver is a server task that logs a dropped channel as a broken invariant.
                 if let Some(acks) = queues.get_mut(key.as_ref()) {
-                    acks.retain(|(i, _)| *i != log_id);
+                    while let Some(pos) = acks.iter().position(|(i, _)| *i == log_id) {
+                        let (_, stale) = acks.swap_remove(pos);
+                        answer(&key, log_id, stale, LockState::Released);
+                    }
                 }
                 if let Some(lock) = locks.get_mut(key.as_ref()) {
                     // F-102: a waiter's bounded await ends in this re-request, so this is where
@@ -1097,7 +1102,7 @@ mod lease_tests {
     }
 
     /// A ticket that re-requests through `Acquire` leaves no registration behind. Its earlier
-    /// `Await` is answered or dropped, never kept for a client that has moved on.
+    /// `Await` is answered, never kept for a client that has moved on.
     #[tokio::test]
     async fn an_acquire_leaves_no_stale_await_registration() {
         let tx = spawn_with_lease(SHORT_LEASE);
@@ -1109,10 +1114,14 @@ mod lease_tests {
         // The client's await timed out; it claims through `Acquire` instead.
         assert_eq!(acquire_bounded(&tx, "k", 2).await, LockState::Locked(2));
 
-        // The old registration is gone: its sender was dropped, not left in the map.
+        // The old registration is gone from the map: it was answered, not left open.
         let got = tokio::time::timeout(Duration::from_secs(5), stale)
             .await
             .expect("the stale registration must not be held open");
-        assert!(got.is_err(), "the stale registration is dropped, got {got:?}");
+        assert_eq!(
+            got.ok(),
+            Some(LockState::Released),
+            "the stale registration is answered, not dropped"
+        );
     }
 }

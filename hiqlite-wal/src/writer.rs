@@ -427,12 +427,6 @@ fn spawn_syncer(tx_writer: flume::Sender<Action>, mut interval: Interval) {
     });
 }
 
-/// There are a lot of `unwrap()`s in this task. The reason is simply, if most of these fail, it can
-/// only be because of a non-recoverable error anyway and the application should crash, so that
-/// the next health check can restart it.
-///
-/// Everything related to locking and memory mapping is being `unwrap()`ped. If anything fails in
-/// this regard, it's either a physical storage or OS issue and this code an do nothing about it.
 /// A step that fails before a `Remove` or `Vote` is acknowledged ends the writer, as it always
 /// did, but answers the caller with the cause first. It used to `?` straight out of `run`, so the
 /// caller got "the writer thread is no longer running" instead of the I/O error, the same class
@@ -449,6 +443,12 @@ macro_rules! answer_or_end {
     };
 }
 
+/// There are a lot of `unwrap()`s in this task. The reason is simply, if most of these fail, it can
+/// only be because of a non-recoverable error anyway and the application should crash, so that
+/// the next health check can restart it.
+///
+/// Everything related to locking and memory mapping is being `unwrap()`ped. If anything fails in
+/// this regard, it's either a physical storage or OS issue and this code an do nothing about it.
 fn run(
     lockfile: LockFile,
     meta: Arc<RwLock<Metadata>>,
