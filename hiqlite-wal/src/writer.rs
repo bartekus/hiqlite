@@ -12,7 +12,7 @@ use std::sync::{Arc, RwLock};
 use std::thread;
 use std::time::Duration;
 use thread_priority::ThreadPriority;
-use tokio::sync::oneshot;
+use tokio::sync::{oneshot, watch};
 use tokio::time::Interval;
 use tokio::{task, time};
 use tracing::{debug, error, warn};
@@ -101,7 +101,14 @@ pub fn spawn(
     wal_size: u32,
     wal_deep_integrity_check: bool,
     meta: Arc<RwLock<Metadata>>,
-) -> Result<(flume::Sender<Action>, Arc<RwLock<WalFileSet>>), Error> {
+) -> Result<
+    (
+        flume::Sender<Action>,
+        Arc<RwLock<WalFileSet>>,
+        watch::Receiver<Option<String>>,
+    ),
+    Error,
+> {
     let mut set = WalFileSet::read(base_path, wal_size)?;
     // TODO emit a warning log in that case and tell the user how to resolve or "force start" in
     // that case, or should be maybe `auto-heal` as much as possible?
@@ -145,7 +152,21 @@ pub fn spawn(
     let wal = wal_locked.clone();
     let snc = sync.clone();
     let reported_path = set.base_path.clone();
+
+    // The termination report gets a consumer.
+    //
+    // `008` KD-3 recorded that the ERROR log below has none: nothing above this crate can tell
+    // a writer that has ended from one that is running, so a node whose log storage had died
+    // went on answering as though it were healthy. This channel is that consumer's half.
+    //
+    // It carries three states, and the third is the one that matters. `None` means the writer
+    // is running. `Some(reason)` means it ended and said why. A **closed** channel means the
+    // sender was dropped without a reason, which is what a panic unwinding past this closure
+    // looks like from the outside: still a terminated writer, still not a healthy node, and
+    // not something this crate can describe beyond that.
+    let (failure_tx, failure_rx) = watch::channel(None::<String>);
     thread::spawn(move || {
+        let _failure_tx = failure_tx;
         // The writer thread's `JoinHandle` is deliberately not retained: nothing in this crate
         // manages its lifecycle, and joining it would be lifecycle management rather than error
         // reporting. What was missing is the report itself. `run` only returns `Err` on a failure
@@ -157,10 +178,13 @@ pub fn spawn(
         // reported by neither. This is an error report for the one termination the writer can
         // describe, not process supervision.
         if let Err(err) = run(lockfile, meta, wal, set, rx, snc, wal_size) {
-            error!(
+            let reason = format!(
                 "Raft logs WAL writer for `{reported_path}` terminated with an unrecoverable \
                 error: {err} - all further appends will fail until this process is restarted"
             );
+            error!("{reason}");
+            // Best effort: if nobody is watching, the log line is still the report.
+            let _ = _failure_tx.send(Some(reason));
         }
     });
 
@@ -169,7 +193,7 @@ pub fn spawn(
         spawn_syncer(tx.clone(), interval);
     }
 
-    Ok((tx, wal_locked))
+    Ok((tx, wal_locked, failure_rx))
 }
 
 /// Flush the active WAL file so that everything written to it is on disk.
@@ -799,7 +823,8 @@ mod tests {
         lockfile.lock().unwrap();
         let meta = Arc::new(RwLock::new(Metadata::read_or_create(base).unwrap()));
 
-        let (tx, _wal) = spawn(base.to_string(), lockfile, sync, 64 * 1024, false, meta).unwrap();
+        let (tx, _wal, _fail) =
+            spawn(base.to_string(), lockfile, sync, 64 * 1024, false, meta).unwrap();
         tx
     }
 
@@ -1267,7 +1292,7 @@ mod tests {
         lockfile.lock().unwrap();
         let meta = Arc::new(RwLock::new(Metadata::read_or_create(&base).unwrap()));
 
-        let (tx, _wal) = spawn(
+        let (tx, _wal, _fail) = spawn(
             base.clone(),
             lockfile,
             LogSync::Immediate,
@@ -1302,7 +1327,7 @@ mod tests {
         lockfile.lock().unwrap();
         let meta = Arc::new(RwLock::new(Metadata::read_or_create(&base).unwrap()));
 
-        let (tx, _wal) = spawn(
+        let (tx, _wal, _fail) = spawn(
             base.clone(),
             lockfile,
             LogSync::Immediate,

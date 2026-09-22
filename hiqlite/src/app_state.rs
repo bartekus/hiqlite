@@ -54,6 +54,13 @@ impl RaftType {
 // Representation of an application state. This struct can be shared around to share
 // instances of raft, store and more.
 pub(crate) struct AppState {
+    /// Terminal-failure record for this node.
+    ///
+    /// Set by whatever failed first: the WAL writer thread ending, a listener that stopped
+    /// serving, the cache state machine refusing committed work. Once set, readiness is gone
+    /// and operations are refused with an account of why. Nothing clears it and nothing
+    /// restarts the failed component.
+    pub(crate) lifecycle: crate::lifecycle::NodeLifecycle,
     /// Exclusive ownership of `data_dir`.
     ///
     /// `None` only for a node that keeps nothing on disk. Held here rather than in a local so

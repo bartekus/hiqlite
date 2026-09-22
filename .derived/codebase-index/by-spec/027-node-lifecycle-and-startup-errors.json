@@ -1,13 +1,18 @@
 {
   "mapping": {
+    "amends": [
+      "010-node-lifecycle-and-split-brain"
+    ],
     "dependsOn": [
       "000-hiqlite-ownership-bootstrap",
-      "003-client-consistency-and-retry-outcomes",
-      "009-configuration-contract"
+      "008-wal-append-completion-notification",
+      "010-node-lifecycle-and-split-brain",
+      "022-replicated-cache-command-compatibility",
+      "024-exclusive-storage-ownership"
     ],
     "implementingPaths": [
       {
-        "path": "hiqlite.env",
+        "path": "hiqlite-wal/src/",
         "source": "spec-edge"
       },
       {
@@ -15,7 +20,19 @@
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite/src/init.rs",
+        "path": "hiqlite/src/bin/abort_probe.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/client/",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/lifecycle.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/network/",
         "source": "spec-edge"
       },
       {
@@ -43,27 +60,79 @@
       {
         "locations": [
           {
-            "file": "hiqlite/src/app_state.rs"
+            "file": "hiqlite/src/bin/abort_probe.rs"
           }
         ],
         "ownership": true,
         "sourceField": "establishes",
         "unit": {
           "kind": "file",
-          "path": "hiqlite/src/app_state.rs"
+          "path": "hiqlite/src/bin/abort_probe.rs"
         }
       },
       {
         "locations": [
           {
-            "file": "hiqlite/src/init.rs"
+            "file": "hiqlite/src/lifecycle.rs"
           }
         ],
         "ownership": true,
         "sourceField": "establishes",
         "unit": {
           "kind": "file",
-          "path": "hiqlite/src/init.rs"
+          "path": "hiqlite/src/lifecycle.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite-wal/src/"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite-wal/src/"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/client/"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/client/"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/network/"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/network/"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/app_state.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/app_state.rs"
         }
       },
       {
@@ -73,7 +142,7 @@
           }
         ],
         "ownership": true,
-        "sourceField": "establishes",
+        "sourceField": "extends",
         "unit": {
           "kind": "file",
           "path": "hiqlite/src/split_brain_check.rs"
@@ -86,23 +155,10 @@
           }
         ],
         "ownership": true,
-        "sourceField": "establishes",
-        "unit": {
-          "kind": "file",
-          "path": "hiqlite/src/start.rs"
-        }
-      },
-      {
-        "locations": [
-          {
-            "file": "hiqlite.env"
-          }
-        ],
-        "ownership": true,
         "sourceField": "extends",
         "unit": {
           "kind": "file",
-          "path": "hiqlite.env"
+          "path": "hiqlite/src/start.rs"
         }
       },
       {
@@ -145,9 +201,9 @@
         }
       }
     ],
-    "specId": "010-node-lifecycle-and-split-brain",
+    "specId": "027-node-lifecycle-and-startup-errors",
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "d36265ecd0ce0230dc72f941c25fe83f707736dbdc1205a52f4bbe16e97e7020"
+  "shardHash": "4fba2dbe70b84b3d6e6dd3eb7c21237b6864f563b56503a26d3bc8d0939eee56"
 }

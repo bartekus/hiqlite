@@ -48,6 +48,11 @@ pub async fn health(state: AppStateExt) -> Result<(), Error> {
 
     #[cfg(any(feature = "sqlite", feature = "cache"))]
     {
+        // A terminal failure is not something a retry three seconds later resolves.
+        state.lifecycle.ensure_available()?;
+        #[cfg(feature = "cache")]
+        state.raft_cache.ensure_cache_compatible()?;
+
         if check_health(&state).await.is_err() {
             // after at least 3 seconds, we should have a new leader
             time::sleep(Duration::from_secs(3)).await;
@@ -95,6 +100,14 @@ async fn check_health(state: &AppStateExt) -> Result<(), Error> {
 pub async fn ready(state: AppStateExt) -> Result<(), Error> {
     #[cfg(all(not(feature = "sqlite"), not(feature = "cache")))]
     panic!("neither `sqlite` nor `cache` feature enabled");
+
+    // First, and before any Raft metric is consulted. A node whose WAL writer has ended or
+    // whose listener has stopped serving is not ready whatever its Raft state says, and
+    // answering on the strength of Raft metrics alone is what let a failed node keep looking
+    // healthy.
+    state.lifecycle.ensure_available()?;
+    #[cfg(feature = "cache")]
+    state.raft_cache.ensure_cache_compatible()?;
 
     if state.is_shutting_down.load(Ordering::Relaxed) {
         return Err(Error::Error("Node is shutting down".into()));
