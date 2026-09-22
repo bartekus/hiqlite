@@ -405,6 +405,14 @@ as well as the source directory. A downgrade to 0.14.x that skipped the manual
 move-aside leaves the marker beside legacy entries, and the next upgrade accepts
 them; that is the operator's step and the guard cannot see it.
 
+**Where the guard runs.** Immediately after storage ownership is taken, before
+the restore path, the reset path and either raft group. It first ran inside the
+cache raft's construction, after the SQLite raft had opened the database, and a
+refused start then left the database checkpointed and with fresh optimizer
+statistics: application data was identical, but "Nothing was changed" was not
+literally true. Observed by the Rauthy integration on 34641b0. Only the owner
+lock file is created before a refusal now.
+
 **The failure that was not one (F-113).** The failed start's log store, dropped
 on the error path, ended its writer, and the watch recorded that as "the Raft log
 WAL writer failed". A raft that fails to construct, and every teardown after a
@@ -710,7 +718,9 @@ cargo test -p hiqlite-patched --lib --no-default-features --features cache store
 cargo test -p hiqlite-patched --lib --no-default-features --features cache store::logs::tests::a_fresh_directory_is_marked_and_a_foreign_marker_is_refused -- --exact
 cargo test -p hiqlite-wal-patched --lib reader::tests::a_requester_that_stops_reading_does_not_end_the_reader -- --exact
 sh -c '! grep -q "ack.send(.*).unwrap()" hiqlite-wal/src/reader.rs'
-sh -c 'grep -B1 "StateMachineMemory::new::<C>" hiqlite/src/store/mod.rs | grep -q "ensure_cache_log_format" || grep -B3 "StateMachineMemory::new::<C>" hiqlite/src/store/mod.rs | grep -q "ensure_cache_log_format"'
+# the guard runs before the restore and before either raft group, so a refusal opens nothing
+sh -c 'a=$(grep -n "store::logs::ensure_cache_log_format" hiqlite/src/start.rs | head -1 | cut -d: -f1); b=$(grep -n "backup::restore_backup_start(&node_config)" hiqlite/src/start.rs | head -1 | cut -d: -f1); c=$(grep -n "store::start_raft_db(" hiqlite/src/start.rs | head -1 | cut -d: -f1); test -n "$a" && test -n "$b" && test -n "$c" && test "$a" -lt "$b" && test "$a" -lt "$c"'
+sh -c '! grep -q "ensure_cache_log_format" hiqlite/src/store/mod.rs'
 sh -c 'test "$(grep -c "lifecycle.begin_shutdown();" hiqlite/src/store/mod.rs)" -ge 4'
 sh -c '! grep -q "holds_files(&dir_snapshots" hiqlite/src/store/logs/mod.rs'
 sh -c 'grep -q "if let Err(err) = init::init_pristine_node_1_db(" hiqlite/src/store/mod.rs'

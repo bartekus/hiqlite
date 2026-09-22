@@ -181,9 +181,6 @@ where
     let is_raft_stopped = Arc::new(AtomicBool::new(true));
     let is_startup_finished = Arc::new(AtomicBool::new(false));
 
-    if node_config.cache_storage_disk {
-        logs::ensure_cache_log_format(&node_config.data_dir).await?;
-    }
     let state_machine_store = Arc::new(
         StateMachineMemory::new::<C>(&node_config.data_dir, !node_config.cache_storage_disk)
             .await?,

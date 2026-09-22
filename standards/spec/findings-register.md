@@ -2771,6 +2771,14 @@ CI jobs have a sixty-minute limit.
 terminates (F-110's out-of-service state) could hang an in-flight append or its
 own shutdown instead of failing them.
 
+**Qualification after the repair.** Three hundred consecutive runs of the whole
+`hiqlite-wal` suite, with the test binary run from a private working directory,
+had no failure. An earlier loop run from the shared checkout had seven, every one
+a burst of "No such file or directory" across unrelated tests: the suite writes
+fixed directory names under `hiqlite-wal/test_data`, so any other run of it in
+the same checkout collides. That is a property of the fixture, not of the code,
+and it is why the qualifying loop was isolated.
+
 ### F-111 `contradiction`, confidence `high`
 
 **The cache raft's replicated command layout changed between hiqlite 0.14.0 and

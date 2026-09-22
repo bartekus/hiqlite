@@ -256,6 +256,16 @@ where
         None
     };
 
+    // B-10: before the restore, the reset and both raft groups, so that a refused start has
+    // opened nothing. It used to run inside the cache raft's construction, after the SQLite
+    // raft had opened the database, and SQLite checkpoints its WAL and records optimizer
+    // statistics on open and close: the refusal's "Nothing was changed" was not literally true
+    // (observed by the Rauthy integration). Only the owner lock is created before this.
+    #[cfg(feature = "cache")]
+    if node_config.cache_storage_disk {
+        store::logs::ensure_cache_log_format(&node_config.data_dir).await?;
+    }
+
     #[cfg(any(feature = "s3", feature = "dashboard"))]
     node_config.init_enc_keys();
 
