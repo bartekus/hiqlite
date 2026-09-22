@@ -1,0 +1,106 @@
+{
+  "mapping": {
+    "amends": [
+      "013-backup-retention-and-object-storage"
+    ],
+    "dependsOn": [
+      "000-hiqlite-ownership-bootstrap",
+      "013-backup-retention-and-object-storage",
+      "024-exclusive-storage-ownership",
+      "025-snapshot-crash-recovery-contract"
+    ],
+    "implementingPaths": [
+      {
+        "path": "hiqlite/src/backup.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/client/",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/s3.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "standards/spec/adoption-plan.md",
+        "source": "spec-edge"
+      },
+      {
+        "path": "standards/spec/findings-register.md",
+        "source": "spec-edge"
+      }
+    ],
+    "resolvedUnits": [
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/client/"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/client/"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/backup.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/backup.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/s3.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/s3.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "standards/spec/adoption-plan.md"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/adoption-plan.md"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "standards/spec/findings-register.md"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/findings-register.md"
+        }
+      }
+    ],
+    "specId": "026-backup-and-restore-integrity",
+    "specStatus": "draft"
+  },
+  "schemaVersion": "1.1.0",
+  "shardHash": "482049d0dff3140aba17885eff37b7656d57806e6a3420545784b8ae00011f84"
+}

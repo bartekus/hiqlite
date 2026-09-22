@@ -67,9 +67,9 @@ check:
     clear
     cargo update
     cargo clippy -- -D warnings
-    cargo minimal-versions check -p hiqlite --features server
-    cargo minimal-versions check -p hiqlite --no-default-features --features external-state-machine
-    cargo minimal-versions check -p hiqlite-wal
+    cargo minimal-versions check -p hiqlite-patched --features server
+    cargo minimal-versions check -p hiqlite-patched --no-default-features --features external-state-machine
+    cargo minimal-versions check -p hiqlite-wal-patched
 
     # update at the end again for following clippy and testing
     cargo update
@@ -109,6 +109,17 @@ clippy:
     cargo clippy --no-default-features --features sqlite,external-state-machine -- -D warnings
     cargo clippy --no-default-features --features full,external-state-machine -- -D warnings
     cargo clippy --features external-state-machine -- -D warnings
+
+    # F-104: `server` is the only feature that compiles `hiqlite/src/server/`, and `full` does
+    # not imply it, so nothing above reaches the proxy handlers, the CLI or the server binary.
+    # A compile error confined to that tree passed every pre-merge gate and was caught only by
+    # the post-merge acceptance sweep, which is the wrong place to find one.
+    #
+    # Library targets only. `--all-targets` here additionally pulls in `hiqlite-wal`'s test
+    # modules, which carry pre-existing lints unrelated to this release, and silencing those to
+    # widen this check would be changing unrelated code to make a gate pass.
+    cargo clippy --no-default-features --features server -- -D warnings
+    cargo clippy --no-default-features --features server,cast_ints -- -D warnings
 
 clippy-examples:
     #!/usr/bin/env bash
@@ -230,6 +241,19 @@ verify:
     just test
     just msrv-verify
 
+# F-108: the release qualification, on the committed graph and nothing else. `check` runs
+# `cargo update` first, which makes it a maintenance sweep and not a qualification.
+qualify:
+    #!/usr/bin/env bash
+    set -euxo pipefail
+    rustc -Vv
+    cargo -V
+    cargo metadata --locked --format-version 1 > /dev/null
+    cargo clippy --locked -- -D warnings
+    just clippy
+    TEST_SKIP_S3_RESTORE="true" cargo test --locked --features cache,counters,dlock,listen_notify,macros,toml,external-state-machine
+    git diff --exit-code -- Cargo.lock
+
 # makes sure everything is fine
 verify-is-clean: verify
     #!/usr/bin/env bash
@@ -253,23 +277,37 @@ release:
 
     just build-image
 
-# publish order: wal, core, macros - remember to update version in hiqlite-macros beforehand
-publish-wal: verify-is-clean
+# Packaging check for one crate, without touching the registry.
+#
+# `--no-verify` is deliberately absent everywhere in this file: it skips the build of the
+# packaged tree, which is the only thing that catches a manifest that resolves in the workspace
+# and not from the registry.
+package-check:
     #!/usr/bin/env bash
     set -euxo pipefail
-    cargo publish -p hiqlite-wal
-    echo "WAL published - now update the version in hiqlite/Cargo.toml and publish-derive"
+    cargo package -p hiqlite-wal-patched --allow-dirty
+    cargo package -p hiqlite-derive-patched --allow-dirty
+    # `hiqlite-patched` cannot be packaged until its two dependencies are on the registry: its
+    # published manifest resolves them by version. `--no-verify` would hide that rather than
+    # answer it, so this stops here and `publish-core` is what proves it.
+    echo "wal and derive package cleanly; core is verified at publication time"
+
+# Publication order is the dependency order: wal and derive first, then core, which depends on
+# both by version. Each step waits for the registry to serve what the next one needs.
+publish-wal:
+    #!/usr/bin/env bash
+    set -euxo pipefail
+    cargo publish -p hiqlite-wal-patched
 
 publish-derive:
     #!/usr/bin/env bash
     set -euxo pipefail
-    cargo publish -p hiqlite-derive
-    echo "Derive published - now update the version in hiqlite/Cargo.toml and publish-core"
+    cargo publish -p hiqlite-derive-patched
 
 publish-core:
     #!/usr/bin/env bash
     set -euxo pipefail
-    cargo publish -p hiqlite
+    cargo publish -p hiqlite-patched
 
 # does a `cargo update` + `npm update` for the UI
 update:

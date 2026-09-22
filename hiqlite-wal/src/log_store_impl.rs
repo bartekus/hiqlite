@@ -37,6 +37,35 @@ pub fn deserialize<T: DeserializeOwned>(bytes: &[u8]) -> Result<T, DecodeError> 
 /// silently. A queued or in-flight operation whose thread has gone away is a storage error,
 /// and openraft has a channel for exactly that.
 #[inline]
+/// The writer's own verdict on an append whose entry stream it stopped reading.
+///
+/// The writer stops reading only after it has decided the batch's outcome, so that decision is
+/// already on its way down `ack`. This waits for it and reports it, so the caller is told why
+/// the append failed rather than that a channel was closed.
+async fn writer_verdict<T: RaftTypeConfig>(
+    ack_rx: oneshot::Receiver<Result<(), crate::error::Error>>,
+) -> StorageError<T::NodeId> {
+    match ack_rx.await {
+        // The expected case: the writer refused the batch and said why.
+        Ok(Err(err)) => StorageIOError::write_logs(&err).into(),
+        // The writer reported success for a batch it never finished reading. That is a broken
+        // contract rather than a storage failure, and it is named as one instead of being
+        // returned to openraft as a successful append.
+        Ok(Ok(())) => StorageError::IO {
+            source: StorageIOError::new(
+                ErrorSubject::Logs,
+                ErrorVerb::Write,
+                AnyError::error(
+                    "the WAL writer reported this append as complete while it was still being \
+                     sent, so the batch it persisted is not the batch that was submitted",
+                ),
+            ),
+        },
+        // The writer is gone without a verdict, which is what a panic in it looks like here.
+        Err(_) => thread_gone::<T>(ErrorSubject::Logs, ErrorVerb::Write, "writer"),
+    }
+}
+
 fn thread_gone<T: RaftTypeConfig>(
     subject: ErrorSubject<T::NodeId>,
     verb: ErrorVerb,
@@ -263,15 +292,27 @@ where
         // the truncated stream the writer now names rather than mistaking for a clean end. The
         // writer reports that failure on both channels, so returning here does not leave the
         // completion callback unfired.
+        //
+        // A **failed send** is different from a failed serialization, and is not reported as
+        // one. The writer only stops reading a batch once it has already decided that batch's
+        // outcome, so a closed receiver means the verdict is waiting on `ack`. Returning the
+        // `SendError` here would replace "this entry is larger than the WAL file" with
+        // "sending on a closed channel", which names the symptom and discards the cause. Which
+        // of the two the caller saw depended purely on whether the writer got to `drop(rx)`
+        // before this loop got to its next send.
         for entry in entries {
             let data = serialize(&entry).map_err(|err| StorageIOError::write_logs(&err))?;
-            tx.send_async(Some((entry.get_log_id().index, data)))
+            if tx
+                .send_async(Some((entry.get_log_id().index, data)))
                 .await
-                .map_err(|err| StorageIOError::write_logs(&err))?;
+                .is_err()
+            {
+                return Err(writer_verdict::<T>(ack_rx).await);
+            }
         }
-        tx.send_async(None)
-            .await
-            .map_err(|err| StorageIOError::write_logs(&err))?;
+        if tx.send_async(None).await.is_err() {
+            return Err(writer_verdict::<T>(ack_rx).await);
+        }
 
         ack_rx
             .await
@@ -387,15 +428,22 @@ mod tests {
         ] {
             let base = format!("test_data/adapter_truncated_recovery_{label}");
             let _ = std::fs::remove_dir_all(&base);
-            let mut store = LogStore::<TestTypeConfig>::start(base.clone(), mode.clone(), WAL_SIZE)
-                .await
-                .unwrap();
+            let mut store = bounded(
+                label,
+                "start",
+                LogStore::<TestTypeConfig>::start(base.clone(), mode.clone(), WAL_SIZE),
+            )
+            .await
+            .unwrap();
 
             // A healthy append first, so the truncated one lands on top of existing state.
-            store
-                .blocking_append(vec![blank_ent::<TestTypeConfig>(1, 1, 1)])
-                .await
-                .unwrap_or_else(|err| panic!("{label}: the healthy append must succeed: {err}"));
+            bounded(
+                label,
+                "healthy append",
+                store.blocking_append(vec![blank_ent::<TestTypeConfig>(1, 1, 1)]),
+            )
+            .await
+            .unwrap_or_else(|err| panic!("{label}: the healthy append must succeed: {err}"));
 
             // A truncated batch, dispatched on the writer channel the adapter uses. The entry
             // sender is dropped without the end-of-stream marker, which is what the adapter
@@ -403,25 +451,29 @@ mod tests {
             let (ack_tx, ack_rx) = oneshot::channel();
             let (entry_tx, entry_rx) = flume::bounded(1);
             let (note_tx, note_rx) = std::sync::mpsc::channel();
-            store
-                .writer
-                .send_async(writer::Action::Append {
+            bounded(
+                label,
+                "dispatch the truncated append",
+                store.writer.send_async(writer::Action::Append {
                     rx: entry_rx,
                     callback: Box::new(move |res| {
                         let _ = note_tx.send(res);
                     }),
                     ack: ack_tx,
-                })
-                .await
-                .unwrap();
+                }),
+            )
+            .await
+            .unwrap();
             for index in 2..=BATCH {
                 let entry = blank_ent::<TestTypeConfig>(1, 1, index);
                 let bytes = serialize(&entry).unwrap();
-                entry_tx.send_async(Some((index, bytes))).await.unwrap();
+                bounded(label, "send an entry", entry_tx.send_async(Some((index, bytes))))
+                    .await
+                    .unwrap();
             }
             drop(entry_tx);
 
-            let err = ack_rx
+            let err = bounded(label, "the truncated append's acknowledgement", ack_rx)
                 .await
                 .unwrap_or_else(|_| panic!("{label}: the truncated append must be acknowledged"))
                 .expect_err(&format!("{label}: a truncated append is never a success"));
@@ -438,14 +490,22 @@ mod tests {
             // The writer is terminal. Queued work must come back as a storage error rather than
             // panic the calling task or leave it waiting forever, which is what the `unwrap`s
             // on these channels used to do.
-            let queued = store
-                .blocking_append(vec![blank_ent::<TestTypeConfig>(1, 1, BATCH + 1)])
-                .await;
+            let queued = bounded(
+                label,
+                "an append to the terminal writer",
+                store.blocking_append(vec![blank_ent::<TestTypeConfig>(1, 1, BATCH + 1)]),
+            )
+            .await;
             assert!(
                 queued.is_err(),
                 "{label}: an append dispatched to a terminal writer must fail, not succeed"
             );
-            let vote = store.save_vote(&Vote::new(1, 1)).await;
+            let vote = bounded(
+                label,
+                "a vote to the terminal writer",
+                store.save_vote(&Vote::new(1, 1)),
+            )
+            .await;
             assert!(
                 vote.is_err(),
                 "{label}: a vote write to a terminal writer must fail, not panic"
@@ -487,11 +547,17 @@ mod tests {
             // Reopen and read through the adapter. The lock file is left behind by a terminal
             // writer, so this is the not-a-clean-start path, which runs the deep integrity
             // check.
-            let mut reopened = LogStore::<TestTypeConfig>::start(base, mode, WAL_SIZE)
-                .await
-                .unwrap_or_else(|err| panic!("{label}: the store must reopen: {err}"));
+            let mut reopened = bounded(
+                label,
+                "reopen",
+                LogStore::<TestTypeConfig>::start(base, mode, WAL_SIZE),
+            )
+            .await
+            .unwrap_or_else(|err| panic!("{label}: the store must reopen: {err}"));
 
-            let state = reopened.get_log_state().await.unwrap();
+            let state = bounded(label, "log state", reopened.get_log_state())
+                .await
+                .unwrap();
             let last = state
                 .last_log_id
                 .unwrap_or_else(|| panic!("{label}: the healthy entry at least must survive"))
@@ -505,7 +571,9 @@ mod tests {
                 "{label}: the store must not report entries beyond the batch it was sent, got {last}"
             );
 
-            let entries = reopened.try_get_log_entries(1..=last).await.unwrap();
+            let entries = bounded(label, "read the prefix", reopened.try_get_log_entries(1..=last))
+                .await
+                .unwrap();
             assert_eq!(
                 entries.len() as u64,
                 last,
@@ -520,13 +588,24 @@ mod tests {
             }
 
             // Reading past the end is answered, not fatal.
-            let beyond = reopened
-                .try_get_log_entries(last + 1..last + 10)
-                .await
-                .unwrap();
+            let beyond = bounded(
+                label,
+                "read past the end",
+                reopened.try_get_log_entries(last + 1..last + 10),
+            )
+            .await
+            .unwrap();
             assert!(beyond.is_empty(), "{label}: nothing exists past the prefix");
 
-            reopened.stop().await.unwrap();
+            bounded(label, "stop", reopened.stop()).await.unwrap();
+        }
+
+        /// Every wait in this test is bounded and names itself, so a stall is a failure that
+        /// says where it stalled. The test used to hang CI for as long as the job allowed.
+        async fn bounded<T>(label: &str, step: &str, fut: impl std::future::Future<Output = T>) -> T {
+            tokio::time::timeout(std::time::Duration::from_secs(20), fut)
+                .await
+                .unwrap_or_else(|_| panic!("{label}: stalled at: {step}"))
         }
     }
 
@@ -568,9 +647,55 @@ mod tests {
         );
     }
 
+    /// The three verdicts `writer_verdict` can reach, driven directly.
+    ///
+    /// This is the path CI exercised and local runs did not. When the writer stops reading a
+    /// batch before the adapter has finished sending it, the send fails and the real outcome is
+    /// on the acknowledgement channel. Whether that happens is a race between the writer's
+    /// `drop(rx)` and the adapter's next send, so it is tested here rather than left to whether
+    /// a given machine loses it: `append_adapter_reports_a_rejected_append_as_an_error` passed
+    /// forty times locally and failed on the first CI run.
+    #[tokio::test]
+    async fn a_writer_that_stopped_reading_is_reported_by_its_verdict_not_by_the_channel() {
+        // The expected case: the writer refused the batch and said why.
+        let (ack, ack_rx) = oneshot::channel();
+        ack.send(Err(crate::error::Error::WalSizeExceeded(
+            "entry is larger than the WAL file".into(),
+        )))
+        .unwrap();
+        let err = writer_verdict::<TestTypeConfig>(ack_rx).await;
+        assert!(
+            format!("{err}").contains("WalSizeExceeded"),
+            "the caller must be told why the writer refused the batch, got: {err}"
+        );
+        assert!(
+            !format!("{err}").contains("closed channel"),
+            "and must not be told about the channel instead, got: {err}"
+        );
+
+        // A success reported for a batch that was never finished is a broken contract, and is
+        // named as one rather than returned to openraft as a successful append.
+        let (ack, ack_rx) = oneshot::channel();
+        ack.send(Ok(())).unwrap();
+        let err = writer_verdict::<TestTypeConfig>(ack_rx).await;
+        assert!(
+            format!("{err}").contains("not the batch that was submitted"),
+            "got: {err}"
+        );
+
+        // No verdict at all, which is what a panic in the writer looks like from here.
+        let (ack, ack_rx) = oneshot::channel::<Result<(), crate::error::Error>>();
+        drop(ack);
+        let err = writer_verdict::<TestTypeConfig>(ack_rx).await;
+        assert!(
+            format!("{err}").contains("no longer running"),
+            "got: {err}"
+        );
+    }
+
     /// An append the writer rejects must not reach openraft as a successful storage call. The
     /// rejection surfaces on the acknowledgement path, which is what `append` returns.
-    #[cfg(feature = "oversized-entry-error")]
+    /// No longer feature-gated: the rejection is the default behavior now.
     #[tokio::test(flavor = "multi_thread")]
     async fn append_adapter_reports_a_rejected_append_as_an_error() {
         let base = "test_data/adapter_append_rejection";

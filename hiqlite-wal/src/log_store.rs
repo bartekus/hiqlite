@@ -20,6 +20,8 @@ where
     meta: Arc<RwLock<Metadata>>,
     wal: Arc<RwLock<WalFileSet>>,
     pub writer: flume::Sender<writer::Action>,
+    /// Observes the writer thread. See [`Self::writer_failure`].
+    writer_failure: tokio::sync::watch::Receiver<Option<String>>,
     pub reader: flume::Sender<reader::Action>,
     _marker: PhantomData<T>,
 }
@@ -54,7 +56,7 @@ where
             let meta = Metadata::read_or_create(&base_path)?;
             let meta = Arc::new(RwLock::new(meta));
 
-            let (writer, wal) = writer::spawn(
+            let (writer, wal, writer_failure) = writer::spawn(
                 base_path,
                 lockfile,
                 sync,
@@ -68,6 +70,7 @@ where
                 meta,
                 wal,
                 writer,
+                writer_failure,
                 reader,
                 _marker: Default::default(),
             })
@@ -97,7 +100,7 @@ where
         task::spawn_blocking(move || {
             let meta = Metadata::read_or_create(&base_path)?;
             let meta = Arc::new(RwLock::new(meta));
-            let (writer, _) = writer::spawn(
+            let (writer, _, _) = writer::spawn(
                 base_path,
                 lockfile,
                 LogSync::ImmediateAsync,
@@ -108,6 +111,19 @@ where
             Ok(writer)
         })
         .await?
+    }
+
+    /// Watch the writer thread for termination.
+    ///
+    /// `None` while it is running; `Some(reason)` once it has ended and said why. The channel
+    /// **closing** means the thread ended without saying why, which is what a panic looks like
+    /// from outside it. All three are a statement about the writer and none of them is a
+    /// statement about what the caller should do, which is the caller's policy.
+    ///
+    /// `008` KD-3 recorded that the writer's termination report had no consumer. This is the
+    /// half that lets there be one.
+    pub fn writer_failure(&self) -> tokio::sync::watch::Receiver<Option<String>> {
+        self.writer_failure.clone()
     }
 
     pub fn shutdown_handle(&self) -> ShutdownHandle {

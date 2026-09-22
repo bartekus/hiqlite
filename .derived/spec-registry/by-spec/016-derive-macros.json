@@ -7,7 +7,7 @@
     ],
     "establishes": [
       {
-        "id": "hiqlite-derive",
+        "id": "hiqlite-derive-patched",
         "kind": "crate"
       },
       {
@@ -81,6 +81,6 @@
     "summary": "Adopts the two derive macros: what FromRow accepts in a #[column] attribute and what each attribute expands to, and what CacheVariants requires of an enum. Four findings, all demonstrated: CacheVariants emits its generics in the wrong position and rejects data-carrying variants, FromRow does not recognise the core spelling of Option, and the trait it implements cannot report a conversion failure. Repairs no runtime behavior.\n",
     "title": "Adopt the derive macros"
   },
-  "shardHash": "8737e9507fbbfa559f7731022a3c58b22f2d00c65e60d37a24b26c7130f252bb",
+  "shardHash": "722421c277e6d887499fbecc508f4a641cd5fd85d1d92d1e0f909c925818de64",
   "specVersion": "1.3.0"
 }

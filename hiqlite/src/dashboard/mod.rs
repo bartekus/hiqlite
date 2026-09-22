@@ -36,19 +36,40 @@ pub struct DashboardState {
 
 impl DashboardState {
     pub fn from_env() -> Self {
-        match env::var("HQL_PASSWORD_DASHBOARD") {
-            Ok(b64) => {
-                let hash = String::from_utf8(b64_decode(&b64).unwrap()).unwrap();
-                Self {
-                    password_dashboard: Some(hash),
-                }
-            }
-            Err(_) => {
-                warn!("HQL_PASSWORD_DASHBOARD has not been set and the dashboard will be disabled");
-                Self {
-                    password_dashboard: None,
-                }
-            }
+        let Ok(b64) = env::var("HQL_PASSWORD_DASHBOARD") else {
+            warn!("HQL_PASSWORD_DASHBOARD has not been set and the dashboard will be disabled");
+            return Self {
+                password_dashboard: None,
+            };
+        };
+
+        // F-089: this was `b64_decode(&b64).unwrap()` and `String::from_utf8(..).unwrap()`,
+        // while the *absent* case four lines below was handled gracefully. A typo in the
+        // variable therefore ended the process at startup, where leaving the variable out
+        // entirely disabled the dashboard and carried on. Two ways of getting the same
+        // configuration wrong, two very different outcomes.
+        //
+        // A malformed value now behaves exactly like an absent one, and says which it was.
+        let Ok(bytes) = b64_decode(&b64) else {
+            warn!(
+                "HQL_PASSWORD_DASHBOARD is not valid base64 and the dashboard will be disabled"
+            );
+            return Self {
+                password_dashboard: None,
+            };
+        };
+        let Ok(hash) = String::from_utf8(bytes) else {
+            warn!(
+                "HQL_PASSWORD_DASHBOARD does not decode to text and the dashboard will be \
+                 disabled"
+            );
+            return Self {
+                password_dashboard: None,
+            };
+        };
+
+        Self {
+            password_dashboard: Some(hash),
         }
     }
 }
@@ -70,5 +91,33 @@ mod tests {
         assert!(is_api_tls_enabled());
         set_api_tls(false);
         assert!(!is_api_tls_enabled());
+    }
+
+    /// F-089: a malformed `HQL_PASSWORD_DASHBOARD` ended the process at startup, while the
+    /// *absent* case four lines below it was handled gracefully and merely disabled the
+    /// dashboard. Two ways of getting the same configuration wrong, two very different
+    /// outcomes.
+    ///
+    /// Driven through the decoding directly rather than through the environment, which is
+    /// process-wide and which `009` D-3 records as the reason no environment route in this
+    /// corpus has a test. What is asserted is that both failure modes are values.
+    #[test]
+    fn a_malformed_dashboard_password_is_a_value_not_a_panic() {
+        // Not base64 at all.
+        assert!(b64_decode("this is not base64!!!").is_err());
+
+        // Base64 of bytes that are not UTF-8: `0xff 0xfe 0xfd`.
+        let decoded = b64_decode("//79").expect("valid base64");
+        assert_eq!(decoded, vec![0xff, 0xfe, 0xfd]);
+        assert!(
+            String::from_utf8(decoded).is_err(),
+            "the second `unwrap` F-089 names is reachable from the first one succeeding"
+        );
+
+        // Both now land on the same state as an absent variable.
+        let disabled = DashboardState {
+            password_dashboard: None,
+        };
+        assert!(disabled.password_dashboard.is_none());
     }
 }

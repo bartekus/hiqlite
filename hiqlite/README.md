@@ -1,4 +1,20 @@
-# Hiqlite
+# Hiqlite (patched downstream build)
+
+> **This crate is `hiqlite-patched`, a downstream build of
+> [sebadob/hiqlite](https://github.com/sebadob/hiqlite) published from the fork at
+> [bartekus/hiqlite](https://github.com/bartekus/hiqlite).**
+>
+> It is **not affiliated with or endorsed by the upstream project**, and nothing in it has been
+> proposed to, reviewed by, or accepted upstream. It exists so applications that need the
+> repairs listed in the release notes can consume them before an upstream release carries them.
+>
+> Upstream provenance: `v0.14.0` plus the nineteen commits on upstream `main` up to
+> `52122ae7163d051d6b488d751018f76596f7d8f7`, plus this fork's repairs.
+>
+> Use `hiqlite = { package = "hiqlite-patched", version = "0.15.0-patched.1" }` so that
+> `use hiqlite::..` and the paths the derive macros emit keep resolving.
+>
+> Prefer upstream `hiqlite` when a release of it carries what you need.
 
 Hiqlite is an embeddable SQLite database that can form a Raft cluster to provide strong consistency, high availability
 (which is where `Hiqlite` derives from), replication, automatic leader fail-over and self-healing features.

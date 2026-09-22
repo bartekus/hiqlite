@@ -1,0 +1,90 @@
+# Executes the corpus's acceptance blocks, on trusted commits only.
+#
+# `spec-spine verify` runs shell commands authored inside specification files. Pull-request CI
+# deliberately does not run it, because a proposed tree is untrusted input: a pull request could
+# author a command and have CI execute it. `.github/workflows/spec-spine.yaml` states that
+# boundary and this workflow does not weaken it.
+#
+# What makes this one different is *when* it runs. A push to the integration branch is a commit
+# that has already been reviewed and merged, so the commands in it are the ones a maintainer
+# would be running by hand. That is the same trust level, not a new one.
+#
+# Restrictions, each deliberate:
+#   - `push` to the integration branch only. Never `pull_request`, never `pull_request_target`,
+#     never a tag, never `workflow_dispatch` with a ref input.
+#   - `permissions: contents: read`. It writes nothing back.
+#   - no `secrets` are referenced, so a command authored in a spec cannot read one.
+#   - the publication credentials live in a different workflow with a different trigger.
+name: Acceptance
+
+on:
+  push:
+    branches:
+      - spec-spine
+
+permissions:
+  contents: read
+
+env:
+  SPEC_SPINE_REV: aa559f5dcaa59bd9f27b0622b51ae5b57dc2185f
+  CARGO_TERM_COLOR: always
+  TERM: xterm
+
+concurrency:
+  group: acceptance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Acceptance blocks
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/sebadob/rauthy-builder:20260519
+    # The container's default shell is `sh`, which rejects `set -o pipefail`. F-109.
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pinned spec-spine
+        run: |
+          cargo install spec-spine-cli \
+            --git https://github.com/statecrafting/spec-spine \
+            --rev "$SPEC_SPINE_REV" \
+            --locked
+
+      - name: Let git read the checkout
+        # The job runs in a container, and a container is where a repository can be present but
+        # `git` refuse to read it. Three acceptance commands call `git ls-files`; B-6 makes them
+        # fail loudly when git cannot run, and this makes sure it can. F-106.
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: The read-only chain first
+        # An acceptance block asserts things about a tree whose derived shards are supposed to
+        # be fresh. Running it against a stale one would report a failure whose cause is the
+        # staleness, so the cheap check goes first and says so.
+        run: |
+          spec-spine check --fail-on-unresolved --fail-on-warn
+          spec-spine lint --fail-on-warn
+          spec-spine index coverage
+
+      - name: Run every acceptance block
+        run: |
+          set -o pipefail
+          failed=""
+          for id in $(spec-spine registry list | awk '{print $1}'); do
+            echo "::group::verify $id"
+            if spec-spine verify "$id"; then
+              echo "ok: $id"
+            else
+              echo "FAILED: $id"
+              failed="$failed $id"
+            fi
+            echo "::endgroup::"
+          done
+          if [ -n "$failed" ]; then
+            echo "acceptance failed for:$failed"
+            exit 1
+          fi
+          echo "every acceptance block passed"

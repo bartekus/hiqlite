@@ -1,0 +1,84 @@
+# An independent AI review of a release candidate.
+#
+# Its own workflow, its own trigger and its own credential, because of what it is: a reviewer
+# reading a tree and writing an opinion. It holds `CLAUDE_CODE_OAUTH_TOKEN` and **not** the
+# registry token, and it never runs on a pull request, so a proposed tree cannot reach either.
+#
+# The review is **evidence, not an approval**. Nothing here gates a merge or a publication, and
+# its output is treated as untrusted input: findings are read and judged, not applied.
+name: AI review
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "The commit to review. Must already be on the integration branch."
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  review:
+    name: Review the release candidate
+    runs-on: ubuntu-latest
+    environment: ai-review
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+
+      - name: The ref must be an ancestor of the integration branch
+        # A reviewer runs on reviewed, merged code. This refuses an arbitrary ref.
+        run: |
+          set -euo pipefail
+          git fetch origin spec-spine
+          if ! git merge-base --is-ancestor "${{ inputs.ref }}" origin/spec-spine; then
+            echo "::error::${{ inputs.ref }} is not on the integration branch"
+            exit 1
+          fi
+
+      - name: Review
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            Review this release candidate of the hiqlite fork. Report findings; change nothing.
+
+            Focus, in this order:
+
+            1. **Durability and crash recovery.** `hiqlite-wal/src/writer.rs`,
+               `hiqlite/src/store/state_machine/sqlite/`. Is anything reported as persisted
+               that is only queued? Can a crash between two operations leave a state that is
+               selected at restart? Specs 021 and 025 state the intended contracts.
+            2. **Deadlocks and lock ordering.** `hiqlite/src/store/logs/memory.rs` (spec 020
+               states one order: data, then logs), `hiqlite/src/store/state_machine/memory/`.
+            3. **Publication provenance.** The three `Cargo.toml` manifests: do the package
+               renames, the `[lib] name` fields and the dependency keys compose so a consumer
+               writing `hiqlite = { package = "hiqlite-patched" }` gets working
+               `::hiqlite::` paths from the derive macros?
+            4. **API compatibility.** Every new public item and every changed signature against
+               what `0.14.0` exposed. Spec 027 B-7 states what this release intends to freeze.
+            5. **Consumer behavior.** The feature sets in spec 029 section 4. Is anything
+               excluded there actually reachable under them?
+            6. **The repairs this candidate made last, which have had the least review.**
+               `hiqlite/src/membership_gate.rs`, `hiqlite/src/network/management.rs`,
+               `hiqlite/src/network/raft_server.rs` and `hiqlite/src/client/mgmt.rs` (F-107,
+               spec 027 D-8: is there any membership change that bypasses the gate; can the
+               shutdown, which holds the gate while it stops both raft groups, deadlock or be
+               cut short; does a drain timeout ever stop anything?);
+               `hiqlite/src/store/state_machine/memory/dlock_handler.rs` and
+               `hiqlite/src/client/dlock.rs` (F-102, spec 023 B-6: is every waiter answered
+               exactly once, can two tickets hold one lock in the leader's view, can a waiter
+               livelock?); `hiqlite/src/backup.rs` and `create_backup` in
+               `hiqlite/src/store/state_machine/sqlite/writer.rs` (spec 026 B-8 to B-10: is
+               there a crash point that leaves the final name holding a database with a
+               foreign write-ahead log, loses both the old and the new database, or leaves
+               no backup at all?); and the qualification graph (F-108, spec 031 B-8: does
+               anything in CI resolve a graph other than the committed `Cargo.lock`?).
+
+            Say what you verified and what you could not. Do not repeat a specification's own
+            claims back as findings.
+          claude_args: "--max-turns 60"

@@ -287,6 +287,21 @@ Next action: fold into the configuration-contract spec of wave 2; decide
 whether a malformed or missing value is a startup error or a panic, and state
 it once for all readers.
 
+**Repaired 2026-09-21 by `027-node-lifecycle-and-startup-errors`.** The decision
+this entry asked for is taken and stated once: an expected failure that hiqlite
+can describe is a **returned error**, never a panic, because for an embedded
+node the panic profile belongs to the consumer and neither of its outcomes is a
+failure hiqlite reported. `HQL_SPLIT_BRAIN_INTERVAL` is validated before the task
+is spawned and returns `Error::Startup`; the S3 variables this entry also names
+are repaired by `026`; `hiqlite/src/server/proxy/config.rs` is not, and is
+`015`'s.
+
+Evidence under the profile that made it fatal: `hiqlite-abort-probe`, a
+`--release` binary that inherits `panic = "abort"`, calls this path and four
+others and reports that each returned an error, exit `0`. With the `.expect(..)`
+restored, the same binary aborted with exit `134`. No test can establish this,
+because Rust's test harness requires unwinding (`027` section 4).
+
 ### F-010 `gap`, confidence `high`
 
 **The configuration surface is dispersed and only partly claimed.** `001` claims
@@ -433,6 +448,14 @@ observability, and the mechanism intended to catch it cannot report it. The owne
 has directed that runtime behavior be preserved during retroactive adoption, so
 this is recorded as found. Whether the watchdog should be repaired, removed, or
 replaced by a reported error is a future policy decision with no default here.
+
+**Acted on 2026-09-21 by `027-node-lifecycle-and-startup-errors`.** The watchdog
+is **removed**. This entry established that it cannot work under either profile:
+unreachable under abort, and silent under unwind. An `assert!` in a task nobody
+joins is not a safety net, and keeping one reads as coverage. What replaces it is
+the checker no longer having a panic to be a net for (F-009). `010` D-1 preserved
+it under OD-3, which directed that the actual behavior be established first; it
+is established, and this is the decision that follows.
 
 ### F-015 `limit`, confidence `high`
 
@@ -633,6 +656,18 @@ release profile it becomes process termination, and under a downstream
 consumer's unwinding profile it does not. Recorded as a decision because the
 intent is sound but unstated. Untested. `006` KD-1.
 
+**Partly acted on 2026-09-21.** `022` removed the panic for a cache command this
+build cannot apply, which is the reachable half: it is now a named terminal
+failure that stops application and takes the node out of service.
+`027-node-lifecycle-and-startup-errors` states the policy this entry says is
+written down nowhere: an expected failure is returned, never panicked, and the
+process is never ended by hiqlite because for an embedded node that decision
+belongs to the application.
+
+**Not repaired**, and carried as `027` KD-1: a **dead handler thread** still
+panics the applying task through `.expect(..)`. That is `006` KD-1 and it is a
+different failure from an entry this build cannot apply.
+
 ### F-026 `limit`, confidence `high`
 
 **Lock validity is a compile-time constant.** `LOCK_VALID_SECONDS = 10`
@@ -826,6 +861,12 @@ variant. Consequence: **fail-closed**. API certificate verification stays
 enabled, so no security boundary is weakened; a documented escape hatch is
 unusable and using it prevents startup. `009` KD-1.
 
+
+**Repaired 2026-09-21 by `029-consumer-surface-repairs`.** The API TLS block now
+reads its own key. This was the one configuration defect that is
+release-blocking on its own: a deployment that sets the documented key could not
+start at all, because the unconsumed key reached the unknown-key check and the
+whole file was refused.
 ### F-032 `contradiction`, confidence `high`
 
 **`HQL_HEALTH_CHECK_DELAY_SECS` is documented and read nowhere.**
@@ -838,6 +879,11 @@ when `env_var.is_empty()`. Both constructors hardcode 30 (`config.rs:199`,
 documented variable does nothing. `network/api.rs:65` names it in a log line,
 which makes it look supported. `009` KD-2.
 
+
+**Repaired 2026-09-21 by `029-consumer-surface-repairs`.** Both routes read the
+documented variable. The parser is given a named constant rather than a string
+literal so a test can assert it is given the right one, which is what an empty
+argument in that position made impossible to notice.
 ### F-033 `contradiction`, confidence `high`
 
 **`HQL_ENC_KEYS_FROM` is documented and read nowhere.** `hiqlite.env:118`
@@ -850,6 +896,13 @@ offers therefore does not exist on the environment path; the TOML path's
 `secrets_file` / `HQL_SECRETS_FILE` mechanism is a different thing that works.
 `009` KD-3.
 
+
+**Resolved 2026-09-21 by `029-consumer-surface-repairs`, by removal rather than
+by implementation.** There was never a value of this variable that changed
+anything: the environment route builds its keys with `cryptr::EncKeys::from_env`,
+which has no file mode to select. Implementing it means adding a second key
+source, which is a feature. The reference file no longer documents it, and says
+why.
 ### F-034 `contradiction`, confidence `high`
 
 **One setting has two defaults and two documented defaults.**
@@ -861,6 +914,9 @@ in the doc comment at `config.rs:58-60`). **Observed by execution** by the test
 `config_toml::tests`. The setting has no environment variable in either
 path. `009` KD-4.
 
+
+**Repaired 2026-09-21 by `029-consumer-surface-repairs`.** One value, 1024,
+which is what two of the three routes already used.
 ### F-035 `limit`, confidence `high`
 
 **The environment constructor cannot select the WAL durability mode.**
@@ -885,6 +941,11 @@ source, not executed. `009` KD-5's sibling, recorded at `009` B-5.
 `expect("Cannot parse HQL_LOG_STATEMENTS as u64")`. Operator-visible and
 trivially wrong. Untested. `009` KD-5.
 
+
+**Corrected 2026-09-21 by `029-consumer-surface-repairs`.** The message names
+`bool`. The `expect` itself remains, and `027` KD-1 carries it: making
+`NodeConfig::from_env` fallible is a public API change this release does not
+make.
 ### F-037 `defect`, confidence `high`
 
 **A bracketed IPv6 advertised address produces an unparsable listen address.**
@@ -945,6 +1006,13 @@ handler to always listen". With exactly one endpoint on TLS the send succeeds,
 but the surviving receiver belongs to the plaintext server, so the TLS listener
 keeps accepting until the process exits either way.
 
+**Repaired 2026-09-21 by `027-node-lifecycle-and-startup-errors`.** Each listener
+takes its own receiver. The plaintext path keeps `with_graceful_shutdown`; the
+TLS path uses `axum_server::Handle` with a ten second grace period, which is that
+server's equivalent and is what the `TODO`s were waiting for. Source-established
+and **not executed**, for the reason `010` section 4 gave: reproducing it needs a
+node with real TLS material and a real shutdown, which `012` owns.
+
 **Source-established, not executed.** Reproducing it needs a node with real TLS
 material and a real shutdown; `010` section 4 states that limit and its
 acceptance block pins the source shape instead. The fault is caused in `010`'s
@@ -966,6 +1034,15 @@ a startup error, and for an embedded node the profile is the **consumer's**, as
 F-014 records for the same reason. Source-established. Same class as F-025.
 `010` KD-4.
 
+**Repaired 2026-09-21 by `027-node-lifecycle-and-startup-errors`.** Both
+listeners are bound before `AppState` is constructed and before any server task
+is spawned, and the already-bound socket is what the server is handed, so
+nothing re-resolves or re-binds later. An unparsable address and one already in
+use are both `Error::Startup`, naming the endpoint, the address and the OS
+reason. A partial startup tears down the raft groups it had already started
+(`027` B-4). Tested under unwind, and the bind path is one of the five the
+abort-profile probe exercises.
+
 ### F-041 `defect`, confidence `high`
 
 **A half-configured TLS endpoint downgrades silently.**
@@ -983,6 +1060,13 @@ Consequence: one misspelled variable name yields a running node with weaker
 transport than was configured, and the only way to notice is to inspect the
 wire. `011` KD-1.
 
+
+**Repaired 2026-09-21 by `030-transport-security-and-dashboard-repairs`.** Half a
+certificate pair is a configuration error naming both variables, in both orders,
+and it is an error with auto-certificates on too, where it used to downgrade to
+a certificate nobody verifies. A warning was considered and declined (`030` D-3):
+the outcome it warns about is a plaintext endpoint an operator believes is
+encrypted.
 ### F-042 `defect`, confidence `high`
 
 **Two booleans four lines apart disagree about whether a typo is fatal.**
@@ -1004,6 +1088,10 @@ panics out of `start_node_inner` rather than through F-040's detached-task route
 That is the better of the two outcomes and is written down nowhere. Same class as
 F-009. `011` KD-2.
 
+
+**Repaired 2026-09-21 by `030-transport-security-and-dashboard-repairs`.** Both
+booleans answer a malformed value the same way, which is `027` B-1's policy for
+the whole crate: a configuration error, returned.
 ### F-043 `defect`, confidence `high`
 
 **A verifying client has nothing to verify against.**
@@ -1029,6 +1117,19 @@ either. The only configuration in which specific certificates and a working
 connection coexist is the one named `danger`. Fail-closed, so nothing is
 weakened; the safe setting simply has no reachable use. `011` KD-3.
 
+
+**Repaired 2026-09-21 by `030-transport-security-and-dashboard-repairs`, and it
+is the load-bearing one of the three.** `ServerTlsConfigCerts` gains a `ca`
+field, readable from `HQL_TLS_{RAFT,API}_CA` or `tls_{raft,api}_ca`, and both the
+rustls and the reqwest client load it.
+
+Enabling `webpki-roots` was the obvious-looking alternative and is the wrong one
+(`030` D-1): the public web roots do not sign an internal cluster's
+certificates, so it makes the store non-empty without making verification work.
+What was missing is the anchor.
+
+Carried as `030` KD-3: a remote client has no node configuration to take an
+anchor from, so it still verifies against the webpki bundle or against nothing.
 ### F-044 `defect`, confidence `high`
 
 **The API channel's no-verify flag is read from the raft configuration.** Four
@@ -1057,6 +1158,14 @@ connection errors on an interval instead of memberships. And the API side's own
 `danger_tls_no_verify` is doubly dead: unreachable from TOML (F-031) and ignored
 by two of the four consumers. `011` KD-4.
 
+
+**Repaired 2026-09-21 by `030-transport-security-and-dashboard-repairs`.** The
+API endpoint's no-verify flag and its trust anchor are node-level facts set
+together at startup from `tls_api`, and every REST client in the process reads
+them. The split-brain checker's `reqwest::Client::new()`, which honoured no
+override at all, goes through the same builder. Carried as `030` KD-4: they are
+process-wide, so a process running two nodes with different API TLS
+configurations would have the second take the first's.
 ### F-045 `contradiction`, confidence `high`
 
 **The stated reason for not verifying certificates does not cover the endpoints
@@ -1083,6 +1192,16 @@ channel, or move the REST endpoints onto the challenge-response is a security
 design decision with three different costs and no default here.
 **Source-established.** `011` KD-5.
 
+
+**Corrected 2026-09-21 by `030-transport-security-and-dashboard-repairs`, as a
+documentation repair and nothing else.** The claim is kept where it is true, the
+raft WebSocket channel, and the exception is stated beside it in the type's
+documentation, in `hiqlite.toml` and in `hiqlite.env`, each pointing at the trust
+anchor F-043's repair added as what to do instead.
+
+**No behavior changed, and that is recorded rather than glossed** (`030` D-5).
+Sending the secret in a header inside TLS is fine when the TLS is verified. What
+was wrong is a sentence telling an operator that verifying it does not matter.
 ### F-046 `evidence`, confidence `high`
 
 **`HQL_TLS_AUTO_CERTS` was documented in one reference file only.** It appeared
@@ -1193,6 +1312,13 @@ side by side.
 The unbounded shape is source-established; that the suite can hang indefinitely
 is **observed** (F-051). The library half is in `003`'s unit. `012` KD-3.
 
+
+**Partly repaired 2026-09-21 by `029-consumer-surface-repairs`.** The library
+half: `wait_until_healthy_db_timeout` and `wait_until_healthy_cache_timeout`
+return the last health error at a deadline and stop early on a terminal node
+failure. The unbounded originals keep their signatures, because they are
+published, and now document that they never return if the node never becomes
+healthy. The test half is in `hiqlite/tests/cluster/` and is unchanged.
 ### F-051 `defect`, confidence `high`
 
 **`Client::remote` returns before its event subscription exists, so an event
@@ -1225,6 +1351,15 @@ deterministic, and whether the race is lost depends only on whether the SSE
 connection completes inside the ~120 ms between `Client::remote` returning and
 the publish. The unit is `003`'s; recorded here because `012` is where it was
 diagnosed. `012` KD-4 and section 5.
+
+**Repaired 2026-09-21 by `032-listen-notify-subscription-readiness`.** Both
+halves of the window are closed. The server acknowledges the registration from
+the handler and `api::listen` waits for that acknowledgement before it answers,
+so an open stream means a registered subscriber; and `RemoteListener::spawn`
+returns a readiness signal that `Client::remote` waits on, bounded at ten
+seconds. A timeout warns rather than failing construction, for the reason
+`032` B-3 gives. `032` KD-1 records what is not closed: a re-subscription after
+a disconnect has the same window and nothing blocks on it.
 
 ### F-052 `evidence`, confidence `high`
 
@@ -1283,6 +1418,16 @@ the code under test rather than as a test smell: the sleep is the evidence, not
 the fault. **Confidence medium** because the mismatch itself was not reproduced;
 the authored admission and the workaround are what is established. `012` KD-7.
 
+**Disposition 2026-09-22, for the supported topology only.** An external consumer
+of the release candidate, built against the packages with Rauthy's and with Rahi's
+exact feature sets, starts a single node, writes, shuts it down, restarts it at
+once on the same data directory in the same process, and writes to both the
+SQLite and the cache raft with no sleep. Six runs per feature set, all passed,
+and the row written before the restart survived it. That is evidence that the
+race, whatever it is, does not appear at N=1; it is not a diagnosis, and the
+three-node phase that carries the sleep is outside this release's supported
+topology. Stays open for N=3.
+
 ### F-055 `defect`, confidence `medium`
 
 **Two concurrently running tests share process-wide environment mutation.**
@@ -1327,6 +1472,12 @@ own; nothing prevents an operator from putting a file there, and
 `HQL_BACKUP_RESTORE=file:` invites it by naming a path the restore then copies
 into `backups/`. `013` KD-1.
 
+**Repaired 2026-09-21 by `026-backup-and-restore-integrity`.** `dt_from_backup_name`
+is now the single definition of the naming convention and is used by all three
+callers: the local sweep, the S3 filter and `Client::backup_list_local`. It also
+checks that the node id parses. The executed proof was replaced rather than
+extended, because it asserted the deletion as expected behavior.
+
 ### F-057 `defect`, confidence `high`
 
 **A restore removes the live database before the replacement is in place.**
@@ -1343,6 +1494,14 @@ Same family as F-003 and F-004, in a different file: `002` records the
 non-atomic publication of snapshots, this is the non-atomic publication of a
 restored database. Source-established. `013` KD-2.
 
+**Repaired 2026-09-21 by `026-backup-and-restore-integrity`.** The order is now
+validate, copy to a staging name beside the database, sync, remove the snapshots
+and logs and lock marker, then **rename** the staging file onto the database and
+sync the directory. The database is the last thing touched and is replaced by a
+rename, and the three removals report their failures instead of discarding them.
+Source-established: `026` section 4 states that `restore_backup` is not executed
+end to end.
+
 ### F-058 `defect`, confidence `high`
 
 **Every node that is not node 1 deletes its data directory before any restore has
@@ -1357,6 +1516,17 @@ path does not exist or the object is not in the bucket, has already destroyed th
 other nodes' state, so the cluster cannot fall back to what it had. The discarded
 `Result` also makes a failed deletion invisible, and the node then joins with a
 half-removed directory. Source-established. `013` KD-3.
+
+**Mitigated 2026-09-21 by `026-backup-and-restore-integrity`, not closed.** The
+follower no longer deletes: it moves everything into
+`{data_dir}/pre-restore-{ts}/`, keeps the storage owner lock, and returns its
+failures. The previous state is recoverable byte for byte, which is demonstrated.
+
+What is **not** repaired is the coordination this entry names. The followers
+still act on an environment variable alone, at their own start time, with no
+signal that node 1 has validated or applied anything. `026` B-7 therefore states
+`N = 1` as the supported restore topology for this release and says why `N = 3`
+is not; `026` KD-2 and KD-3 carry the remainder.
 
 ### F-059 `defect`, confidence `high`
 
@@ -1374,6 +1544,14 @@ authored `TODO` at `:393` acknowledges. `HQL_BACKUP_SKIP_VALIDATION` disables
 even that, comparing against the exact string `"true"`, so `"TRUE"` validates;
 that direction is fail-closed. Source-established. `013` KD-4.
 
+**Repaired 2026-09-21 by `026-backup-and-restore-integrity`.** Validation now runs
+`PRAGMA quick_check(1)`, requires a readable `_metadata` table and row, and
+returns a named error when the blob does not decode instead of `unwrap`ing it
+inside `spawn_blocking`. `HQL_BACKUP_SKIP_VALIDATION` is parsed
+case-insensitively and warns when it takes effect. Not repaired, and carried as
+`026` KD-5: nothing still compares a cluster or backup identity, so the wrong
+cluster's backup is accepted as long as it is structurally valid.
+
 ### F-060 `defect`, confidence `high`
 
 **The post-restore log purge retries forever with no delay.**
@@ -1385,6 +1563,10 @@ emitting an error line per iteration. Every other loop in the same function
 sleeps between 50 ms and 100 ms, and the snapshot trigger twelve lines above was
 deliberately changed to bail out rather than loop. Source-established.
 `013` KD-5.
+
+**Repaired 2026-09-21 by `026-backup-and-restore-integrity`.** Ten attempts with a
+100 ms sleep, then a bail-out, which is what the snapshot trigger twelve lines
+above it already did.
 
 ### F-061 `defect`, confidence `high`
 
@@ -1402,6 +1584,15 @@ wrong key is first discovered by the detached upload task in `create_backup`
 acknowledged, as an error log. Same class as F-009 and F-042.
 Source-established. `013` KD-6.
 
+**Repaired 2026-09-21 by `026-backup-and-restore-integrity`.** Each missing or
+unparsable variable is a named `Error::Config`; `HQL_S3_PATH_STYLE` is optional
+and defaults to `true`; and the reading is split into `from_lookup` so it is
+testable without process-wide environment mutation, which `009` D-3 records as
+the reason no environment route in this corpus has a test. `verify_access` proves
+the credentials with one list call and the restore path calls it before pulling.
+Carried as `026` KD-6: the probe is not run at startup, so a node with bad
+credentials still starts and discovers it at the first backup.
+
 ### F-062 `contradiction`, confidence `high`
 
 **The backup cron failure message counts retries that were not attempted.**
@@ -1412,6 +1603,9 @@ message that then runs is `"Backup task failed after {} retries"` with the
 literal 5. Consequence: an operator reading the log believes five backup attempts
 were made and all failed, when one was. Classed as a contradiction between
 authored text and behavior, not a defect. Source-established. `013` KD-7.
+
+**Corrected 2026-09-21 by `026-backup-and-restore-integrity`.** The loop counts
+real attempts and reports the last error alongside the bound.
 
 ### F-063 `contradiction`, confidence `high`
 
@@ -1425,6 +1619,10 @@ Nothing observable follows, because the constant's purpose is to be far in the
 past as a guard against a trailing token that happens to parse as a small
 integer. Recorded because the constant guards a deletion and its stated meaning
 is what a reader would check it against. Source-established. `013` KD-8.
+
+**Corrected 2026-09-21 by `026-backup-and-restore-integrity`.** `TS_MIN` is
+`1_704_067_200`, which is `2024-01-01T00:00:00Z`, and is pinned by a test rather
+than by a comment.
 
 ### F-064 `contradiction`, confidence `high`
 
@@ -1443,6 +1641,9 @@ for a name with no underscore at all.
 `migration::tests::a_name_without_a_numeric_index_panics_with_the_other_rules_message`
 asserts the message that fires. `014` KD-1.
 
+
+**Repaired 2026-09-21 by `029-consumer-surface-repairs`.** The message names the
+rule that was broken. The test that pinned the wrong one was replaced.
 ### F-065 `defect`, confidence `high`
 
 **A duplicate migration index is reported as a gap.**
@@ -1454,6 +1655,10 @@ different deployment mistakes with different fixes, and the message describes th
 one that did not happen. Source-established; no fixture reaches it, and `014` D-2
 records why none was added. `014` KD-2.
 
+
+**Repaired 2026-09-21 by `029-consumer-surface-repairs`.** A duplicate index says
+the index is used twice and names both files, with a fixture of two files
+claiming index 1.
 ### F-066 `defect`, confidence `high`
 
 **Every migration validation failure is a panic, and the signature cannot carry
@@ -1473,6 +1678,11 @@ knows how to assert. Same class as F-009 and F-042, and also a public-API
 question, which is W-17's. Source-established, with three of the five panic sites
 executed. `014` KD-3.
 
+
+**Repaired 2026-09-21 by `029-consumer-surface-repairs`.** `Migrations::try_build`
+returns a named error for each of the five rules and is what the client's
+migration path calls. `Migrations::build` is kept as a panicking wrapper because
+it is the published signature and `migrate!` expands to it.
 ### F-067 `defect`, confidence `high`
 
 **The proxy panics on its first route registration and never binds.**
@@ -1496,6 +1706,16 @@ panics with the real handler and the same `nest`, and
 `the_same_capture_in_zero_eight_syntax_is_accepted` shows the node's spelling is
 accepted. `015` KD-1.
 
+
+**Repaired 2026-09-21 by `029-consumer-surface-repairs`.** The route literal is
+axum 0.8's spelling. The route table is also split out of `start_proxy` so a
+test can construct it without a live upstream client, which is what nothing ever
+did and is why a router that could not be built went unnoticed through a whole
+major version.
+
+Not release-blocking for either named consumer, which is recorded rather than
+used as a reason to skip it: neither enables `server`. It **is** release-blocking
+for the published crate, which offers that binary (`029` D-3).
 ### F-068 `defect`, confidence `high`
 
 **The proxy compares the API secret in non-constant time.**
@@ -1515,6 +1735,10 @@ Source-established; no timing measurement was taken and none is claimed.
 Reachable only once F-067 is fixed, which is the order a repair has to consider.
 `015` KD-2.
 
+
+**Repaired 2026-09-21 by `029-consumer-surface-repairs`.** The proxy compares the
+API secret in constant time, as the node four files away already did for the
+same secret.
 ### F-069 `defect`, confidence `high`
 
 **A valid path value reaches an unconditional panic.** `RaftType`
@@ -1538,6 +1762,12 @@ match on both surfaces, so the caller must already hold `secret_api`. Under
 unwinding the consequence is a dropped connection; under `panic = abort` it is
 the process, which is `010` B-7's split. Source-established. `015` KD-3.
 
+
+**Repaired 2026-09-21 by `029-consumer-surface-repairs`.** `RaftType::selected()`
+returns a `BadRequest` naming the raft groups this build serves, and every
+handler that takes the path parameter calls it first. The panicking arms stay
+and are now unreachable from a request, which is the shape `022` B-1 used for
+the cache index.
 ### F-070 `defect`, confidence `high`
 
 **The proxy's documented default configuration file can never be loaded.**
@@ -1610,6 +1840,9 @@ that does not exist in the file they are editing. **Observed by execution**
 (`server::proxy::config::tests::proxy_validation_covers_two_fields_and_names_a_third`).
 `015` KD-8.
 
+
+**Repaired 2026-09-21 by `029-consumer-surface-repairs`.** The message names
+`secret_api`, which is the field the proxy has.
 ### F-075 `contradiction`, confidence `high`
 
 **A declared module contains nothing but commented-out code.**
@@ -1665,6 +1898,11 @@ probes are not committed, because a source file that fails to compile cannot liv
 in a crate CI builds; `016` D-2 records that and why no compile-fail harness was
 added. `016` KD-1.
 
+
+**Repaired 2026-09-21 by `029-consumer-surface-repairs`.** The generics are
+emitted after `impl` rather than after `for`, so a generic cache enum compiles. A
+data-carrying variant and a non-enum input each get a `compile_error!` naming the
+rule instead of E0533 or `unimplemented!()` pointing at the derive.
 ### F-078 `defect`, confidence `high`
 
 **`core::option::Option` is treated as a non-optional type.**
@@ -1679,6 +1917,10 @@ a bare value and fails at runtime rather than yielding `None`. **Observed by
 execution**, both spellings
 (`from_row::tests::the_core_spelling_of_option_is_not_recognised`). `016` KD-2.
 
+
+**Repaired 2026-09-21 by `029-consumer-surface-repairs`.** `core` is accepted
+alongside `std`. The test that pinned the defect was replaced by one that
+asserts all three spellings take the optional branch.
 ### F-079 `limit`, confidence `high`
 
 **The derived row conversion cannot report a failure.**
@@ -1793,6 +2035,11 @@ is unbounded. The fix is `let _guard =`.
 acquires the lock exactly as `verify_password` does, then acquires it again.
 `018` KD-1.
 
+
+**Repaired 2026-09-21 by `030-transport-security-and-dashboard-repairs`.** One
+binding. The test that pinned the released guard was replaced by one that
+asserts the difference between the two forms and one that asserts
+`verify_password` itself holds it.
 ### F-085 `defect`, confidence `high`
 
 **The unauthenticated dashboard fallback panics on a multi-byte path.**
@@ -1814,6 +2061,11 @@ The dashboard tree exists only when `password_dashboard.is_some()`
 (`dashboard::static_files::tests::a_multibyte_path_panics_the_fallback`).
 `018` KD-2.
 
+
+**Repaired 2026-09-21 by `030-transport-security-and-dashboard-repairs`.** The
+check is about the extension, so it asks for the extension. This was the only one
+of the dashboard findings reachable with **no credential at all**: the fallback
+is mounted outside the `Session` extractor.
 ### F-086 `defect`, confidence `high`
 
 **The same character-boundary mistake in the dashboard query classifier.**
@@ -1829,6 +2081,11 @@ is separated from F-085 rather than folded into it. Recorded because it is the
 same defect in the same module, which makes it a pattern rather than a slip.
 Source-established. `018` KD-3.
 
+
+**Repaired 2026-09-21 by `030-transport-security-and-dashboard-repairs`,
+together with F-088: they are one line.** The classifier asks for the first
+keyword token past whitespace and comments, which is character-boundary safe by
+construction.
 ### F-087 `defect`, confidence `high`
 
 **The global login cooldown is a denial of service against the operator.**
@@ -1850,6 +2107,18 @@ answer is a policy choice with at least three forms (per-client cooldown,
 exponential backoff, accepting the exposure), which is why `018` D-1 does not
 pick one. Source-established; no availability test was written. `018` KD-4.
 
+
+**Recorded, not repaired, 2026-09-21 by
+`030-transport-security-and-dashboard-repairs` (`030` KD-1, D-6).** The
+alternative is worse in the way the authored comment says: per-client state needs
+a client identity, and behind a proxy that is a header anyone can set, so keying
+on it buys spoofable state and an unbounded map in exchange for a denial of
+service already bounded by "the attacker can reach the dashboard". Repairing it
+properly is a design decision about dashboard authentication that this release
+does not take.
+
+**An operator who exposes the dashboard to an untrusted network should expect
+this**, and the release notes say so.
 ### F-088 `defect`, confidence `high`
 
 **A dashboard read that does not begin with one of three keywords is replicated
@@ -1865,6 +2134,10 @@ Raft, and be rejected by the non-deterministic-function guard for containing a
 function that would have been accepted on the read path. Nothing is corrupted; a
 read is charged as a cluster-wide write. Source-established. `018` KD-5.
 
+
+**Repaired 2026-09-21 by `030-transport-security-and-dashboard-repairs`.** See
+F-086: one line, two defects. A CTE, a bare `VALUES` and anything behind a
+comment are reads again.
 ### F-089 `defect`, confidence `high`
 
 **A malformed dashboard password ends the process at startup.**
@@ -1878,6 +2151,10 @@ disabling the dashboard with a warning, so two adjacent cases of the same
 misconfiguration are handled in opposite ways. Same class as F-009, F-042 and
 F-061, and part of W-22. Source-established. `018` KD-6.
 
+
+**Repaired 2026-09-21 by `030-transport-security-and-dashboard-repairs`.** A
+malformed value disables the dashboard exactly as an absent one does, and says
+which it was.
 ### F-090 `evidence`, confidence `high`
 
 **The dashboard UI has one test and nothing runs it.**
@@ -1906,6 +2183,12 @@ every encrypted value in the process and not only sessions. Classed as a limit: 
 stateless one-hour session on an ops surface is a defensible design, and what is
 missing is the statement of what it costs. Source-established. `018` KD-8.
 
+
+**Recorded, not repaired, 2026-09-21 by
+`030-transport-security-and-dashboard-repairs` (`030` KD-2).** Revoking a session
+needs server-side session state the dashboard does not have. Rotating
+`HQL_PASSWORD_DASHBOARD` still does not invalidate a live session, and the
+one-hour lifetime is the only bound.
 ### F-094 `defect`, confidence `high`
 
 **A local dashboard build inflates the coverage denominator and stales the
@@ -2043,3 +2326,653 @@ stale: one said ten against a table of fourteen, and the next said twelve after
 minus the two repaired, and this paragraph is the one that has to be recomputed
 whenever the class table changes. F-021 through F-024 and F-029 are a separate
 cache-log repair that was deliberately not bundled into `008`.
+
+---
+
+## Found while delivering the downstream release (2026-09-21)
+
+### F-096 `contradiction`, confidence `high`
+
+**A repair changed a unit another spec owns and did not carry that spec's
+acceptance, so the acceptance kept asserting code that no longer exists.**
+`024-exclusive-storage-ownership` repaired the follower restore wipe, because
+where it put the storage owner lock required it, and `013`'s acceptance block
+asserts that wipe verbatim:
+`grep -q 'let _ = fs::remove_dir_all(node_config.data_dir.as_ref()).await;'`.
+`024` declared the `extends` edge on `hiqlite/src/backup.rs` and did not declare
+`amends_verification` on `013`, so `013`'s block began failing at that command on
+the integration branch the moment `024` merged.
+
+**Observed by execution**, not inference: `just spine-verify 013` was run against
+the integration branch at `024`'s merge commit and reported
+`FAILED at command 15`.
+
+The coupling gate did not catch it and is not meant to: `C-001` asks whether an
+owning spec moved in the same range, and `024` is an owning spec of that path
+through its `extends` edge, so the gate was satisfied. What went unchecked is a
+different question, whether the acceptance the owning spec carries still holds,
+and nothing runs that on a pull request by design (`004`'s trust boundary). W-24
+is the row that asks whether an automated control should.
+
+**Repaired 2026-09-21 by `026-backup-and-restore-integrity`**, which takes
+`013`'s acceptance and replaces the twelve commands that asserted defective
+expressions, including this one. Recorded rather than tidied away, because the
+rule it breaks is a real one and the failure mode is invisible until someone runs
+a command that CI deliberately does not.
+
+**A second occurrence, found 2026-09-21 by the same sweep that found the
+first.** `020-cache-log-store-contract-repair` rewrote the status line of
+`standards/spec/cache-log-repair-proposal.md` from "proposed, not authorized" to
+"delivered", which is correct and is what `005`'s acceptance greps verbatim.
+`020` declared the `extends` edge on that unit and did not declare
+`amends_verification` on `005`, so `005`'s block began failing at that command
+the moment `020` merged.
+
+Two occurrences of one rule being broken, by two different specs, in one
+release. That is not a coincidence: the rule is checked only by a command
+nobody runs on a pull request. `028`'s post-merge acceptance job is what detects
+it, and `028` KD-1 records that it cannot prevent it.
+
+**Repaired 2026-09-21 by `029-consumer-surface-repairs`**, which takes `005`'s
+acceptance along with four others.
+
+### F-097 `contradiction`, confidence `high`
+
+**A recorded probe result was wrong, and it blocked a queue row for two days.**
+The adoption plan's rung-0 section records
+`index.resolver_exclusions += ["hiqlite/static", "dashboard/src/spow"]` as having
+"no effect", and concludes that the only key which removes generated and
+vendored files from the coverage denominator is `coupling.bypass_prefixes`,
+which also exempts them from the coupling gate. On that basis W-14 was recorded
+as **blocked on the pinned tool**, with a pin upgrade as the recommended
+resolution, and W-23 was recorded as depending on it.
+
+The observation was accurate and the conclusion was not. The pinned tool matches
+`resolver_exclusions` entries as path **components**, through
+`has_excluded_component`, not as path prefixes. `"hiqlite/static"` is not a
+component of anything; `"static"` is a component of
+`hiqlite/static/_app/immutable/chunks/…`, and `"spow"` is a component of
+`dashboard/src/spow/…`. Every other entry in that list is already a bare
+component name (`target`, `node_modules`, `.derived`, `dist`, `build`,
+`.next`), which is the shape the key wanted all along.
+
+**Observed by execution**, on the same pinned revision the original probe used:
+with `"static"` and `"spow"` added, the denominator goes from 239 to 223, all
+sixteen files leave, the numerator does not move, `C-001` still refuses a change
+to `hiqlite/src/config.rs`, and a change to `dashboard/src/spow/spow-wasm.js`
+still stales the committed index.
+
+Recorded as a contradiction rather than a defect: nothing in the tool or the
+configuration was wrong. What was wrong was a conclusion in an authored document,
+which then propagated into two queue rows and a recommendation to change the
+pin. Checked at the tool's current head as well: there is still no separate
+denominator-exclusion key, so the recommended pin upgrade would not have
+delivered what W-14 asked for.
+
+**Resolved 2026-09-21 by `028-enforcement-readiness-and-acceptance-control`**,
+which applies the correct form and replaces the conclusion in the plan rather
+than adding a note beside it.
+
+### F-098 `defect`, confidence `high`
+
+**An entry larger than the WAL panicked the writer, by default.** A single raft
+entry cannot span WAL files, so an entry larger than `wal_size` cannot be
+written. `hiqlite-wal/src/writer.rs` answered that with `panic!` unless the
+`oversized-entry-error` feature was enabled, on the reasoning recorded beside it
+that an oversized entry is "a non-recoverable setup issue (it needs a config
+change with a full restart, or code changes)".
+
+The comment two lines below says what is wrong with that reasoning: "With the
+default `wal_size` of 2MB this is easily reached by a single large INSERT,
+transaction or batch." An application's own data ending its storage thread is a
+large write, not a setup issue, and under an aborting profile it ends the
+embedding application's whole process. Neither named consumer of this release
+enables the feature, and `hiqlite/src/config.rs` hardcoded `wal_size` on both
+the `Default` and the environment routes, so the ceiling could not be raised
+from the constructor most deployments use either (F-035).
+
+**Found 2026-09-21** while triaging the register against the two consumers'
+feature sets. It had no identifier: the behavior is documented in
+`hiqlite-wal/Cargo.toml`'s feature comment and in the source, and no finding
+recorded it as a defect.
+
+**Repaired 2026-09-21 by `029-consumer-surface-repairs`.** The rejection is the
+only behavior: `Error::WalSizeExceeded` on the acknowledgement and on the
+completion, and the writer keeps serving. The feature is kept as a no-op so a
+consumer that enables it still builds, and the test that pinned the panic is
+gone. `HQL_WAL_SIZE` makes the ceiling selectable from the environment, and
+`hiqlite.env` documents both the variable and what it bounds.
+
+### F-099 `contradiction`, confidence `high`
+
+**This register counts two defects it never defines.** F-092 and F-093 appear in
+F-012's disposition as prose and in this document's own class tables, and
+neither has a `###` entry of its own. A reader following the class counts finds
+fifty-six defects and fifty-four definitions.
+
+Found 2026-09-21 while triaging the register for the release. Not repaired:
+the register's structure is `005`'s, and adding two entries is a change to it
+rather than to any code. Recorded so the count and the content stop disagreeing
+silently.
+
+### F-100 `defect`, confidence `high`
+
+**A restore replaced the database and left the previous database's write-ahead
+log beside it, so the restored node started on foreign metadata.** `026`'s
+staging repair (F-057) changed the restore from "remove the database directory,
+then copy the backup into it" to "copy the backup to `hiqlite.db.restoring`,
+sync it, remove the snapshots, the lock marker and the logs, then rename". The
+rename replaces `hiqlite.db` and nothing else, and `hiqlite.db-wal` and
+`hiqlite.db-shm` were left where they were. They belong to the database that
+was just discarded.
+
+**Observed by execution**, on 2026-09-22, in the cluster integration test's
+`restore from file backup` phase, which became reachable for the first time
+once F-051 was repaired. Node 1 restored, read the pre-restore `_metadata` out
+of the stale write-ahead log, and reported `node 1 raft is already initialized`
+with the three-node membership from before the restore instead of
+`initializing pristine node 1 raft`. It therefore needed two votes it could not
+get, and `restore_backup_finish` blocks on `current_leader()` before the
+routers serve, so nodes 2 and 3 could not reach the endpoint they needed in
+order to rejoin it. Three nodes, no leader, no progress.
+
+The same run on the fork's base with only the F-051 repair applied completed
+all fifteen phases, which is what identifies this as a regression introduced by
+`026` and not a pre-existing defect.
+
+**Repaired 2026-09-22 by `026-backup-and-restore-integrity`.** The two sidecar
+files are removed after the staged image is durable and before the rename, so
+the final name never holds a database with a foreign write-ahead log, and
+F-057's rollback property is unchanged: nothing is removed until the
+replacement is on disk and synced.
+
+**Consumer triage.** Reaches both named consumers: Rauthy and Rahi both enable
+`backup`. The three-node deadlock needs `N > 1`, because a single-member
+membership can elect itself; at `N = 1` the same stale write-ahead log instead
+gives the restored node a `last_applied` and a membership from before the
+restore, which is the wrong state to start on even though it starts. Either way
+the repair is the same and neither consumer should run an affected build.
+
+### F-101 `defect`, confidence `high`
+
+**A deliberate shutdown was recorded as a WAL writer failure, and took the node
+out of service on its way out.** `027`'s lifecycle watcher treats a closed
+`writer_failure` watch channel as "the writer thread ended without reporting a
+reason, which is what a panic in it looks like from outside". A shutdown closes
+that channel too, because a shutdown is what ending the writer thread looks
+like from outside as well.
+
+**Observed by execution**, on 2026-09-22, in the full-suite run: three nodes
+being shut down on purpose each logged
+`this node is out of service because the Raft log WAL writer failed` at
+`ERROR`, and each recorded a terminal failure that `ensure_available` would
+then have refused every operation with. Nothing depended on the refusal,
+because the nodes were going away, and the log said a node had failed when it
+had not.
+
+**Repaired 2026-09-22 by `027-node-lifecycle-and-startup-errors`.**
+`NodeLifecycle::begin_shutdown` is called by the shutdown path before anything
+is asked to stop, and `fail` records nothing afterwards. A failure recorded
+**before** the shutdown is kept, because that failure is still why the node is
+going away.
+
+**Consumer triage.** Reaches both named consumers: every embedded node shuts
+down, and both run one. The consequence is a false `ERROR` line and a node that
+describes itself as out of service while it is going away; nothing outlives the
+process, and no operation is wrongly refused in a way a caller could observe,
+because the refusals begin at the moment the node stops serving anyway. Low
+severity, high visibility, and it would have made every clean shutdown look like
+an incident in a consumer's logs.
+
+### F-102 `evidence`, confidence `medium`
+
+**The cluster binary's two tests run concurrently in one process, and the
+distributed-lock phase was observed stalling under that load.** `test_cluster`
+and `learner_only_node_stays_non_voter_and_becomes_ready` are two tests in one
+binary, so the harness runs them on separate threads of the same process: six
+nodes, two Raft groups each, on one machine. The port ranges and data
+directories are disjoint; the machine is not.
+
+**Observed once**, on 2026-09-22, in the first of three full-suite runs on this
+tree. `test_cluster` reached the distributed-lock phase's
+`awaiting handle_1_2` while `learner_only` was shutting its three nodes down,
+made no further progress, and failed after the client's own timeout with
+`Connect: request timed out`. The other two runs of the same command on the same
+tree completed all fifteen phases. `main.rs:69` already carries the authored
+comment `TODO sometimes the test gets stuck here`.
+
+**Not repaired, and not called a flake without more than one observation.** One
+occurrence in three runs does not distinguish a lock-handler liveness gap that
+only appears under contention from a fixture that shares a machine with a second
+cluster. Repairing it properly means either serializing the two tests or
+bounding the lock phase's waits so a stall reports where it stalled, and both
+are changes to `012`'s fixture surface rather than to the handler `023`
+repaired. Recorded so the next occurrence has something to attach to, with the
+run's evidence rather than an impression. `012` KD-1, F-048.
+
+**Consumer triage.** Reaches neither named consumer: it is a property of this
+repository's test fixture, not of the library. It is recorded because it bounds
+what the suite's green result establishes, not because a consumer is exposed.
+
+**The timing argues against contention, which was the first explanation
+offered.** Measured from the run's log: `>>> Test distributed locks` at
+`03:49:17.259824Z`, `>>> awaiting handle_1_2` at `03:49:17.437192Z` and no
+further output of any kind from the phase, then the panic at `03:51:17.329358Z`.
+That is a stall of **119.9 seconds**, and the lease is ten. The concurrent
+`learner_only` shutdowns completed at `03:49:09`, `03:49:24` and `03:49:36`, so
+roughly a hundred of those hundred and twenty seconds elapsed **after** the
+second cluster was gone and the machine was idle again. Load alone does not
+explain it.
+
+**The handler's promotion chain was then tested directly and is sound.** The
+suspicion was `023` B-3: `Release` refreshes `exp`, wakes the front of the
+queue, and on a failed wake drops that ticket and promotes the next in the same
+pass, a chain nothing drove more than one link at a time.
+`three_queued_awaiters_are_each_promoted_in_turn` now queues three awaiters on
+one key, parks all three before any release, and walks the whole chain with
+every wait bounded. It passed **sixty of sixty** runs. Writing it also corrected
+an assumption worth recording: a promoted awaiter is answered `Released`, not
+`Locked`, and `client::dlock` re-requests with the same ticket. The first draft
+of the test asserted `Locked` and was wrong about the protocol, not about the
+handler.
+
+So the handler is not where this stall comes from, and the remaining candidates
+are above it: the client stream, the cache Raft apply path, or the fixture. Still
+**not repaired and still not a flake**: F-105 in this same release passed forty
+of forty local runs and was a real defect. This entry is a narrowed open
+question.
+
+**Repaired 2026-09-22 by `023` B-6, from source, not from a reproduction.** The
+stall lasted 119.9 seconds, which is the client's 120-second request timeout, and
+the source has four mechanisms that each leave a queued waiter parked for exactly
+that long: nothing wakes a waiter when a lease expires; the waiter's only bound
+was the request timeout; the re-request (`Acquire`) never looked at the holder's
+lease and duplicated its ticket; and an await, which an embedded client sends to
+its own possibly-follower node, changed lock state outside Raft and could grant
+from a lagging view. Each is now closed and tested, each test observed failing
+against the old handler. **The consumer triage above was wrong:** the lock handler
+and client are library code, and Rahi enables `dlock`. What remains unproven is
+which mechanism produced the one observed run, and the client-side bound, which
+only the cluster suite executes.
+
+### F-106 `defect`, confidence `high`
+
+**Three acceptance commands could not fail for the reason they exist.**
+`017` and `019` assert that certain files are not tracked, with
+`! git ls-files <tree> | grep -q "<pattern>"`. When `git` cannot run, it writes
+to stderr, the pipeline produces nothing, `grep -q` exits non-zero, and the
+leading `!` turns that into a pass. The assertion reported success in exactly
+the environment where it had checked nothing.
+
+**Observed by execution**, on 2026-09-22: run in a directory that is not a
+repository, the original command exits `0`.
+
+Found while pre-flighting `028`'s post-merge acceptance job, which had never
+run. That job executes inside a container, which is precisely where a checkout
+can be present but unreadable by `git`.
+
+**Repaired 2026-09-22 by `028-enforcement-readiness-and-acceptance-control`**,
+B-6. The shape is now `tracked=$(git ls-files <tree>) && ! printf ... | grep -q`,
+so a `git` failure fails the assignment and short-circuits. Measured in all
+three directions: `128` where git cannot run, `0` in this repository, and `1`
+against a pattern that is tracked, so it still detects what it forbids. The
+workflow also sets `safe.directory`, so the failure mode is avoided as well as
+detected.
+
+**Consumer triage.** Reaches neither named consumer: it is an acceptance
+command, not shipped code. It is recorded because a check that cannot fail is
+not a check, and this release adds the gate that would have relied on it.
+
+**Not a waiver.** No implementation changed to match these commands. They were
+replaced through `amends_verification`, which replaces whole blocks, and every
+other command in both blocks is carried forward unchanged.
+
+### F-107 `defect`, confidence `high`
+
+**A leader that has removed itself from the voters still accepted membership
+changes for other nodes.** `leave_cluster`'s guard is `are_we_leader`, which
+asked only whether this node reports itself leader. A node that removes **itself**
+from the voter set keeps reporting leadership for a window, so the guard said
+yes and openraft then refused the membership append that the answer had
+authorized:
+
+    debug_assert!(
+        self.state.server_state == ServerState::Leader,
+        "Only leader is allowed to call update_effective_membership()"
+    );
+
+**Observed by execution**, twice, on 2026-09-22: once in CI and once locally.
+The local log gives the sequence exactly, inside two milliseconds:
+
+    15:29:29.841  Node 1 (Cache) has left the cluster: configs: [{2, 3}]
+    15:29:29.842  Shutting down raft cache layer
+    15:29:29.8428 Node 3 (Cache) is a cluster member - removing it
+    15:29:29.8436 change_membership: start to commit joint config RemoveVoters({3})
+    15:29:29.8478 panicked: Only leader is allowed to call update_effective_membership()
+
+Node 1 left the cache cluster while shutting down, and a peer's leave request
+for node 3 arrived one millisecond later. Node 1 was no longer a voter and
+answered anyway.
+
+**It is a `debug_assert!`, and that cuts both ways.** It is compiled out of a
+release build, so a consumer does not get this panic. Kept apart, as of the
+2026-09-22 revision below:
+
+- **Observed:** the panic, in debug builds, twice.
+- **Established from source (openraft 0.9.25):** both checks in
+  `append_membership` are `debug_assert!`, and in a release build the function
+  goes on to append the membership to the effective state and rebuild the
+  replication streams on a node whose server state is no longer `Leader`.
+- **Not established:** what that does to commit and to the cluster's
+  membership. It was never executed in a release build; `027` KD-9.
+
+The assertion is **byte-identical in 0.9.24 and 0.9.25**, so the openraft version
+is not the variable.
+
+**Repaired 2026-09-22 by `027-node-lifecycle-and-startup-errors`.** The decision
+is now a pure function, `membership_change_allowed`, which refuses on three
+grounds: the node is shutting down, there is no leader, the node is not the
+leader, or **the node is the leader but not a voter**. The last is the hole.
+Every refusal is `Error::LeaderChange`, which the HTTP layer maps to `409`, and
+`leave_remote_cluster` already walks to the next node on a non-success, so a
+refusal is a redirect rather than a failed leave.
+
+**A first repair attempt was wrong and is recorded as such.** It took
+`raft_lock` around both raft shutdowns on the theory that a shutdown was tearing
+down a raft mid-membership-change. The timestamps above refute it: the two
+operations are a millisecond apart and sequential, and `raft_lock` was free the
+whole time. That change was reverted rather than kept as a plausible-looking
+guard on a false premise.
+
+**Tested as a decision, not as a race.** The sequence above cannot be scheduled
+by a test, so all five input combinations are enumerated directly, and both
+tests were observed failing with the voter check removed.
+
+**Revised 2026-09-22: the decision alone did not close it.** Tracing every
+membership mutation and both shutdown paths found four gaps the repair above left
+open, read from source and not observed failing: the decision ran before
+`raft_lock` was taken; `post_membership` had neither the decision nor the lock;
+the raft stream's `RemoveMembershipCache` never asked the decision; and shutdown
+stopped both raft groups without the lock. **Repaired by `027` D-8**: one
+`MembershipGate` through which every change is admitted and decided under its
+lock, with the raft's `Leader` state now required as well; a shutdown that closes
+admission first, drains for at most five seconds, and **stops nothing** on
+timeout; every stop run under the gate in a task a caller's timeout cannot cancel;
+and bounded commit waits. Six deterministic interleaving tests, each of four
+mutations observed failing one. What remains untested is in `027` KD-7 to KD-9.
+
+The "first repair attempt was wrong" paragraph above stands: taking the lock
+around the shutdowns **alone** rested on a false premise about the observed
+sequence. D-8 synchronizes shutdown for a different reason, the in-flight change
+the source allows, and together with deciding under the lock rather than instead
+of it.
+
+**Consumer triage.** Reaches both named consumers in principle and neither as a
+crash: both embed a node and shut it down, and both ship release builds where
+the assertion is absent. What they were exposed to is the membership append on a
+node leaving the cluster, whose effect is not established (KD-9), which is why
+this is an ordering defect rather than a durability one.
+
+### F-108 `evidence`, confidence `high`
+
+**Local runs and CI were resolving different dependency trees, and nothing said
+so.** The workspace `Cargo.lock` is deliberately untracked, which is the normal
+choice for a library, so CI resolves fresh on every run while a developer's
+checkout keeps whatever it resolved first. This repository's local lock held
+`openraft 0.9.24`; CI resolved `0.9.25`, published 2026-07-28. **Every local
+gate result recorded for this release before 2026-09-22 was therefore taken
+against a dependency tree no consumer and no CI run would get.**
+
+Found 2026-09-22 by reading a CI panic's path, which named
+`openraft-0.9.25/src/...` where the local tree had `0.9.24`.
+
+First handled, not repaired, by moving the local tree to `0.9.25` and re-running
+the gate there, on the reasoning that committing a `Cargo.lock` for a library
+pins nothing for consumers. **That reasoning conflated two questions**, and the
+owner's direction of 2026-09-22 separates them:
+
+- **Is the qualification reproducible?** Only if local runs and CI build the same
+  graph. **Repaired 2026-09-22 by `031` B-8:** the workspace `Cargo.lock` is
+  tracked (force-added; `.gitignore` is `000`'s unit and is not edited), both CI
+  workflows refuse to start on a lock the manifests do not already satisfy
+  (`cargo metadata --locked`), print the toolchain and the lock's digest, and end
+  by proving no step changed it; `just qualify` is the local equivalent.
+- **What does a consumer resolve?** A different graph, qualified separately after
+  publication, from the registry with no workspace, path or Git override.
+  `openraft` is pinned exactly to `=0.9.25`, the only version this release was
+  qualified on, because F-107 showed a patch release of the consensus library
+  changing what a race does. Every other dependency keeps its range, and what a
+  future resolution can change there is stated in the handoff.
+
+Earlier results are kept as evidence about the graph they ran on (`0.9.24`
+locally before 2026-09-22), not as evidence about the committed one.
+
+### F-114 `defect`, confidence `high`
+
+**A WAL adapter test could stall CI indefinitely, and the writer tests' helper
+raced the writer.** CI's `Check` on `d45826c` stalled in
+`log_store_impl::tests::a_truncated_append_leaves_a_recoverable_prefix_in_every_log_sync_mode`
+and was cancelled 26 minutes in; every earlier run had passed it. Reproduced
+locally in the full `hiqlite-wal` suite: two failures in 177 runs, one that stall
+and one a panic in `writer::tests::append`, which `unwrap`ped an end-of-stream
+send into a receiver the writer had dropped by rejecting the entry.
+
+**Diagnosed and repaired 2026-09-22, `021` B-9.** With every wait bounded and
+named, the stall recurred on the 162nd full-suite run as `immediate_async:
+stalled at: an append to the terminal writer`: a library defect. A terminated WAL
+writer stopped reading its channel while the adapter still held senders, so an
+`Append` queued just before the termination was never read and never dropped, and
+the adapter blocked on the entry channel inside it forever. The same mechanism
+hung a shutdown of a terminated writer. The writer now answers every action after
+a termination with the terminal error. The helper race is fixed separately and
+CI jobs have a sixty-minute limit.
+
+**Consumer triage.** Reaches both named consumers: any node whose WAL writer
+terminates (F-110's out-of-service state) could hang an in-flight append or its
+own shutdown instead of failing them.
+
+**Qualification after the repair.** Three hundred consecutive runs of the whole
+`hiqlite-wal` suite, with the test binary run from a private working directory,
+had no failure. An earlier loop run from the shared checkout had seven, every one
+a burst of "No such file or directory" across unrelated tests: the suite writes
+fixed directory names under `hiqlite-wal/test_data`, so any other run of it in
+the same checkout collides. That is a property of the fixture, not of the code,
+and it is why the qualifying loop was isolated.
+
+### F-111 `contradiction`, confidence `high`
+
+**The cache raft's replicated command layout changed between hiqlite 0.14.0 and
+this release's upstream baseline, and nothing refused the old log.** Upstream PR
+#362 (`1a4e345`) inserted `GetRemove` and `Replace` at indices 2 and 3 of
+`CacheRequest` and made every variant feature-independent; 0.14.0's layout was
+feature-dependent. A 0.14.0 cache log fails to decode here, or decodes some
+entries as different commands.
+
+**Observed by execution** on 2026-09-22 by the Rauthy integration (CI and a local
+Linux arm64 container, deterministic on both architectures), and reproduced here
+from the same directory: `cannot create the cache raft: when Read Logs: bincode
+DecodeError UnexpectedEnd { additional: 8 }`, once F-112 no longer hid it.
+
+**Repaired 2026-09-22 by `027` B-10, as a contract rather than a decoder:** the
+cache is not carried across the upgrade, a legacy cache log is refused before it
+is decoded, and `HQL_CACHE_LEGACY_MOVE_ASIDE=true` moves it aside. A legacy
+decoder was declined: 0.14.0's layout depends on the features of the build that
+wrote it, so no single decoder is right, and a wrong one diverges silently.
+
+**Consumer triage.** Reaches both named consumers on their first start of this
+release on an existing directory: `cache_storage_disk = true` is the default.
+
+### F-112 `defect`, confidence `high`
+
+**The WAL reader thread panicked when a requester stopped reading**, and under a
+consumer's `panic = "abort"` that ended the process and hid the error that had
+made the requester stop. `hiqlite-wal/src/reader.rs` `unwrap`ped every send.
+**Observed** by the Rauthy integration as exit `134` at `reader.rs:123` and `:135`.
+**Repaired 2026-09-22** by `027` B-10; the regression test panics at `reader.rs:123`
+against the unrepaired reader, the same line as the first observation.
+
+### F-113 `defect`, confidence `high`
+
+**A raft that failed to construct was recorded as a failed WAL writer.** Its log
+store, dropped on the error path, ended the writer thread, and the lifecycle
+watch logged "this node is out of service because the Raft log WAL writer
+failed" for a node that had never started. **Observed** in the same reproduction.
+**Repaired 2026-09-22** by `027` B-10: the lifecycle is marked as shutting down
+before a failed construction returns and before every partial-start teardown. The
+repaired reproduction no longer logs it; no unit test drives it (`027` KD-10's
+limitation applies: no test starts a node).
+
+### F-110 `defect`, confidence `high`
+
+**An out-of-service node kept serving its embedded client.**
+`Client::ensure_node_available` was documented as the gate every local operation
+went through, and only the health checks and the network API called it. After a
+terminal component failure, an embedded client's writes failed inside openraft
+with "sending on a closed channel" instead of `NodeFailed`, and its reads were
+still served.
+
+**Observed by execution** on 2026-09-22 by the Rauthy integration, against
+`c7d0d6a9`: a Rauthy node with a small `HQL_WAL_SIZE` and its logs directory made
+read-only until WAL rotation failed with `EACCES`. The lifecycle recorded the WAL
+writer failure; the embedded client was not refused by it. Reported as evidence;
+nothing in this checkout was edited by that session.
+
+**Repaired 2026-09-22 by `027` B-9's review follow-up**: both rate-limit gates
+and every local read and listen call `ensure_node_available` first. The refusal
+is read from source, not injected here (`027` KD-10).
+
+**Consumer triage.** Reaches Rauthy directly, observed. Reaches Rahi the same way,
+because both embed a node.
+
+### F-109 `defect`, confidence `high`
+
+**Three containerized workflows ran their scripts under `sh`, and two of them had
+never run.** A job with a `container:` runs `run:` steps with the container's
+default shell unless told otherwise, and in `rauthy-builder` that is `sh`, which
+rejects `set -o pipefail`. `publish.yaml`'s "tag must match the manifests" step
+and `acceptance.yaml`'s "run every acceptance block" step both begin with it, so
+publication and the post-merge acceptance would each have failed on their first
+step that mattered. Neither workflow had ever run, which is why nothing had shown
+it.
+
+**Observed by execution** on 2026-09-22, in the pull-request `Check` run for
+`a51cb3f`: the new F-108 step failed with `set: Illegal option -o pipefail`.
+
+**Repaired 2026-09-22 by `031` B-8:** all three jobs declare `shell: bash` as the
+default, and the two that ask git whether the lock changed first mark the
+checkout safe, as `acceptance.yaml` already did for F-106.
+
+**Consumer triage.** Reaches neither named consumer directly. It blocked the
+publication they are waiting for.
+
+### F-103 `defect`, confidence `high`
+
+**The pull-request style workflow ran with a writable token.**
+`.github/workflows/code_style.yaml` declares no `permissions:` block, so its
+`GITHUB_TOKEN` came from the repository default, which this repository has set
+to `write` (`default_workflow_permissions: "write"`, read from the API on
+2026-09-22). It triggers on `pull_request`, so for a branch in this repository
+the job that builds and lints code under review held a token that could push to
+it. It references no secret, so nothing was readable from it, and the four
+workflows this corpus authored all set `contents: read` explicitly.
+
+Found 2026-09-22 while auditing every workflow trigger and secret reference
+before publication.
+
+**Repaired 2026-09-22 by `028-enforcement-readiness-and-acceptance-control`**,
+B-4: the workflow now declares `permissions: contents: read`, with the reason
+in the file. The repository-wide default is not changed, because that is a
+repository setting rather than a change to this tree, and an explicit block in
+each workflow is the stronger statement anyway.
+
+**Consumer triage.** Reaches neither named consumer: it is this repository's CI
+configuration and nothing in a published artifact. It is in scope because the
+release's own instruction was to keep build, review and publication credentials
+separate and least-privilege, and auditing that is what found it.
+
+### F-104 `defect`, confidence `high`
+
+**No pre-merge gate compiles the `server` feature, so a compile error confined
+to `hiqlite/src/server/` reaches the integration branch.** The lint matrix in
+the `justfile` covers twenty-odd feature combinations and none of them is
+`server`. `full` does not imply it: `server` is defined as `full` **plus**
+`clap`, `home`, `tracing-subscriber`, `listen_notify` and `tokio/macros`, so
+`--features full` compiles none of the server tree. `just test-no-s3` does not
+enable it either.
+
+**Observed by execution**, on 2026-09-22. `032`'s change to
+`NotifyRequest::Listen` was applied to `network::api::listen` and not to the
+proxy's copy of the same endpoint at `server/proxy/handlers.rs:34`. Clippy with
+`-D warnings`, the feature matrix, the full test suite and both CI workflows all
+passed; **nine acceptance blocks then failed**, every one of them on the same
+`E0308`, because a `spec-spine verify` command somewhere in each enables
+`server`. The only gate that saw it was the post-merge one, which runs after the
+merge and reports rather than prevents.
+
+**Repaired 2026-09-22 by `031-downstream-release-qualification`**: two `server`
+combinations are added to the lint matrix, and the proxy handler now carries the
+same acknowledgement as the endpoint it proxies.
+
+**Consumer triage.** The missing gate reaches neither named consumer, because
+neither embeds the server binary. The defect it let through would have reached
+anyone building with `server`, as a build failure rather than a runtime one.
+
+**Library targets only.** `--all-targets` under `server` additionally pulls in
+`hiqlite-wal`'s test modules, which carry pre-existing lints unrelated to this
+release. Silencing those to widen the check would be changing unrelated code to
+make a gate pass, so the gate is narrower and this is what it does not cover.
+
+**The blind spot was bounded, not just patched.** Every feature declared in
+`hiqlite/Cargo.toml` was checked against the lint matrix on 2026-09-22. Eight
+are never named in a clippy line: `default`, `macros`, `s3`, `toml`,
+`__cluster`, `__abort-probe`, `jemalloc`, `__profiling`. The first five are
+compiled transitively (`default` by the bare clippy line, `macros`, `s3` and
+`toml` through `full` and `server`, `__cluster` through `sqlite`), and
+`__abort-probe` is built by the publication workflow's probe step. The two
+genuinely uncompiled ones, `jemalloc` and `__profiling`, were compiled by hand
+with `-D warnings` and are clean, as are `sqlite,macros`, `sqlite,toml` and
+`sqlite,s3`. `server` was the only gap with a defect behind it. They are not
+added to the matrix: a lint line that has never caught anything costs every
+future run, and this record is the cheaper evidence.
+
+### F-105 `defect`, confidence `high`
+
+**A rejected append reported "sending on a closed channel" instead of why it
+was rejected, depending on who won a race.** `RaftLogStorage::append` sends the
+batch's entries to the writer thread over a bounded channel and then waits on an
+acknowledgement. The writer stops reading a batch as soon as it has decided that
+batch's outcome, and dropping its receiver makes the adapter's **next** send
+fail. That `SendError` was mapped straight to `StorageIOError::write_logs`, so
+openraft received `flume::SendError<Option<(u64, Vec<u8>)>>: sending on a closed
+channel` and the actual cause, `WalSizeExceeded`, was discarded. The cause was
+never lost: it was already on its way down the acknowledgement channel, which
+the early return abandoned.
+
+Which of the two a caller saw depended purely on whether the writer reached
+`drop(rx)` before the adapter reached its next send.
+
+**Observed by execution**, on 2026-09-22.
+`append_adapter_reports_a_rejected_append_as_an_error` passed **forty out of
+forty** local runs and failed on the first CI run, on a slower and more
+contended machine. It would have been easy and wrong to record that as a flaky
+test: the test asserted the right thing, and the code under it was reporting the
+wrong error half the time.
+
+**Repaired 2026-09-22 by `021-wal-append-stream-integrity`.** A failed send now
+waits for the writer's verdict and reports that. Three outcomes are named: the
+writer's own error; a success reported for a batch that was never finished
+sending, which is a broken contract rather than a storage failure and is refused
+as one rather than passed to openraft as a successful append; and no verdict at
+all, which is what a panic in the writer looks like from the adapter.
+
+**Consumer triage.** Reaches both named consumers: any append larger than
+`wal_size`, or any other writer-side rejection, could surface as a closed-channel
+error instead of its cause. The append still failed either way, so this is a
+diagnosis defect rather than a durability one, and it is the difference between
+an operator reading "entry is larger than the WAL file" and reading a channel
+error that names nothing actionable. F-098 is the defect that produces the
+rejection; this is the one that hid its reason.
+
+**Tested directly, not by re-running the race.** The three verdict paths are
+driven through the function itself, because whether a given machine loses the
+race is not something a test should depend on.

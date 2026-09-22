@@ -12,7 +12,7 @@ use std::sync::{Arc, RwLock};
 use std::thread;
 use std::time::Duration;
 use thread_priority::ThreadPriority;
-use tokio::sync::oneshot;
+use tokio::sync::{oneshot, watch};
 use tokio::time::Interval;
 use tokio::{task, time};
 use tracing::{debug, error, warn};
@@ -101,7 +101,14 @@ pub fn spawn(
     wal_size: u32,
     wal_deep_integrity_check: bool,
     meta: Arc<RwLock<Metadata>>,
-) -> Result<(flume::Sender<Action>, Arc<RwLock<WalFileSet>>), Error> {
+) -> Result<
+    (
+        flume::Sender<Action>,
+        Arc<RwLock<WalFileSet>>,
+        watch::Receiver<Option<String>>,
+    ),
+    Error,
+> {
     let mut set = WalFileSet::read(base_path, wal_size)?;
     // TODO emit a warning log in that case and tell the user how to resolve or "force start" in
     // that case, or should be maybe `auto-heal` as much as possible?
@@ -145,7 +152,21 @@ pub fn spawn(
     let wal = wal_locked.clone();
     let snc = sync.clone();
     let reported_path = set.base_path.clone();
+
+    // The termination report gets a consumer.
+    //
+    // `008` KD-3 recorded that the ERROR log below has none: nothing above this crate can tell
+    // a writer that has ended from one that is running, so a node whose log storage had died
+    // went on answering as though it were healthy. This channel is that consumer's half.
+    //
+    // It carries three states, and the third is the one that matters. `None` means the writer
+    // is running. `Some(reason)` means it ended and said why. A **closed** channel means the
+    // sender was dropped without a reason, which is what a panic unwinding past this closure
+    // looks like from the outside: still a terminated writer, still not a healthy node, and
+    // not something this crate can describe beyond that.
+    let (failure_tx, failure_rx) = watch::channel(None::<String>);
     thread::spawn(move || {
+        let _failure_tx = failure_tx;
         // The writer thread's `JoinHandle` is deliberately not retained: nothing in this crate
         // manages its lifecycle, and joining it would be lifecycle management rather than error
         // reporting. What was missing is the report itself. `run` only returns `Err` on a failure
@@ -156,11 +177,36 @@ pub fn spawn(
         // this line and is reported by the panic hook instead, and an abort or a process kill is
         // reported by neither. This is an error report for the one termination the writer can
         // describe, not process supervision.
+        // Kept past `run`, so the thread can still answer what is queued after a termination.
+        let rx_after = rx.clone();
         if let Err(err) = run(lockfile, meta, wal, set, rx, snc, wal_size) {
-            error!(
+            let reason = format!(
                 "Raft logs WAL writer for `{reported_path}` terminated with an unrecoverable \
                 error: {err} - all further appends will fail until this process is restarted"
             );
+            error!("{reason}");
+            // Best effort: if nobody is watching, the log line is still the report.
+            let _ = _failure_tx.send(Some(reason.clone()));
+
+            // F-114. A terminated writer used to stop reading its channel, but the adapter
+            // still held senders, and a queued message is kept alive for as long as any sender
+            // is. An `Append` that reached the one-slot queue just before the termination was
+            // never read and never dropped, so the entry channel inside it stayed open and the
+            // adapter blocked on it forever: "a terminal writer fails its callers" held for
+            // every interleaving except that one. The thread now answers every action with the
+            // termination until the last sender is gone or a shutdown arrives.
+            while let Ok(action) = rx_after.recv() {
+                if !refuse_after_termination(action, &reason) {
+                    break;
+                }
+            }
+            // A shutdown ends the loop, and the receiver drops with this thread, but a queued
+            // message outlives that for as long as a sender exists. Refuse whatever is already
+            // queued behind the shutdown. This narrows the window; a send racing this line can
+            // still land after it, as it can after a healthy writer's shutdown.
+            while let Ok(action) = rx_after.try_recv() {
+                refuse_after_termination(action, &reason);
+            }
         }
     });
 
@@ -169,7 +215,32 @@ pub fn spawn(
         spawn_syncer(tx.clone(), interval);
     }
 
-    Ok((tx, wal_locked))
+    Ok((tx, wal_locked, failure_rx))
+}
+
+/// Answer one action that reached a writer after it terminated. `false` ends the thread.
+fn refuse_after_termination(action: Action, reason: &str) -> bool {
+    let err = || Error::Internal(reason.to_string().into());
+    match action {
+        Action::Append { rx, callback, ack } => {
+            // Dropping the entry receiver first releases a producer that is blocked sending.
+            drop(rx);
+            let _ = ack.send(Err(err()));
+            callback(Err(err().as_io_error()));
+        }
+        Action::Remove { ack, .. } | Action::Vote { ack, .. } => {
+            let _ = ack.send(Err(err()));
+        }
+        Action::Sync => {}
+        Action::Shutdown(ack) => {
+            // Not acknowledged: the writer did not stop cleanly, it had already failed, and a
+            // shutdown answered `()` here was reported as a clean stop all the way up (found in
+            // review). The caller sees the closed channel as an error.
+            drop(ack);
+            return false;
+        }
+    }
+    true
 }
 
 /// Flush the active WAL file so that everything written to it is on disk.
@@ -422,15 +493,23 @@ fn run(
                         received += 1;
 
                         if bytes.len() > data_len_limit {
-                            // A single raft entry cannot span WAL files. By default an
-                            // oversized entry is a non-recoverable setup issue (it needs a
-                            // config change with a full restart, or code changes), so the
-                            // writer panics. With the `oversized-entry-error` feature the
-                            // append instead fails with `Error::WalSizeExceeded` and the
-                            // writer keeps serving subsequent requests. With the default
-                            // `wal_size` of 2MB this is easily reached by a single large
-                            // INSERT, transaction or batch.
-                            #[cfg(feature = "oversized-entry-error")]
+                            // A single raft entry cannot span WAL files, so an entry larger
+                            // than the WAL cannot be written. **That is a rejected append, not
+                            // a reason to end the writer**, and it is the default now.
+                            //
+                            // It used to be a `panic!`, on the reasoning that an oversized
+                            // entry is a non-recoverable setup issue. The comment beside it
+                            // said what is wrong with that: "With the default `wal_size` of
+                            // 2MB this is easily reached by a single large INSERT, transaction
+                            // or batch." An application's own data ending the storage thread,
+                            // and under an aborting profile the whole process, is not a setup
+                            // issue; it is a large write. The caller gets
+                            // `Error::WalSizeExceeded` on the acknowledgement and on the
+                            // completion, and the writer keeps serving.
+                            //
+                            // `oversized-entry-error` is kept as a no-op so a consumer that
+                            // enables it still builds; it selects what is now the only
+                            // behavior.
                             {
                                 res = Err(Error::WalSizeExceeded(
                                     format!(
@@ -443,19 +522,22 @@ fn run(
                                 ));
                                 break;
                             }
-                            #[cfg(not(feature = "oversized-entry-error"))]
-                            {
-                                panic!(
-                                    "`data` length must not exceed `wal_size` -> data length \
-                                    is {} vs wal_size (without header) is {data_len_limit}",
-                                    bytes.len(),
-                                );
-                            }
                         }
 
                         if !active.has_space(bytes.len() as u32) {
                             buf.clear();
-                            wal.roll_over(wal_size, &mut buf)?;
+                            // A failed rollover used to `?` out of `run` from here, dropping the
+                            // acknowledgement and the completion callback unfired, so openraft
+                            // never heard about this append at all (found in review). It is a
+                            // failed append now, answered once on both channels, and terminal,
+                            // because the WAL's file set may be half rolled.
+                            if let Err(err) = wal.roll_over(wal_size, &mut buf) {
+                                let msg: Cow<'static, str> =
+                                    format!("rolling over to a new WAL file failed: {err}").into();
+                                res = Err(Error::Internal(msg));
+                                terminal = Some(err);
+                                break;
+                            }
                             {
                                 let mut lock = wal_locked.write().unwrap();
                                 lock.active = wal.active;
@@ -563,7 +645,10 @@ fn run(
                             lock.active = wal.active;
                             lock.clone_files_from_no_mmap(&wal.files);
                         }
-                        ack.send(Ok(())).unwrap();
+                        // A requester that went away (a cancelled future during teardown) is
+                        // not a reason to end the writer: that `unwrap` could abort the
+                        // process under `panic = "abort"`, the same class as F-112.
+                        let _ = ack.send(Ok(()));
                     }
                     Err(err) => {
                         if persist_purged {
@@ -584,7 +669,7 @@ fn run(
                                 );
                             }
                         }
-                        ack.send(Err(err)).unwrap();
+                        let _ = ack.send(Err(err));
                     }
                 }
             }
@@ -598,7 +683,7 @@ fn run(
                 meta.write()?.vote = Some(value);
                 let res = Metadata::write(meta.clone(), &wal.base_path);
 
-                ack.send(res).unwrap();
+                let _ = ack.send(res);
             }
             Action::Sync => {
                 // The ticker is the only flush in `IntervalMillis` mode and no append waits on
@@ -623,11 +708,15 @@ fn run(
 
     // drop the lockfile before trying to remove it to unlock it
     drop(lockfile);
-    LockFile::remove(&wal.base_path).expect("LockFile removal failed");
+    if let Err(err) = LockFile::remove(&wal.base_path) {
+        // The lock itself was released by dropping it above; a leftover file only means the
+        // next start takes the not-a-clean-start path. Not worth ending the process for.
+        error!("Could not remove the WAL lock file in {}: {err}", wal.base_path);
+    }
 
     if let Some(ack) = shutdown_ack {
-        ack.send(())
-            .expect("Shutdown handler to always wait for ack from logs");
+        // A shutdown caller that stopped waiting is not a failure of the writer.
+        let _ = ack.send(());
     }
 
     Ok(())
@@ -799,7 +888,8 @@ mod tests {
         lockfile.lock().unwrap();
         let meta = Arc::new(RwLock::new(Metadata::read_or_create(base).unwrap()));
 
-        let (tx, _wal) = spawn(base.to_string(), lockfile, sync, 64 * 1024, false, meta).unwrap();
+        let (tx, _wal, _fail) =
+            spawn(base.to_string(), lockfile, sync, 64 * 1024, false, meta).unwrap();
         tx
     }
 
@@ -995,6 +1085,83 @@ mod tests {
     }
 
 
+    /// F-114, deterministically. An append queued behind one the writer is still reading, which
+    /// then turns out truncated, used to be stranded: the writer terminated without reading it,
+    /// the adapter's senders kept it alive in the queue, and whoever was sending its entries
+    /// blocked forever. The same held for a shutdown sent to a terminated writer. Both must now
+    /// be answered, and every wait here is bounded so the unrepaired writer fails rather than
+    /// hangs.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn work_queued_behind_a_terminating_append_is_answered_not_stranded() {
+        let base = "test_data/queued_behind_termination".to_string();
+        let tx = start_writer(&base, LogSync::ImmediateAsync);
+        let bound = Duration::from_secs(5);
+
+        // A: the writer takes it and waits for entries.
+        let (ack_a_tx, ack_a) = oneshot::channel();
+        let (entries_a, rx_a) = flume::bounded::<Option<(u64, Vec<u8>)>>(1);
+        tx.send_async(Action::Append {
+            rx: rx_a,
+            callback: Box::new(|_| {}),
+            ack: ack_a_tx,
+        })
+        .await
+        .unwrap();
+        entries_a.send_async(Some((1, b"first".to_vec()))).await.unwrap();
+
+        // B: queued behind A in the one-slot channel while the writer is still inside A.
+        let (ack_b_tx, ack_b) = oneshot::channel();
+        let (entries_b, rx_b) = flume::bounded::<Option<(u64, Vec<u8>)>>(1);
+        let (note_b_tx, note_b) = std::sync::mpsc::channel();
+        tx.send_async(Action::Append {
+            rx: rx_b,
+            callback: Box::new(move |res| {
+                let _ = note_b_tx.send(res);
+            }),
+            ack: ack_b_tx,
+        })
+        .await
+        .unwrap();
+
+        // A is truncated: the writer terminates.
+        drop(entries_a);
+        let a = tokio::time::timeout(bound, ack_a)
+            .await
+            .expect("A must be acknowledged")
+            .unwrap();
+        assert!(matches!(a, Err(Error::IncompleteAppend(_))), "got {a:?}");
+
+        // B's producer must not block, and B must be refused, once, on both channels.
+        let sent = tokio::time::timeout(bound, async {
+            for id in 2..=4u64 {
+                if entries_b.send_async(Some((id, b"more".to_vec()))).await.is_err() {
+                    break;
+                }
+            }
+            let _ = entries_b.send_async(None).await;
+        })
+        .await;
+        assert!(sent.is_ok(), "the producer of an append queued behind a termination blocked");
+        let b = tokio::time::timeout(bound, ack_b)
+            .await
+            .expect("an append queued behind a termination must be answered")
+            .expect("the answer must not be a dropped channel");
+        assert!(b.is_err(), "a terminated writer must refuse queued work, got {b:?}");
+        assert!(
+            note_b.recv_timeout(bound).expect("one completion").is_err(),
+            "the completion is a failure too"
+        );
+
+        // And a shutdown sent to the terminated writer is answered rather than awaited forever,
+        // and not as a clean stop: the writer had already failed.
+        let (sd_tx, sd_rx) = oneshot::channel();
+        tx.send_async(Action::Shutdown(sd_tx)).await.unwrap();
+        let sd = tokio::time::timeout(bound, sd_rx)
+            .await
+            .expect("a shutdown of a terminated writer must be answered, not awaited forever");
+        assert!(sd.is_err(), "a terminated writer must not acknowledge a clean shutdown");
+    }
+
     /// F-028: a truncated entry stream was acknowledged and notified as a **successful**
     /// append, because `while let Ok(Some(..)) = rx.recv()` ends the same way for the `None`
     /// that marks a healthy end of stream and for the `Err` that a dropped sender produces.
@@ -1050,8 +1217,10 @@ mod tests {
                     "{label} / {case}: exactly one completion per dispatched append"
                 );
 
+                // F-114: a terminated writer keeps answering, so termination is observed as a
+                // refusal naming it, not as a closed channel (which used to strand queued work).
                 assert!(
-                    eventually(|| tx.is_disconnected()),
+                    later_append_is_refused_as_terminated(&tx).await,
                     "{label} / {case}: the writer must end after a truncated append"
                 );
             }
@@ -1094,8 +1263,9 @@ mod tests {
                 "{label}: exactly one completion"
             );
 
+            let (ack, _) = dispatch_append(&tx, 1, b"after an empty batch".to_vec());
             assert!(
-                !tx.is_disconnected(),
+                matches!(tokio::time::timeout(Duration::from_secs(5), ack).await, Ok(Ok(Ok(())))),
                 "{label}: an empty batch is not a failure and must not end the writer"
             );
 
@@ -1175,10 +1345,8 @@ mod tests {
             Ok(()),
             "the healthy append must complete successfully before an injection is armed"
         );
-        assert!(
-            !tx.is_disconnected(),
-            "the writer is serving before the injected failure"
-        );
+        // The healthy append acknowledged above is what shows the writer serving. A channel
+        // that is still connected no longer shows it: a terminated writer keeps its receiver.
 
         let _armed = fault::arm_persistence_failure(&base);
         let (ack_rx, note_rx) = dispatch_append(&tx, 2, b"entry".to_vec());
@@ -1197,26 +1365,24 @@ mod tests {
             "the notification must carry the injected cause, got: {notified}"
         );
 
-        // Failure policy preserved, observed positively. `run` owns the only `Receiver` for this
-        // channel and holds it for as long as it is on the stack, so the sender reporting a
-        // disconnect establishes that `run` has left: the writer can receive no further action.
-        // It does not establish that the OS thread has finished, because the thread closure runs
-        // its error report after `run` returns. That is a stronger claim than this test makes and
-        // than the runtime supports.
+        // Failure policy preserved, observed positively: a later append is refused, and the
+        // refusal names the termination. It used to be observed as a closed channel and a later
+        // append that was never acknowledged, which was F-114's defect seen from the side
+        // where it looked like the policy working.
         assert!(
-            eventually(|| tx.is_disconnected()),
-            "the writer must still stop serving after a persistence failure: its sole Action \
-            receiver is dropped when `run` returns"
+            later_append_is_refused_as_terminated(&tx).await,
+            "the writer must stop serving after a persistence failure"
         );
+    }
 
-        // And the consequence the policy is about: with the writer no longer receiving, a later
-        // append is never acknowledged. This is a corollary of the disconnect above, not the
-        // proof of it.
-        let (mut later_ack, _later_note) = dispatch_append(&tx, 3, b"later".to_vec());
-        assert!(
-            later_ack.try_recv().is_err(),
-            "a terminated writer must not acknowledge a later append"
+    /// A later append to a terminated writer is refused within five seconds, and says why.
+    async fn later_append_is_refused_as_terminated(tx: &flume::Sender<Action>) -> bool {
+        let (ack, note) = dispatch_append(tx, 999, b"later".to_vec());
+        let refused = matches!(
+            tokio::time::timeout(Duration::from_secs(5), ack).await,
+            Ok(Ok(Err(Error::Internal(reason)))) if reason.contains("terminated")
         );
+        refused && note.recv_timeout(Duration::from_secs(5)).is_ok_and(|r| r.is_err())
     }
 
     /// The termination itself is reported. The thread's `JoinHandle` is not retained; the report
@@ -1241,7 +1407,6 @@ mod tests {
         );
     }
 
-    #[cfg(feature = "oversized-entry-error")]
     fn append(tx: &flume::Sender<Action>, id: u64, bytes: Vec<u8>) -> Result<(), Error> {
         let (ack_tx, ack_rx) = oneshot::channel();
         let (entry_tx, entry_rx) = flume::bounded(1);
@@ -1251,12 +1416,23 @@ mod tests {
             ack: ack_tx,
         })
         .unwrap();
-        entry_tx.send(Some((id, bytes))).unwrap();
-        entry_tx.send(None).unwrap();
+        // The acknowledgement carries the verdict. A writer that rejects an entry drops the
+        // entry receiver, and whether that happens before or after these sends is a race, so a
+        // failed send is expected and not a test failure. It used to `unwrap`, which failed
+        // this suite about once in forty full runs.
+        let _ = entry_tx.send(Some((id, bytes)));
+        let _ = entry_tx.send(None);
         ack_rx.blocking_recv().unwrap()
     }
 
-    #[cfg(feature = "oversized-entry-error")]
+    /// An entry larger than the WAL is a rejected append, and the writer keeps serving.
+    ///
+    /// This used to require the `oversized-entry-error` feature; the default was a `panic!`,
+    /// which under an aborting profile ends the embedding application because its own write
+    /// was too big. The comment beside that panic said the default `wal_size` of 2 MiB is
+    /// "easily reached by a single large INSERT, transaction or batch", which is what makes it
+    /// a large write rather than a setup issue. The test is now unconditional and the one that
+    /// pinned the panic is gone.
     #[test]
     fn oversized_entry_errors_without_killing_writer() {
         let base = "test_data/oversized_entry".to_string();
@@ -1267,7 +1443,7 @@ mod tests {
         lockfile.lock().unwrap();
         let meta = Arc::new(RwLock::new(Metadata::read_or_create(&base).unwrap()));
 
-        let (tx, _wal) = spawn(
+        let (tx, _wal, _fail) = spawn(
             base.clone(),
             lockfile,
             LogSync::Immediate,
@@ -1291,65 +1467,4 @@ mod tests {
         ack_rx.blocking_recv().unwrap();
     }
 
-    #[cfg(not(feature = "oversized-entry-error"))]
-    #[test]
-    fn oversized_entry_panics_and_kills_writer() {
-        let base = "test_data/oversized_entry_panic".to_string();
-        let _ = std::fs::remove_dir_all(&base);
-        std::fs::create_dir_all(&base).unwrap();
-
-        let lockfile = LockFile::create(&base).unwrap();
-        lockfile.lock().unwrap();
-        let meta = Arc::new(RwLock::new(Metadata::read_or_create(&base).unwrap()));
-
-        let (tx, _wal) = spawn(
-            base.clone(),
-            lockfile,
-            LogSync::Immediate,
-            64 * 1024,
-            false,
-            meta.clone(),
-        )
-        .unwrap();
-
-        let send_append = |id: u64, bytes: Vec<u8>| {
-            let (ack_tx, ack_rx) = oneshot::channel();
-            let (entry_tx, entry_rx) = flume::bounded(1);
-            // The writer thread may already be dead, so every send can fail and is ignored;
-            // the assertion is that the append is never acked.
-            let _ = tx.send(Action::Append {
-                rx: entry_rx,
-                callback: Box::new(|_| {}),
-                ack: ack_tx,
-            });
-            let _ = entry_tx.send(Some((id, bytes)));
-            let _ = entry_tx.send(None);
-            ack_rx
-        };
-
-        // an oversized entry panics the writer thread by default; the append is never acked
-        let mut ack = send_append(1, vec![0u8; 70 * 1024]);
-        assert!(
-            !recv_with_timeout(&mut ack),
-            "oversized entry must panic the writer (no ack)"
-        );
-
-        // the writer thread is dead: a subsequent append is never acked either
-        let mut ack = send_append(2, b"ok".to_vec());
-        assert!(
-            !recv_with_timeout(&mut ack),
-            "writer must be dead after the panic"
-        );
-    }
-
-    #[cfg(not(feature = "oversized-entry-error"))]
-    fn recv_with_timeout(ack: &mut tokio::sync::oneshot::Receiver<Result<(), Error>>) -> bool {
-        for _ in 0..10 {
-            if ack.try_recv().is_ok() {
-                return true;
-            }
-            std::thread::sleep(std::time::Duration::from_millis(100));
-        }
-        false
-    }
 }

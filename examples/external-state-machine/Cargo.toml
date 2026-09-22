@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 # Only the opt-in engine is enabled. No Raft node, network, dashboard, backup
 # scheduler or auto-heal code is compiled into this example.
-hiqlite = { path = "../../hiqlite", default-features = false, features = [
+hiqlite = { package = "hiqlite-patched", path = "../../hiqlite", default-features = false, features = [
     "external-state-machine",
 ] }
 

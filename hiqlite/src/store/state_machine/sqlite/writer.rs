@@ -794,25 +794,28 @@ fn create_backup(
     let path_full = format!("{target_folder}/{file}");
     info!("Creating database backup into {path_full}");
 
-    // vacuum into a temp file and move it into place, so a crash mid-backup can never leave
-    // a partial file under the final backup name (restore would pick it up as valid)
+    // Vacuum into a temp file, finish it there, make it durable, and only then give it the final
+    // name, so a crash can never leave a partial or unfinished file under a backup's name
+    // (restore would pick it up as valid). The metadata reset used to run after the rename,
+    // with its result ignored, and neither the file nor the rename was synced, so a crash
+    // could publish a backup that still carried the live node's metadata, or one whose name
+    // survived and whose bytes did not.
     let path_temp = format!("{path_full}~");
-    if let Err(err) = conn.execute(&format!("VACUUM main INTO '{path_temp}'"), ()) {
+    let publish = || -> Result<(), Error> {
+        conn.execute(&format!("VACUUM main INTO '{path_temp}'"), ())?;
+        {
+            let conn_bkp = rusqlite::Connection::open(&path_temp)?;
+            persist_metadata(&conn_bkp, &StateMachineData::default())?;
+        }
+        crate::store::state_machine::sqlite::sync_file_blocking(&path_temp)?;
+        std::fs::rename(&path_temp, &path_full)
+            .map_err(|err| Error::Error(format!("rename backup into place: {err}").into()))?;
+        crate::store::state_machine::sqlite::sync_parent_dir_blocking(&path_full)?;
+        Ok(())
+    };
+    if let Err(err) = publish() {
         let _ = std::fs::remove_file(&path_temp);
-        return Err(err.into());
-    }
-    if let Err(err) = std::fs::rename(&path_temp, &path_full) {
-        let _ = std::fs::remove_file(&path_temp);
-        return Err(Error::Error(
-            format!("rename backup into place: {err}").into(),
-        ));
-    }
-
-    // connect to the backup and reset metadata
-    // make sure connection is dropped before starting encrypt + push
-    {
-        let conn_bkp = rusqlite::Connection::open(&path_full)?;
-        persist_metadata(&conn_bkp, &StateMachineData::default());
+        return Err(err);
     }
 
     info!("Database backup finished");

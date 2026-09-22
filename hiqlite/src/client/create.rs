@@ -140,7 +140,10 @@ impl Client {
         }
 
         let tls_config = if tls {
-            Some(tls::build_tls_config(tls_no_verify))
+            // A remote client has no `ServerTlsConfig` to take a trust anchor from, so it
+            // still verifies against whatever the `webpki-roots` feature provides, or against
+            // nothing. `030` KD-2 records that.
+            Some(tls::build_tls_config(tls_no_verify, None))
         } else {
             None
         };
@@ -160,11 +163,28 @@ impl Client {
         let (tx_client_cache, rx_client_cache) = flume::bounded(1);
 
         #[cfg(feature = "listen_notify")]
-        let rx_notify = Some(RemoteListener::spawn(
-            leader_cache.clone(),
-            tls,
-            api_secret.clone(),
-        ));
+        let rx_notify = {
+            let (rx_notify, ready) =
+                RemoteListener::spawn(leader_cache.clone(), tls, api_secret.clone());
+
+            // F-051: wait for the subscription to exist before handing the client back, so an
+            // event published straight after construction is not dropped for want of a listener.
+            match tokio::time::timeout(crate::client::listen_notify::remote::READY_TIMEOUT, ready)
+                .await
+            {
+                Ok(Ok(())) => {}
+                Ok(Err(_)) => {
+                    tracing::warn!("The listen event stream task ended before it connected")
+                }
+                Err(_) => tracing::warn!(
+                    "The listen event stream did not connect within {:?}; it will keep retrying, \
+                     but events published before it connects will not be delivered",
+                    crate::client::listen_notify::remote::READY_TIMEOUT
+                ),
+            }
+
+            Some(rx_notify)
+        };
 
         #[cfg(all(feature = "listen_notify_local", not(feature = "listen_notify")))]
         let rx_notify = None;

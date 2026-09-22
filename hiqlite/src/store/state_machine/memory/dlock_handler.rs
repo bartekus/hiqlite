@@ -10,7 +10,7 @@ use tokio::sync::oneshot;
 use tokio::task;
 use tracing::{debug, error, info, warn};
 
-const LOCK_VALID_SECONDS: i64 = 10;
+pub(crate) const LOCK_VALID_SECONDS: i64 = 10;
 
 pub enum LockRequest {
     /// used for a first try lock without coming from a queue
@@ -177,10 +177,42 @@ async fn handler(rx: flume::Receiver<LockRequest>, lease_seconds: i64) {
             LockRequest::Acquire(LockRequestPayload { key, log_id, ack }) => {
                 let now = Utc::now().timestamp();
                 if let Some(lock) = locks.get_mut(key.as_ref()) {
-                    if lock.current_ticket.is_some() {
+                    // F-102: a waiter's bounded await ends in this re-request, so this is where
+                    // a holder whose lease ran out without a release is noticed. Before, only a
+                    // fresh `Lock` looked at `exp`, and a waiter that was never woken sat out
+                    // the client's 120-second request timeout.
+                    if lock.exp < now {
+                        if lock.current_ticket.is_some_and(|holder| holder != log_id) {
+                            lock.current_ticket = None;
+                        }
+                        // Same dead-ticket handling as in `Lock`: a front ticket that had its
+                        // whole window and did not claim is gone.
+                        while let Some(&ticket) = lock.queue.front()
+                            && ticket != log_id
+                            && lock.current_ticket.is_none()
+                        {
+                            lock.queue.pop_front();
+                            if let Some(acks) = queues.get_mut(key.as_ref())
+                                && let Some(pos) = acks.iter().position(|(i, _)| *i == ticket)
+                            {
+                                let (_, ack) = acks.swap_remove(pos);
+                                answer(&key, ticket, ack, LockState::Released);
+                            }
+                        }
+                    }
+
+                    if lock.current_ticket == Some(log_id) {
+                        // Already ours: a retry after a lost response. Answer it again, with a
+                        // lease that has time left in it rather than whatever remained.
+                        lock.exp = now + lease_seconds;
+                        answer(&key, log_id, ack, LockState::Locked(log_id));
+                    } else if lock.current_ticket.is_some() {
                         // Someone else holds the lock (e.g. our lease expired and the lock was
-                        // re-granted). Re-queue and report back so the client can wait again.
-                        lock.queue.push_back(log_id);
+                        // re-granted). Keep our place, never a second copy of it, and report
+                        // back so the client can wait again.
+                        if !lock.queue.contains(&log_id) {
+                            lock.queue.push_back(log_id);
+                        }
                         answer(&key, log_id, ack, LockState::Queued(log_id));
                     } else if let Some(first) = lock.queue.front() {
                         if *first == log_id {
@@ -192,8 +224,10 @@ async fn handler(rx: flume::Receiver<LockRequest>, lease_seconds: i64) {
                                 lock.exp = now + lease_seconds;
                             }
                         } else {
-                            // Our ticket is not the promoted one anymore -> re-queue.
-                            lock.queue.push_back(log_id);
+                            // Our ticket is not the promoted one anymore: keep or take a place.
+                            if !lock.queue.contains(&log_id) {
+                                lock.queue.push_back(log_id);
+                            }
                             answer(&key, log_id, ack, LockState::Queued(log_id));
                         }
                     } else {
@@ -294,50 +328,42 @@ async fn handler(rx: flume::Receiver<LockRequest>, lease_seconds: i64) {
             }
 
             LockRequest::Await(LockAwaitPayload { key, id, ack }) => {
-                let now = Utc::now().timestamp();
-
-                if let Some(lock) = locks.get_mut(key.as_ref()) {
-                    // Same dead-ticket handling as in LockRequest::Lock.
-                    if lock.exp < now {
-                        while let Some(&ticket) = lock.queue.front()
-                            && ticket != id
-                        {
-                            lock.queue.pop_front();
-                            if let Some(acks) = queues.get_mut(key.as_ref())
-                                && let Some(pos) = acks.iter().position(|(i, _)| *i == ticket)
-                            {
-                                let (_, ack) = acks.swap_remove(pos);
-                                answer(&key, ticket, ack, LockState::Released);
-                            }
+                // F-102: an await only waits. It is not a Raft entry: an embedded client sends
+                // it to its **own** node's handler, which may be a follower, so anything it
+                // changed here was a change to one node's copy of replicated state. It used to
+                // evict tickets and grant `Locked` from that node's view; a follower whose view
+                // lagged the leader's could grant a lock the leader had given to someone else.
+                // Every state change now goes through `Lock`, `Acquire` or `Release`, which
+                // every node applies in log order, and an await that would have been granted
+                // is answered `Released` so its client claims through the leader instead.
+                //
+                // The holder's lease is deliberately not judged here. This node's clock may be
+                // ahead of the leader's, and an await that answered `Released` on its own view
+                // of `exp` sent its client round a loop of Raft writes the leader kept answering
+                // `Queued`. Expiry is judged by `Acquire`, which the client's bounded await ends
+                // in.
+                match locks.get(key.as_ref()) {
+                    Some(lock)
+                        if lock.current_ticket.is_some()
+                            || lock.queue.front().is_some_and(|front| *front != id) =>
+                    {
+                        let acks = queues.entry(key.to_string()).or_default();
+                        // A client that timed out and awaits again replaces its old
+                        // registration. Left in place, the dead entry is found first, fails to
+                        // deliver, and gets the live ticket dropped. The replaced one is
+                        // **answered**, not dropped: for a remote client its receiver is a
+                        // server task that treats a dropped channel as a broken invariant.
+                        if let Some(pos) = acks.iter().position(|(i, _)| *i == id) {
+                            let (_, old) = acks.swap_remove(pos);
+                            answer(&key, id, old, LockState::Released);
                         }
+                        acks.push((id, ack));
                     }
-
-                    if lock.exp < now || lock.current_ticket.is_none() {
-                        let front = lock.queue.front();
-                        if let Some(ticket) = front {
-                            if *ticket == id {
-                                lock.queue.pop_front();
-                                lock.current_ticket = Some(id);
-                                lock.exp = now + lease_seconds;
-                                if !answer(&key, id, ack, LockState::Locked(id)) {
-                                    lock.current_ticket = None;
-                                    lock.exp = now + lease_seconds;
-                                }
-                            } else {
-                                queues.entry(key.to_string()).or_default().push((id, ack));
-                            }
-                        } else {
-                            // Nothing to wait for: no current holder and no queued ticket. Let the
-                            // client re-request, it will get a fresh grant.
-                            answer(&key, id, ack, LockState::Released);
-                        }
-                    } else {
-                        queues.entry(key.to_string()).or_default().push((id, ack));
+                    // Nothing holds it, or it is ours to claim, or the lock was removed while
+                    // this await was in flight: re-request.
+                    _ => {
+                        answer(&key, id, ack, LockState::Released);
                     }
-                } else {
-                    // The lock was released and fully removed while this await was in flight.
-                    // Let the client re-request, it will get a fresh grant.
-                    answer(&key, id, ack, LockState::Released);
                 }
             }
 
@@ -443,8 +469,11 @@ mod tests {
         assert_eq!(lock(&tx, "k", 1).await, LockState::Locked(1));
         assert_eq!(lock(&tx, "k", 2).await, LockState::Queued(2));
         release(&tx, "k", 1);
-        // no current holder anymore: the queued ticket is granted directly while waiting
-        assert_eq!(await_lock(&tx, "k", 2).await, LockState::Locked(2));
+        // F-102: no current holder anymore, so the await tells the queued ticket to claim, and
+        // the claim is a replicated `Acquire`. It used to grant `Locked` from the await itself,
+        // which is a change no other node applied.
+        assert_eq!(await_lock(&tx, "k", 2).await, LockState::Released);
+        assert_eq!(acquire(&tx, "k", 2).await, LockState::Locked(2));
         release(&tx, "k", 2);
     }
 
@@ -539,6 +568,93 @@ mod lease_tests {
             .await
             .expect("the handler must answer within five seconds")
             .expect("the handler must not drop the answer channel")
+    }
+
+    /// Three awaiters queued on one key are each promoted in turn, and none is left parked.
+    ///
+    /// F-102: the cluster suite's distributed-lock phase queues three handles on one key and
+    /// awaits them, and one run stalled there for 120 seconds with no further output. Nothing
+    /// in this module drove more than one awaiter through a promotion chain, so the chain
+    /// `Release` walks (refresh `exp`, wake the front, drop a dead ticket and promote the next
+    /// in the same pass) was only ever exercised one link at a time.
+    ///
+    /// Every wait is bounded, so a lost wake is a failed assertion naming which link broke
+    /// rather than a hung test.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn three_queued_awaiters_are_each_promoted_in_turn() {
+        let tx = spawn();
+
+        assert_eq!(lock_bounded(&tx, "k", 1).await, LockState::Locked(1));
+        for id in 2..=4 {
+            assert_eq!(
+                lock_bounded(&tx, "k", id).await,
+                LockState::Queued(id),
+                "ticket {id} should be queued behind the holder"
+            );
+        }
+
+        // All three park before any release, which is the ordering the cluster phase produces.
+        let mut awaiting = Vec::new();
+        for id in 2..=4 {
+            let tx = tx.clone();
+            awaiting.push((
+                id,
+                tokio::spawn(async move { super::tests::await_lock(&tx, "k", id).await }),
+            ));
+        }
+
+        // Give the handler time to register all three awaits before the first release, so the
+        // test exercises promotion of a registered awaiter rather than the "has not awaited
+        // yet" path, which `023` B-3 keeps deliberately.
+        tokio::time::sleep(Duration::from_millis(200)).await;
+
+        let mut holder = 1;
+        for (id, handle) in awaiting {
+            release(&tx, "k", holder);
+
+            let state = tokio::time::timeout(Duration::from_secs(5), handle)
+                .await
+                .unwrap_or_else(|_| {
+                    panic!(
+                        "awaiter {id} was never woken after {holder} released: the promotion \
+                         chain stopped at this link"
+                    )
+                })
+                .expect("the awaiting task must not panic");
+
+            // The protocol has two ways to be granted, and `client::dlock` handles both:
+            // `Locked` directly, or `Released` meaning "your ticket was promoted, claim it".
+            // Anything else leaves a caller with no lock and nothing to re-request.
+            match state {
+                LockState::Locked(got) => assert_eq!(got, id, "the wrong ticket was granted"),
+                LockState::Released => {
+                    let claimed = tokio::time::timeout(
+                        Duration::from_secs(5),
+                        super::tests::acquire(&tx, "k", id),
+                    )
+                    .await
+                    .unwrap_or_else(|_| {
+                        panic!("awaiter {id} was promoted but could not then claim the lock")
+                    });
+                    assert_eq!(
+                        claimed,
+                        LockState::Locked(id),
+                        "a promoted ticket must be claimable with the same id"
+                    );
+                }
+                other => panic!("awaiter {id} got {other:?}, which is neither a grant nor a \
+                                 promotion it can act on"),
+            }
+            holder = id;
+        }
+
+        // And the key is usable afterwards: the last holder releases and a new caller gets it.
+        release(&tx, "k", holder);
+        assert_eq!(
+            lock_bounded(&tx, "k", 99).await,
+            LockState::Locked(99),
+            "after the whole chain drains, the key must be free"
+        );
     }
 
     /// Register an await and then drop the receiver, which is what a cancelled `lock()` future
@@ -788,5 +904,187 @@ mod lease_tests {
             LockState::Released,
             "a straggler on a removed lock is told to re-request, not left waiting"
         );
+    }
+
+    /// Register an await and hand back its receiver, so a test can bound it.
+    fn await_registered(
+        tx: &flume::Sender<LockRequest>,
+        key: &str,
+        id: u64,
+    ) -> oneshot::Receiver<LockState> {
+        let (ack, rx) = oneshot::channel();
+        send(
+            tx,
+            LockRequest::Await(LockAwaitPayload {
+                key: Cow::Owned(key.to_string()),
+                id,
+                ack,
+            }),
+        );
+        rx
+    }
+
+    async fn acquire_bounded(tx: &flume::Sender<LockRequest>, key: &str, log_id: u64) -> LockState {
+        let (ack, rx) = oneshot::channel();
+        send(
+            tx,
+            LockRequest::Acquire(LockRequestPayload {
+                key: Cow::Owned(key.to_string()),
+                log_id,
+                ack,
+            }),
+        );
+        tokio::time::timeout(Duration::from_secs(5), rx)
+            .await
+            .expect("the handler must answer within five seconds")
+            .expect("the handler must not drop the answer channel")
+    }
+
+    /// F-102. A holder whose release never arrives, because it died or its release was lost,
+    /// wakes nobody: lease expiry is only noticed when a request arrives, and a parked waiter
+    /// sends none. Its only way out is the client's bounded await ending in a re-request with
+    /// its own ticket, and that re-request used to be queued again behind the dead holder,
+    /// because `Acquire` never looked at `exp`. So the waiter sat out the 120-second request
+    /// timeout, which is the 119.9 seconds F-102 measured.
+    #[tokio::test]
+    async fn a_waiter_whose_holder_never_releases_claims_after_one_lease() {
+        let tx = spawn_with_lease(SHORT_LEASE);
+
+        assert_eq!(lock_bounded(&tx, "k", 1).await, LockState::Locked(1));
+        assert_eq!(lock_bounded(&tx, "k", 2).await, LockState::Queued(2));
+        let mut parked = await_registered(&tx, "k", 2);
+
+        // Ticket 1 never releases. Past its lease, nothing has woken the waiter.
+        wait_out_the_lease().await;
+        assert!(
+            parked.try_recv().is_err(),
+            "nothing wakes a parked waiter when a lease expires; that is why the client bounds it"
+        );
+
+        // The client's bounded await ends, and it re-requests with its ticket.
+        assert_eq!(
+            acquire_bounded(&tx, "k", 2).await,
+            LockState::Locked(2),
+            "a re-request after the holder's lease must claim the lock, not queue behind it"
+        );
+    }
+
+    /// F-102. An await is not a Raft entry, and for an embedded client it runs on that client's
+    /// own node, which may be a follower. It must change nothing: it used to grant `Locked` and
+    /// evict tickets from the local view. Here it would have granted ticket 2; instead it says
+    /// "claim", and the lock is still ticket 2's to claim, not a fresh caller's.
+    #[tokio::test]
+    async fn an_await_changes_no_lock_state() {
+        let tx = spawn_with_lease(SHORT_LEASE);
+
+        assert_eq!(lock_bounded(&tx, "k", 1).await, LockState::Locked(1));
+        assert_eq!(lock_bounded(&tx, "k", 2).await, LockState::Queued(2));
+        release(&tx, "k", 1);
+
+        let rx = await_registered(&tx, "k", 2);
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(5), rx)
+                .await
+                .unwrap()
+                .unwrap(),
+            LockState::Released,
+            "an await that would have been granted is told to claim through a replicated request"
+        );
+        assert_eq!(
+            lock_bounded(&tx, "k", 3).await,
+            LockState::Queued(3),
+            "the await did not take the lock, so ticket 2 is still first in line"
+        );
+        assert_eq!(acquire_bounded(&tx, "k", 2).await, LockState::Locked(2));
+    }
+
+    /// F-102. A re-request while someone else holds the lock keeps the ticket's place and never
+    /// adds a second copy. A duplicate used to stay at the front after the ticket's first copy
+    /// was granted and released, and made the next caller wait out a lease behind nobody.
+    #[tokio::test]
+    async fn a_re_request_never_duplicates_its_ticket() {
+        let tx = spawn_with_lease(SHORT_LEASE);
+
+        assert_eq!(lock_bounded(&tx, "k", 1).await, LockState::Locked(1));
+        assert_eq!(lock_bounded(&tx, "k", 2).await, LockState::Queued(2));
+        assert_eq!(acquire_bounded(&tx, "k", 2).await, LockState::Queued(2));
+        assert_eq!(acquire_bounded(&tx, "k", 2).await, LockState::Queued(2));
+        release(&tx, "k", 1);
+        assert_eq!(acquire_bounded(&tx, "k", 2).await, LockState::Locked(2));
+        // A retry after a lost response is answered again, not queued.
+        assert_eq!(acquire_bounded(&tx, "k", 2).await, LockState::Locked(2));
+        release(&tx, "k", 2);
+        assert_eq!(
+            lock_bounded(&tx, "k", 3).await,
+            LockState::Locked(3),
+            "no stale copy of ticket 2 may be left in front of the next caller"
+        );
+    }
+
+    /// F-102. A client whose await timed out awaits again with the same ticket. The dead
+    /// registration used to stay first in the list, fail to deliver on the next release, and
+    /// get the live ticket dropped from the queue, so its new await was never answered.
+    #[tokio::test]
+    async fn a_timed_out_await_does_not_cost_the_live_ticket_its_place() {
+        let tx = spawn_with_lease(SHORT_LEASE);
+
+        assert_eq!(lock_bounded(&tx, "k", 1).await, LockState::Locked(1));
+        assert_eq!(lock_bounded(&tx, "k", 2).await, LockState::Queued(2));
+        assert_eq!(lock_bounded(&tx, "k", 3).await, LockState::Queued(3));
+
+        await_then_abandon(&tx, "k", 2);
+        let live = await_registered(&tx, "k", 2);
+        release(&tx, "k", 1);
+
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(5), live)
+                .await
+                .expect("the live await must be answered within five seconds")
+                .unwrap(),
+            LockState::Released
+        );
+        assert_eq!(acquire_bounded(&tx, "k", 2).await, LockState::Locked(2));
+    }
+
+    /// A replaced registration is answered, never dropped. For a remote client the receiver
+    /// is a server task in `network::api` that used to `expect` an answer, so dropping it
+    /// panicked that task, and under `panic = "abort"` ended the node. Found in review.
+    #[tokio::test]
+    async fn a_replaced_await_is_answered_not_dropped() {
+        let tx = spawn_with_lease(SHORT_LEASE);
+
+        assert_eq!(lock_bounded(&tx, "k", 1).await, LockState::Locked(1));
+        assert_eq!(lock_bounded(&tx, "k", 2).await, LockState::Queued(2));
+        let first = await_registered(&tx, "k", 2);
+        let _second = await_registered(&tx, "k", 2);
+
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(5), first)
+                .await
+                .expect("the replaced await must be answered within five seconds")
+                .expect("the replaced await must be answered, not have its channel dropped"),
+            LockState::Released
+        );
+    }
+
+    /// An await does not judge a lease on its own node's clock. A follower whose clock ran
+    /// ahead answered `Released` for the last seconds of every lease while the leader kept
+    /// answering `Queued`, and its client looped on Raft writes. Found in review.
+    #[tokio::test]
+    async fn an_await_does_not_judge_the_lease() {
+        let tx = spawn_with_lease(SHORT_LEASE);
+
+        assert_eq!(lock_bounded(&tx, "k", 1).await, LockState::Locked(1));
+        assert_eq!(lock_bounded(&tx, "k", 2).await, LockState::Queued(2));
+        wait_out_the_lease().await;
+
+        let mut parked = await_registered(&tx, "k", 2);
+        tokio::task::yield_now().await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        assert!(
+            parked.try_recv().is_err(),
+            "an expired holder is noticed by `Acquire`, not answered by an await"
+        );
+        assert_eq!(acquire_bounded(&tx, "k", 2).await, LockState::Locked(2));
     }
 }

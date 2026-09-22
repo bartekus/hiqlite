@@ -20,7 +20,7 @@ profiling = ["hiqlite/__profiling"]
 tokio-console = ["dep:console-subscriber"]
 
 [dependencies]
-hiqlite = { path = "../../hiqlite", features = [
+hiqlite = { package = "hiqlite-patched", path = "../../hiqlite", features = [
     "cache", "dlock", "listen_notify", "macros", "shutdown-handle"
 ] }
 

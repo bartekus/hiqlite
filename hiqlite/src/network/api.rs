@@ -48,6 +48,11 @@ pub async fn health(state: AppStateExt) -> Result<(), Error> {
 
     #[cfg(any(feature = "sqlite", feature = "cache"))]
     {
+        // A terminal failure is not something a retry three seconds later resolves.
+        state.lifecycle.ensure_available()?;
+        #[cfg(feature = "cache")]
+        state.raft_cache.ensure_cache_compatible()?;
+
         if check_health(&state).await.is_err() {
             // after at least 3 seconds, we should have a new leader
             time::sleep(Duration::from_secs(3)).await;
@@ -95,6 +100,14 @@ async fn check_health(state: &AppStateExt) -> Result<(), Error> {
 pub async fn ready(state: AppStateExt) -> Result<(), Error> {
     #[cfg(all(not(feature = "sqlite"), not(feature = "cache")))]
     panic!("neither `sqlite` nor `cache` feature enabled");
+
+    // First, and before any Raft metric is consulted. A node whose WAL writer has ended or
+    // whose listener has stopped serving is not ready whatever its Raft state says, and
+    // answering on the strength of Raft metrics alone is what let a failed node keep looking
+    // healthy.
+    state.lifecycle.ensure_available()?;
+    #[cfg(feature = "cache")]
+    state.raft_cache.ensure_cache_compatible()?;
 
     if state.is_shutting_down.load(Ordering::Relaxed) {
         return Err(Error::Error("Node is shutting down".into()));
@@ -340,11 +353,19 @@ pub async fn listen(
     validate_secret(&state, &headers)?;
 
     let (tx, rx) = flume::bounded(1);
+    let (ack, ack_rx) = tokio::sync::oneshot::channel();
     state
         .raft_cache
         .tx_notify
-        .send_async(NotifyRequest::Listen(tx))
+        .send_async(NotifyRequest::Listen((tx, ack)))
         .await?;
+
+    // F-051: the response is not sent until the subscription exists. A client that sees the
+    // stream open can therefore rely on being subscribed, which is what makes the readiness
+    // signal on the client side mean anything.
+    ack_rx
+        .await
+        .map_err(|_| Error::Error("the notification handler is not running".into()))?;
 
     Ok(sse::Sse::new(rx.into_stream()).keep_alive(sse::KeepAlive::default()))
 }
@@ -363,6 +384,7 @@ pub async fn stream(
     Path(raft_type): Path<RaftType>,
     ws: upgrade::IncomingUpgrade,
 ) -> Result<impl IntoResponse, Error> {
+    raft_type.selected()?;
     let (response, socket) = ws.upgrade()?;
     debug!("New Raft Stream for {:?}", raft_type);
 
@@ -841,9 +863,12 @@ async fn handle_socket_concurrent(
                         .tx_dlock
                         .send(LockRequest::Await(LockAwaitPayload { key, id, ack }))
                         .expect("kv handler to always be running");
-                    let lock_state = rx
-                        .await
-                        .expect("to always get an answer from the kv handler");
+                    // A dropped answer channel is an error for this one request, never a panic:
+                    // under `panic = "abort"` a panic here ends the whole node.
+                    let lock_state = rx.await.unwrap_or_else(|_| {
+                        error!("the lock handler dropped an await without answering it");
+                        LockState::Released
+                    });
 
                     ApiStreamResponse {
                         request_id,

@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-hiqlite = { path = "../../hiqlite", features = [
+hiqlite = { package = "hiqlite-patched", path = "../../hiqlite", features = [
     "cache", "dlock", "listen_notify", "macros", "shutdown-handle"
 ] }
 

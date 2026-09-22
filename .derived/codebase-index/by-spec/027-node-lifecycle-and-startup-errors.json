@@ -1,0 +1,226 @@
+{
+  "mapping": {
+    "amends": [
+      "010-node-lifecycle-and-split-brain"
+    ],
+    "dependsOn": [
+      "000-hiqlite-ownership-bootstrap",
+      "008-wal-append-completion-notification",
+      "010-node-lifecycle-and-split-brain",
+      "022-replicated-cache-command-compatibility",
+      "024-exclusive-storage-ownership"
+    ],
+    "implementingPaths": [
+      {
+        "path": "hiqlite-wal/src/",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/app_state.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/bin/abort_probe.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/client/",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/lifecycle.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/membership_gate.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/network/",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/split_brain_check.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/start.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "spec-spine.toml",
+        "source": "spec-edge"
+      },
+      {
+        "path": "standards/spec/adoption-plan.md",
+        "source": "spec-edge"
+      },
+      {
+        "path": "standards/spec/findings-register.md",
+        "source": "spec-edge"
+      }
+    ],
+    "resolvedUnits": [
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/bin/abort_probe.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/bin/abort_probe.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/lifecycle.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/lifecycle.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/membership_gate.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/membership_gate.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite-wal/src/"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite-wal/src/"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/client/"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/client/"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/network/"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/network/"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/app_state.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/app_state.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/split_brain_check.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/split_brain_check.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/start.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/start.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "spec-spine.toml"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "spec-spine.toml"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "standards/spec/adoption-plan.md"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/adoption-plan.md"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "standards/spec/findings-register.md"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/findings-register.md"
+        }
+      }
+    ],
+    "specId": "027-node-lifecycle-and-startup-errors",
+    "specStatus": "draft"
+  },
+  "schemaVersion": "1.1.0",
+  "shardHash": "1763c13d3ade16b29eea409aeaed64d2334e3b7c647d390646b22fa87d1965d5"
+}

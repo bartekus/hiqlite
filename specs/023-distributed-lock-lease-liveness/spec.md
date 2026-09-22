@@ -139,10 +139,52 @@ detection later. A configurable one moves the choice to the operator without
 changing what any value of it can promise. `006` KD-2 and F-026 stand exactly as
 recorded.
 
+### B-6. A waiter is bounded by the lease, and only replicated requests change lock state
+
+F-102, repaired 2026-09-22. Read from source, not reproduced: the stall measured
+119.9 seconds against the client's 120-second request timeout, and four things in
+the source explain a waiter lasting exactly that long.
+
+1. **Nothing wakes a parked waiter when a lease expires.** Expiry is noticed only
+   when a request arrives. A holder that dies, or whose release is lost, leaves
+   its waiters parked, and a parked waiter sends nothing.
+2. **The waiter's wait was bounded only by the request timeout.** It now lasts at
+   most one lease plus two seconds (`AWAIT_BOUND`, derived from
+   `LOCK_VALID_SECONDS`), and then the client re-requests with its own ticket.
+3. **That re-request (`Acquire`) never looked at `exp`**, so it was queued again
+   behind the dead holder, and it pushed a **second copy** of its ticket. It now
+   clears a holder whose lease is over, drops front tickets that had their window,
+   answers a retry for a lock it already holds with `Locked` again, and never
+   duplicates a ticket.
+4. **An await changed replicated state outside Raft.** An embedded client sends
+   its await to its **own** node's handler, which may be a follower. That path
+   evicted tickets and could grant `Locked` from the local view, so a follower
+   lagging the leader could grant a lock the leader had given to someone else.
+   An await now only registers, replacing any earlier registration of the same
+   ticket, or answers `Released`; every state change goes through `Lock`,
+   `Acquire` or `Release`, which every node applies in log order.
+
+**Corrected in review of the candidate, 2026-09-22.** Independent review found
+that replacing a registration dropped the old answer channel, and a remote
+client's server task `expect`ed an answer on it: under `panic = "abort"` that
+ended the node. A replaced registration is now answered `Released`, and the
+server task treats a dropped channel as `Released` rather than panicking. Review
+also found that an await judging the lease on its own node's clock could send a
+waiter round a loop of Raft writes when that clock ran ahead of the leader's; an
+await no longer looks at `exp` at all, and a client whose awaits are answered at
+once repeatedly backs off. A retried `Acquire` for a lock the ticket already holds
+now refreshes the lease instead of returning one that may have run out.
+
+**Consequence for callers.** A queued caller whose holder dies acquires within
+about one lease plus the await bound of the holder's grant, instead of failing
+after 120 seconds. A promoted awaiter now always claims through a replicated
+`Acquire`, one extra round trip.
+
 ## 4. Evidence and its limits
 
-Eight tests in `dlock_handler.rs`, in a module beside the six PR #352 left,
-which are unchanged and still pass.
+Nine tests in `dlock_handler.rs`, in a module beside the six PR #352 left,
+which are unchanged and still pass. Eight were written with this spec; the
+ninth was added on 2026-09-22 and is described below.
 
 **Four fail against the unrepaired handler**, run and observed: 4 passed, 4
 failed.
@@ -152,6 +194,20 @@ failed.
 - a grant that was never received does not hold the lock;
 - a dead promoted ticket does not block the next caller;
 - a fully released lock wakes its stragglers.
+
+A ninth was added on 2026-09-22, after F-102: **three queued awaiters are each
+promoted in turn.** Nothing here drove the promotion chain more than one link at
+a time, and B-3's `Release` walks it (refresh `exp`, wake the front, drop a dead
+ticket and promote the next in the same pass). The test queues three awaiters on
+one key, parks all three before any release, and bounds every wait so a lost
+wake names the link that broke instead of hanging. It passes, sixty runs of
+sixty, which is what moves F-102's suspicion off this handler rather than
+leaving it pointed here.
+
+Writing it corrected an assumption: a promoted awaiter is answered `Released`,
+not `Locked`, and `client::dlock` re-requests with the same ticket. The first
+draft asserted `Locked` and was wrong about the protocol. The test now accepts
+either grant shape and follows the client's own loop.
 
 **Four pass both before and after**, because they characterize behavior this
 spec describes rather than changes, which is why they are here:
@@ -184,6 +240,24 @@ What the acceptance does **not** establish:
 - **No client is fenced.** Section 5.
 - **The `Acquire` and `Await` undo paths in B-2 are not separately tested.** The
   `Lock` one is; the other two are the same change applied to the same shape.
+
+**B-6 (F-102), four tests, each observed failing against the handler as it
+was before the repair and passing after:** a waiter whose holder never releases
+claims with one re-request after the lease, where the original handler queued it
+again; an await that would have been granted changes nothing, where the original
+granted `Locked` itself; a re-request never duplicates its ticket, where the
+original left a stale copy in front of the next caller; and a timed-out await does
+not cost the live ticket its place, where the original dropped it. One existing
+test, `lock_release_roundtrip`, asserted the local grant and now asserts
+`Released` followed by a replicated `Acquire`; it asserted the behavior item 4
+removes, and is replaced rather than kept.
+
+**What B-6 does not establish.** The client's bounded await is not exercised by
+any unit test, because it needs a running node; the cluster suite's lock phase
+is the only thing that runs it. The F-102 stall was never reproduced on demand,
+so the claim is that the source explains a waiter lasting exactly the request
+timeout and that each mechanism is now tested closed, not that the observed run
+was caused by one particular mechanism.
 
 ## 5. Known defects
 
@@ -218,6 +292,16 @@ store (`007`), so a restarted node has no locks at all until a snapshot install
 or a new log entry arrives. What a peer believes about a lock and what this node
 believes can differ for that window.
 
+**KD-6. After a holder dies, the next grant goes to whoever re-requests first.**
+Every parked waiter's bounded await ends at about the same time, and the first
+re-request to reach the leader evicts the front tickets ahead of it. Liveness is
+bounded; order is not preserved across a dead holder.
+
+**KD-7. Nodes can still disagree about a lease.** `exp` is computed from each
+node's clock at apply time (the handler's own comment). B-6 removes the one path
+that acted on a follower's view without Raft; it does not make the lease a
+cluster-wide fact.
+
 **KD-5. A front ticket that never awaits still occupies the queue for a lease
 window.** B-3 keeps it deliberately, because "has not awaited yet" and "is gone"
 are indistinguishable at that moment. The refreshed deadline bounds it; nothing
@@ -251,6 +335,12 @@ is named so it cannot be mistaken for a knob.
 **D-5 (2026-09-21, this block is `022`'s acceptance).** Which is `006`'s through
 `022`. All twenty-six of `022`'s commands are carried forward unchanged.
 
+**D-6 (2026-09-22, bound the waiter in the client, not with a timer in the
+handler).** A handler timer would have to change lock state on every node on
+that node's clock, which is the non-replicated change B-6 removes from the await
+path. A client that re-requests puts the decision in a Raft entry, where every
+node applies it in the same order.
+
 ## 7. Out of scope
 
 - **Fencing tokens, and any cross-node mutual-exclusion guarantee.** KD-1 is
@@ -268,42 +358,56 @@ this spec's** (D-5), and `022`'s is `006`'s, so `spec-spine verify 006` and
 `verify 022` both resolve here and print the attribution line.
 
 ```verify:cli
+# Package names, not library names: the downstream release renamed the three packages
+# (`031` B-2), and `-p` takes a package name. `use hiqlite::..` is unaffected.
 # --- 022's acceptance, which is also 006's, carried forward unchanged ---
-cargo test -p hiqlite --lib --no-default-features --features cache store::state_machine::memory::cache_ttl_handler::tests::collision_bump_keeps_both_keys -- --exact
-cargo test -p hiqlite --lib --no-default-features --features cache store::state_machine::memory::cache_ttl_handler::tests::refreshed_key_is_not_deleted_at_old_expiry -- --exact
-cargo test -p hiqlite --lib --no-default-features --features cache store::state_machine::memory::cache_ttl_handler::tests::refreshed_key_expires_at_new_expiry -- --exact
-cargo test -p hiqlite --lib --no-default-features --features cache store::state_machine::memory::cache_ttl_handler::tests::clear_removes_pending_expiry -- --exact
-cargo test -p hiqlite --lib --no-default-features --features cache store::state_machine::memory::cache_ttl_handler::tests::snapshot_roundtrip_preserves_expiries -- --exact
-cargo test -p hiqlite --lib --no-default-features --features cache store::state_machine::memory::cache_ttl_handler::tests::old_seconds_expiries_are_normalized_on_install -- --exact
-cargo test -p hiqlite --lib --no-default-features --features cache store::state_machine::memory::kv_handler::tests::get_remove_and_replace_are_atomic_per_key -- --exact
-cargo test -p hiqlite --lib --no-default-features --features cache store::state_machine::memory::state_machine::serialized_enum_order::cache_request_variant_order_is_stable -- --exact
-cargo test -p hiqlite --lib --no-default-features --features cache,in-memory-snapshots store::state_machine::memory::state_machine::tests::in_memory_only_does_not_require_data_dir -- --exact
-cargo test -p hiqlite --lib --no-default-features --features cache,in-memory-snapshots store::state_machine::memory::state_machine::tests::read_current_snapshot_skips_temp_files -- --exact
-cargo test -p hiqlite --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::tests::lock_release_roundtrip -- --exact
-cargo test -p hiqlite --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::tests::duplicate_release_is_ignored -- --exact
-cargo test -p hiqlite --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::tests::release_after_lock_was_removed_is_ignored -- --exact
-cargo test -p hiqlite --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::tests::acquire_after_lock_was_removed_grants_fresh -- --exact
-cargo test -p hiqlite --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::tests::await_when_lock_was_removed_returns_released -- --exact
-cargo test -p hiqlite --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::tests::late_release_after_takeover_is_ignored -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features cache store::state_machine::memory::cache_ttl_handler::tests::collision_bump_keeps_both_keys -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features cache store::state_machine::memory::cache_ttl_handler::tests::refreshed_key_is_not_deleted_at_old_expiry -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features cache store::state_machine::memory::cache_ttl_handler::tests::refreshed_key_expires_at_new_expiry -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features cache store::state_machine::memory::cache_ttl_handler::tests::clear_removes_pending_expiry -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features cache store::state_machine::memory::cache_ttl_handler::tests::snapshot_roundtrip_preserves_expiries -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features cache store::state_machine::memory::cache_ttl_handler::tests::old_seconds_expiries_are_normalized_on_install -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features cache store::state_machine::memory::kv_handler::tests::get_remove_and_replace_are_atomic_per_key -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features cache store::state_machine::memory::state_machine::serialized_enum_order::cache_request_variant_order_is_stable -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features cache,in-memory-snapshots store::state_machine::memory::state_machine::tests::in_memory_only_does_not_require_data_dir -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features cache,in-memory-snapshots store::state_machine::memory::state_machine::tests::read_current_snapshot_skips_temp_files -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::tests::lock_release_roundtrip -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::tests::duplicate_release_is_ignored -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::tests::release_after_lock_was_removed_is_ignored -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::tests::acquire_after_lock_was_removed_grants_fresh -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::tests::await_when_lock_was_removed_returns_released -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::tests::late_release_after_takeover_is_ignored -- --exact
 grep -q 'LOCK_VALID_SECONDS: i64 = 10' hiqlite/src/store/state_machine/memory/dlock_handler.rs
 sh -c 'grep -q "unreachable!(\"a CacheRequest::Get should never come through the Raft\")" hiqlite/src/store/state_machine/memory/state_machine.rs'
-cargo test -p hiqlite --lib --no-default-features --features cache,counters,dlock,listen_notify_local store::state_machine::memory::state_machine::cache_compatibility_tests::an_out_of_range_cache_index_stops_application_at_that_entry -- --exact
-cargo test -p hiqlite --lib --no-default-features --features cache,counters,dlock,listen_notify_local store::state_machine::memory::state_machine::cache_compatibility_tests::a_later_batch_is_refused_once_the_node_is_incompatible -- --exact
-cargo test -p hiqlite --lib --no-default-features --features cache,counters,dlock,listen_notify_local store::state_machine::memory::state_machine::cache_compatibility_tests::a_command_that_must_never_be_replicated_stops_application -- --exact
-cargo test -p hiqlite --lib --no-default-features --features cache,counters,dlock,listen_notify_local store::state_machine::memory::state_machine::cache_compatibility_tests::the_recorded_failure_is_what_callers_are_refused_with -- --exact
-cargo test -p hiqlite --lib --no-default-features --features cache,counters,dlock,listen_notify_local store::state_machine::memory::state_machine::cache_compatibility_tests::a_compatible_batch_still_applies_completely -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features cache,counters,dlock,listen_notify_local store::state_machine::memory::state_machine::cache_compatibility_tests::an_out_of_range_cache_index_stops_application_at_that_entry -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features cache,counters,dlock,listen_notify_local store::state_machine::memory::state_machine::cache_compatibility_tests::a_later_batch_is_refused_once_the_node_is_incompatible -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features cache,counters,dlock,listen_notify_local store::state_machine::memory::state_machine::cache_compatibility_tests::a_command_that_must_never_be_replicated_stops_application -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features cache,counters,dlock,listen_notify_local store::state_machine::memory::state_machine::cache_compatibility_tests::the_recorded_failure_is_what_callers_are_refused_with -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features cache,counters,dlock,listen_notify_local store::state_machine::memory::state_machine::cache_compatibility_tests::a_compatible_batch_still_applies_completely -- --exact
 sh -c 'grep -q "fn unsupported_reason" hiqlite/src/store/state_machine/memory/state_machine.rs'
 sh -c 'grep -q "CacheIncompatible" hiqlite/src/error.rs'
 sh -c 'grep -q "fn ensure_cache_compatible" hiqlite/src/app_state.rs'
 # --- what this repair adds ---
-cargo test -p hiqlite --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::an_abandoned_waiter_never_kills_the_handler -- --exact
-cargo test -p hiqlite --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::a_grant_that_was_never_received_does_not_hold_the_lock -- --exact
-cargo test -p hiqlite --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::a_dead_promoted_ticket_does_not_block_the_next_caller -- --exact
-cargo test -p hiqlite --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::a_stale_release_after_takeover_blocks_nothing -- --exact
-cargo test -p hiqlite --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::an_interrupted_lease_is_reacquired_immediately_from_a_snapshot -- --exact
-cargo test -p hiqlite --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::a_completed_operation_leaves_nothing_to_wait_for_after_a_restart -- --exact
-cargo test -p hiqlite --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::replaying_an_unreleased_lock_re_grants_it_for_one_more_lease_window -- --exact
-cargo test -p hiqlite --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::a_fully_released_lock_wakes_its_stragglers -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::an_abandoned_waiter_never_kills_the_handler -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::a_grant_that_was_never_received_does_not_hold_the_lock -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::a_dead_promoted_ticket_does_not_block_the_next_caller -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::a_stale_release_after_takeover_blocks_nothing -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::an_interrupted_lease_is_reacquired_immediately_from_a_snapshot -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::a_completed_operation_leaves_nothing_to_wait_for_after_a_restart -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::replaying_an_unreleased_lock_re_grants_it_for_one_more_lease_window -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::a_fully_released_lock_wakes_its_stragglers -- --exact
+# F-102: the promotion chain, driven more than one link at a time
+cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::three_queued_awaiters_are_each_promoted_in_turn -- --exact
+# B-6 / F-102: a waiter is bounded by the lease, and an await changes nothing
+cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::a_waiter_whose_holder_never_releases_claims_after_one_lease -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::an_await_changes_no_lock_state -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::a_re_request_never_duplicates_its_ticket -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::a_timed_out_await_does_not_cost_the_live_ticket_its_place -- --exact
+sh -c 'grep -q "time::timeout(AWAIT_BOUND, self.lock_await(" hiqlite/src/client/dlock.rs'
+sh -c 'grep -q "LOCK_VALID_SECONDS as u64 + 2" hiqlite/src/client/dlock.rs'
+cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::a_replaced_await_is_answered_not_dropped -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::an_await_does_not_judge_the_lease -- --exact
+sh -c '! grep -q "to always get an answer from the kv handler" hiqlite/src/network/api.rs'
 # no acknowledgement in the lock handler may panic its own task
 sh -c '! grep -q "ack.send(LockState::" hiqlite/src/store/state_machine/memory/dlock_handler.rs'
 sh -c 'grep -q "fn answer(" hiqlite/src/store/state_machine/memory/dlock_handler.rs'

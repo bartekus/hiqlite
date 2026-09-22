@@ -55,6 +55,7 @@
       "B-3. A promoted ticket gets its own deadline",
       "B-4. The awaiter map shrinks",
       "B-5. The lease length is unchanged, and injectable only for tests",
+      "B-6. A waiter is bounded by the lease, and only replicated requests change lock state",
       "4. Evidence and its limits",
       "5. Known defects",
       "6. Resolved decisions",
@@ -66,6 +67,6 @@
     "summary": "Completes what upstream PR #352 started. Every remaining acknowledgement in the lock handler could kill the whole handler when its client had gone away, a promoted ticket inherited the released holder's deadline and could block every later caller, an undelivered grant held the lock for a full lease window, and the awaiter map never shrank. States, with executed evidence, the lease limits none of this removes, and declines a longer or configurable TTL as a repair for them.\n",
     "title": "Repair the distributed-lock handler's liveness and state the lease limits it does not remove"
   },
-  "shardHash": "616f9766dcfee8aaf4a60a4611afbbf810d8aac8fc49e95086b07d8c43f2e96d",
+  "shardHash": "64a90b7b235df645760bb220f832161add4c66d77e77978043ee5c6929bd2b53",
   "specVersion": "1.3.0"
 }

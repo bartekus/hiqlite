@@ -42,6 +42,7 @@ pub(crate) async fn start_raft_db(
     node_config: &NodeConfig,
     raft_config: Arc<RaftConfig>,
     do_reset_metadata: bool,
+    lifecycle: crate::lifecycle::NodeLifecycle,
 ) -> Result<StateRaftDB, Error> {
     // We always want to start stopped and set to `false` as soon as we found out,
     // that we are not pristine node and need cleanup.
@@ -81,7 +82,7 @@ pub(crate) async fn start_raft_db(
         recovery_bounds,
     )
     .await
-    .unwrap();
+    .map_err(|err| Error::Startup(format!("cannot open the sqlite state machine: {err}").into()))?;
 
     let is_startup_finished = Arc::new(AtomicBool::new(false));
     let sql_writer = state_machine_store.write_tx.clone();
@@ -98,6 +99,14 @@ pub(crate) async fn start_raft_db(
     };
 
     let shutdown_handle = log_store.shutdown_handle();
+    // `008` KD-3's missing consumer. A writer thread that ends, for any reason including a
+    // panic inside it, now takes this node out of service instead of leaving it answering as
+    // though its log storage were healthy.
+    crate::lifecycle::watch_wal_writer(
+        lifecycle.clone(),
+        log_store.writer_failure(),
+        "the sqlite raft log",
+    );
 
     let raft = openraft::Raft::new(
         node_config.node_id,
@@ -107,9 +116,14 @@ pub(crate) async fn start_raft_db(
         state_machine_store,
     )
     .await
-    .expect("Raft create failed");
+    .map_err(|err| {
+            // A start that failed is not a component that failed: the log store dropped here
+            // ends its writer, and without this the watch recorded that as a WAL writer failure.
+            lifecycle.begin_shutdown();
+            Error::Startup(format!("cannot create the sqlite raft: {err}").into())
+        })?;
 
-    init::init_pristine_node_1_db(
+    if let Err(err) = init::init_pristine_node_1_db(
         &raft,
         node_config.node_id,
         &node_config.nodes,
@@ -121,7 +135,24 @@ pub(crate) async fn start_raft_db(
             .map(|c| c.danger_tls_no_verify())
             .unwrap_or(false),
     )
-    .await?;
+    .await
+    {
+        // The raft, its WAL writer and the SQLite writer are all running by now. Returning
+        // without stopping them leaked the WAL writer's lock past a failed start, and the next
+        // start in the same process panicked on it (found in review).
+        lifecycle.begin_shutdown();
+        let _ = raft.shutdown().await;
+        let _ = shutdown_handle.shutdown().await;
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        if sql_writer
+            .send_async(state_machine::sqlite::writer::WriterRequest::Shutdown(tx))
+            .await
+            .is_ok()
+        {
+            let _ = rx.await;
+        }
+        return Err(err);
+    }
 
     Ok(StateRaftDB {
         raft,
@@ -138,6 +169,7 @@ pub(crate) async fn start_raft_db(
 pub(crate) async fn start_raft_cache<C>(
     node_config: &NodeConfig,
     raft_config: Arc<RaftConfig>,
+    lifecycle: crate::lifecycle::NodeLifecycle,
 ) -> Result<StateRaftCache, Error>
 where
     C: Debug + CacheVariants,
@@ -184,6 +216,11 @@ where
         )
         .await?;
         let shutdown_handle = log_store.shutdown_handle();
+        crate::lifecycle::watch_wal_writer(
+            lifecycle.clone(),
+            log_store.writer_failure(),
+            "the cache raft log",
+        );
 
         let raft = openraft::Raft::new(
             node_config.node_id,
@@ -193,7 +230,12 @@ where
             state_machine_store,
         )
         .await
-        .expect("Raft create failed");
+        .map_err(|err| {
+            // A start that failed is not a component that failed: the log store dropped here
+            // ends its writer, and without this the watch recorded that as a WAL writer failure.
+            lifecycle.begin_shutdown();
+            Error::Startup(format!("cannot create the cache raft: {err}").into())
+        })?;
 
         (raft, Some(shutdown_handle))
     } else {
@@ -205,12 +247,17 @@ where
             state_machine_store,
         )
         .await
-        .expect("Raft create failed");
+        .map_err(|err| {
+            // A start that failed is not a component that failed: the log store dropped here
+            // ends its writer, and without this the watch recorded that as a WAL writer failure.
+            lifecycle.begin_shutdown();
+            Error::Startup(format!("cannot create the cache raft: {err}").into())
+        })?;
 
         (raft, None)
     };
 
-    init::init_pristine_node_1_cache(
+    if let Err(err) = init::init_pristine_node_1_cache(
         &raft,
         node_config.cache_storage_disk,
         node_config.node_id,
@@ -223,7 +270,16 @@ where
             .map(|c| c.danger_tls_no_verify())
             .unwrap_or(false),
     )
-    .await?;
+    .await
+    {
+        // As for the SQLite group: nothing started here may outlive a failed start.
+        lifecycle.begin_shutdown();
+        let _ = raft.shutdown().await;
+        if let Some(handle) = &shutdown_handle {
+            let _ = handle.shutdown().await;
+        }
+        return Err(err);
+    }
 
     Ok(StateRaftCache {
         raft,

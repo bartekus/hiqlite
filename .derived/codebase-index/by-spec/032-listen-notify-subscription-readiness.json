@@ -1,0 +1,90 @@
+{
+  "mapping": {
+    "amends": [
+      "031-downstream-release-qualification"
+    ],
+    "dependsOn": [
+      "000-hiqlite-ownership-bootstrap",
+      "003-client-consistency-and-retry-outcomes",
+      "006-cache-state-machine",
+      "012-cluster-integration-evidence",
+      "031-downstream-release-qualification"
+    ],
+    "implementingPaths": [
+      {
+        "path": "hiqlite/src/client/",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/network/",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/store/state_machine/memory/",
+        "source": "spec-edge"
+      },
+      {
+        "path": "standards/spec/findings-register.md",
+        "source": "spec-edge"
+      }
+    ],
+    "resolvedUnits": [
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/client/"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/client/"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/network/"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/network/"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/store/state_machine/memory/"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/store/state_machine/memory/"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "standards/spec/findings-register.md"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/findings-register.md"
+        }
+      }
+    ],
+    "specId": "032-listen-notify-subscription-readiness",
+    "specStatus": "draft"
+  },
+  "schemaVersion": "1.1.0",
+  "shardHash": "749b54cb1852ac88876e18ea81eda1c685f225893bfa12b71a797e1db8cde082"
+}

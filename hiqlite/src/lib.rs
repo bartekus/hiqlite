@@ -81,9 +81,49 @@ mod network;
 mod start;
 
 #[cfg(any(feature = "sqlite", feature = "cache"))]
+pub mod lifecycle;
+#[cfg(any(feature = "sqlite", feature = "cache"))]
+mod membership_gate;
+
+/// Entry points for the abort-profile probe binary.
+///
+/// Not part of the supported API: it exists so `hiqlite-abort-probe` can call the expected
+/// failure paths from outside the crate, under a profile no test can run in.
+#[cfg(feature = "__abort-probe")]
+#[doc(hidden)]
+pub mod probe {
+    pub fn split_brain_interval(raw: &str) -> Result<std::time::Duration, crate::Error> {
+        crate::split_brain_check::split_brain_interval_from(Some(raw))
+    }
+
+    #[cfg(feature = "s3")]
+    pub fn s3_config_from(
+        pairs: &[(&str, &str)],
+    ) -> Result<Option<std::sync::Arc<crate::s3::S3Config>>, crate::Error> {
+        let map: std::collections::HashMap<String, String> = pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+        crate::s3::S3Config::from_lookup(&move |name| map.get(name).cloned())
+    }
+
+    pub async fn bind(addr: &str) -> Result<std::net::TcpListener, crate::Error> {
+        crate::start::bind_listener(addr, "the probe endpoint").await
+    }
+
+    pub fn take_storage_ownership(dir: &str) -> Result<impl Sized, crate::Error> {
+        crate::storage_lock::StorageOwnership::acquire(dir)
+    }
+}
+
+#[cfg(any(feature = "sqlite", feature = "cache"))]
 mod storage_lock;
 #[cfg(any(feature = "sqlite", feature = "cache"))]
 mod store;
+/// The environment variable that moves a hiqlite 0.14.x cache raft log aside on the one start
+/// that upgrades a data directory. See the consumer handoff.
+#[cfg(feature = "cache")]
+pub use store::logs::CACHE_LEGACY_MOVE_ASIDE_ENV;
 
 #[cfg(feature = "backup")]
 mod backup;

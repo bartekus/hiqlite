@@ -8,6 +8,15 @@ on:
       - synchronize
       - ready_for_review
 
+# Least privilege for a pull-request trigger: this workflow reads the tree, runs the
+# style and lint checks, and writes nothing back. Without this block it inherits the
+# repository default, which is `write`, and a pull request from a branch in this
+# repository would run with a token that can push. It references no secret and must
+# not be given one: `031` keeps the publication and review credentials in workflows
+# with their own triggers.
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
   # `clear` in the just recipes fails without TERM on CI runners
@@ -18,10 +27,32 @@ jobs:
     if: github.event.pull_request.draft == false
     name: Check
     runs-on: ubuntu-latest
+    # F-114: a stalled test held this job until it was cancelled 26 minutes in. A full green run
+    # takes about 25 minutes.
+    timeout-minutes: 60
     container:
       image: ghcr.io/sebadob/rauthy-builder:20260519
+    # The container's default shell is `sh`, which rejects `set -o pipefail`. F-109.
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
+      - name: Let git read the checkout
+        # A container is where a repository can be present and `git` refuse to read it; the
+        # last step here asks git whether the lock changed. See F-106.
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Qualification graph is the committed lockfile (F-108)
+        # Fails if the committed `Cargo.lock` does not already satisfy every manifest, instead of
+        # letting this runner resolve a graph of its own. Every later cargo step then builds that
+        # graph, and the last step proves none of them changed it.
+        run: |
+          set -euo pipefail
+          rustc -Vv
+          cargo -V
+          cargo metadata --locked --format-version 1 > /dev/null
+          sha256sum Cargo.lock
       - name: Clippy (deny warnings)
         run: cargo clippy -- -D warnings
       - name: Clippy (feature matrix)
@@ -31,3 +62,5 @@ jobs:
       - name: Tests
         # S3 tests cannot be done inside GitHub CI
         run: just test-no-s3
+      - name: No step changed the qualification graph (F-108)
+        run: git diff --exit-code -- Cargo.lock

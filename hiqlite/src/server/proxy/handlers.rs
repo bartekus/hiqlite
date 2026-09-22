@@ -29,10 +29,19 @@ pub async fn listen(
     validate_secret(&state, &headers)?;
 
     let (tx, rx) = flume::unbounded();
+    let (ack, ack_rx) = tokio::sync::oneshot::channel();
     state
         .tx_notify
-        .send_async(NotifyRequest::Listen(tx))
+        .send_async(NotifyRequest::Listen((tx, ack)))
         .await?;
+
+    // F-051, on the proxy's copy of this endpoint. The response is not sent until the
+    // subscription exists, for the same reason and with the same consequence as
+    // `network::api::listen`: a client that sees the stream open is a client the handler will
+    // send to. The proxy forwards the same contract it is proxying.
+    ack_rx
+        .await
+        .map_err(|_| Error::Error("the notification handler is not running".into()))?;
 
     Ok(sse::Sse::new(rx.into_stream()).keep_alive(sse::KeepAlive::default()))
 }
@@ -86,7 +95,11 @@ fn validate_secret(state: &AppStateExt, headers: &HeaderMap) -> Result<(), Error
     match headers.get(HEADER_NAME_SECRET) {
         None => Err(Error::Token("API Secret missing".into())),
         Some(secret) => {
-            if state.secret_api.as_bytes() != secret.as_bytes() {
+            // F-068: this was a plain `!=` over the bytes, which returns as soon as they
+            // differ. The node's own `validate_secret` already uses a constant-time compare
+            // (`network/mod.rs`); the proxy validates the same secret and did not.
+            if !constant_time_eq::constant_time_eq(state.secret_api.as_bytes(), secret.as_bytes())
+            {
                 Err(Error::Token("Invalid API Secret".into()))
             } else {
                 Ok(())

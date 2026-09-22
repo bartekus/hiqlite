@@ -1,0 +1,91 @@
+{
+  "mapping": {
+    "amends": [
+      "004-governance-harness",
+      "017-examples-as-documentation",
+      "019-dashboard-build-contract"
+    ],
+    "dependsOn": [
+      "000-hiqlite-ownership-bootstrap",
+      "004-governance-harness",
+      "005-adoption-assessment-and-plan",
+      "019-dashboard-build-contract"
+    ],
+    "implementingPaths": [
+      {
+        "path": ".github/workflows/acceptance.yaml",
+        "source": "spec-edge"
+      },
+      {
+        "path": "spec-spine.toml",
+        "source": "spec-edge"
+      },
+      {
+        "path": "standards/spec/adoption-plan.md",
+        "source": "spec-edge"
+      },
+      {
+        "path": "standards/spec/findings-register.md",
+        "source": "spec-edge"
+      }
+    ],
+    "resolvedUnits": [
+      {
+        "locations": [
+          {
+            "file": ".github/workflows/acceptance.yaml"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": ".github/workflows/acceptance.yaml"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "spec-spine.toml"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "spec-spine.toml"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "standards/spec/adoption-plan.md"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/adoption-plan.md"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "standards/spec/findings-register.md"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/findings-register.md"
+        }
+      }
+    ],
+    "specId": "028-enforcement-readiness-and-acceptance-control",
+    "specStatus": "draft"
+  },
+  "schemaVersion": "1.1.0",
+  "shardHash": "267fc54db560f3ebfebe2e8a5fe984ae10dbff3cfb1720c56e343e10dfee3a14"
+}

@@ -15,7 +15,11 @@ origin:
   paths:
     - "hiqlite-derive/src/"
 establishes:
-  - { kind: crate, id: "hiqlite-derive" }
+  # The **package** was renamed to `hiqlite-derive-patched` by the downstream release (`031`
+  # B-2); the directory and the library name are unchanged. A crate unit resolves by package
+  # name, so this claim had to follow the rename or stop resolving. This is a correction to a
+  # territory declaration, not a change to what this spec says: its text is unedited.
+  - { kind: crate, id: "hiqlite-derive-patched" }
   - "hiqlite-derive/src/lib.rs"
   - "hiqlite-derive/src/from_row.rs"
   - "hiqlite-derive/src/into_cache_data.rs"

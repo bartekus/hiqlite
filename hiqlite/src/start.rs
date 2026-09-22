@@ -10,8 +10,8 @@ use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use std::time::Duration;
 use tokio::net::TcpListener;
-use tokio::sync::Mutex;
 use tokio::task;
 use tracing::{debug, info};
 
@@ -53,6 +53,150 @@ fn storage_ownership_required(node_config: &NodeConfig) -> bool {
     }
 }
 
+
+
+/// Stop what a partial startup already started.
+///
+/// A constructor that returns `Err` must not leave threads running against the data directory
+/// it was told to open: a WAL writer, a SQLite writer and a raft core outliving the failure
+/// would keep the storage busy behind a node that reported it had not started.
+#[allow(unused_variables)]
+async fn teardown_partial_start(
+    #[cfg(feature = "sqlite")] raft_db: crate::app_state::StateRaftDB,
+    #[cfg(feature = "cache")] raft_cache: crate::app_state::StateRaftCache,
+) {
+    #[cfg(feature = "cache")]
+    {
+        let _ = raft_cache.raft.shutdown().await;
+        if let Some(handle) = &raft_cache.shutdown_handle {
+            let _ = handle.shutdown().await;
+        }
+    }
+    #[cfg(feature = "sqlite")]
+    teardown_raft_db(raft_db).await;
+}
+
+#[cfg(feature = "sqlite")]
+async fn teardown_raft_db(raft_db: crate::app_state::StateRaftDB) {
+    let _ = raft_db.raft.shutdown().await;
+    let _ = raft_db.shutdown_handle.shutdown().await;
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    if raft_db
+        .sql_writer
+        .send_async(crate::store::state_machine::sqlite::writer::WriterRequest::Shutdown(tx))
+        .await
+        .is_ok()
+    {
+        let _ = rx.await;
+    }
+}
+
+/// Bind a listener, or fail startup saying which endpoint and why.
+pub(crate) async fn bind_listener(
+    addr: &str,
+    what: &'static str,
+) -> Result<std::net::TcpListener, Error> {
+    let parsed = SocketAddr::from_str(addr).map_err(|err| {
+        Error::Startup(format!("{what} address `{addr}` is not a socket address: {err}").into())
+    })?;
+
+    let listener = TcpListener::bind(parsed).await.map_err(|err| {
+        Error::Startup(format!("{what} could not bind to `{addr}`: {err}").into())
+    })?;
+
+    // Handed to the server as a std listener so the TLS and plaintext paths can both take an
+    // already-bound socket. `set_nonblocking` is what `axum_server` expects of one.
+    let listener = listener.into_std().map_err(|err| {
+        Error::Startup(format!("{what} listener on `{addr}` is unusable: {err}").into())
+    })?;
+    listener.set_nonblocking(true).map_err(|err| {
+        Error::Startup(format!("{what} listener on `{addr}` is unusable: {err}").into())
+    })?;
+    Ok(listener)
+}
+
+/// Serve a router on an already-bound listener, with graceful shutdown on both paths.
+///
+/// The TLS branches had no shutdown future at all (F-039), which the `TODO`s they carried
+/// acknowledged: with TLS on both endpoints neither plaintext branch ran, both watch receivers
+/// dropped when startup returned, and the shutdown sequence then `expect`ed a send on a channel
+/// with no receivers. `axum_server::Handle` is the TLS equivalent of
+/// `with_graceful_shutdown` and closes that.
+///
+/// Whichever branch runs, the server task's exit is observed rather than dropped: a listener
+/// that stops serving takes the node out of service, unless it stopped because it was asked to.
+#[allow(clippy::too_many_arguments)]
+async fn serve_router(
+    listener: std::net::TcpListener,
+    addr: String,
+    what: &'static str,
+    router: Router,
+    tls: Option<&crate::tls::ServerTlsConfig>,
+    listen_addr: &str,
+    mut rx_shutdown: tokio::sync::watch::Receiver<bool>,
+    lifecycle: crate::lifecycle::NodeLifecycle,
+) {
+    match tls {
+        Some(config) => {
+            let config = config.server_config(listen_addr).await;
+            let handle = axum_server::Handle::new();
+            let shutdown_handle = handle.clone();
+            task::spawn(async move {
+                let _ = rx_shutdown.changed().await;
+                shutdown_handle.graceful_shutdown(Some(Duration::from_secs(10)));
+            });
+
+            task::spawn(Box::pin(async move {
+                let server = match axum_server::from_tcp_rustls(listener, config) {
+                    Ok(server) => server,
+                    Err(err) => {
+                        lifecycle.fail(
+                            crate::lifecycle::FailedComponent::Listener,
+                            format!("{what} on {addr} could not start its TLS server: {err}"),
+                        );
+                        return;
+                    }
+                };
+                let res = server
+                    .handle(handle)
+                    .serve(router.into_make_service())
+                    .await;
+                report_listener_exit(lifecycle, what, &addr, res);
+            }));
+        }
+        None => {
+            let listener = TcpListener::from_std(listener)
+                .expect("a listener this process just bound to be convertible back");
+            task::spawn(Box::pin(async move {
+                let shutdown = shutdown_signal(rx_shutdown.clone());
+                let res = axum::serve(listener, router.into_make_service())
+                    .with_graceful_shutdown(shutdown)
+                    .await;
+                report_listener_exit(lifecycle, what, &addr, res);
+            }));
+        }
+    }
+}
+
+/// A server task that returned. An error is a terminal node failure; a clean return is a
+/// shutdown that has already been asked for.
+fn report_listener_exit(
+    lifecycle: crate::lifecycle::NodeLifecycle,
+    what: &'static str,
+    addr: &str,
+    res: std::io::Result<()>,
+) {
+    match res {
+        Ok(()) => debug!("{what} on {addr} stopped serving"),
+        Err(err) => {
+            lifecycle.fail(
+                crate::lifecycle::FailedComponent::Listener,
+                format!("{what} on {addr} stopped serving: {err}"),
+            );
+        }
+    }
+}
+
 #[allow(clippy::extra_unused_type_parameters)]
 pub async fn start_node_inner<C>(node_config: Box<NodeConfig>) -> Result<Client, Error>
 where
@@ -69,11 +213,36 @@ where
 
     let tls_api_client_config = node_config.tls_api.clone().map(|c| c.client_config());
     let tls_raft = node_config.tls_raft.is_some();
-    let tls_no_verify = node_config
-        .tls_raft
+
+    // F-044: `tls_no_verify` was derived from `node_config.tls_raft` and then handed to every
+    // caller that talks to `addr_api`, which is the **API** endpoint and has its own TLS
+    // configuration. Two of the four consumers of that value therefore took the raft channel's
+    // answer to a question about the API channel: a node with `danger_tls_no_verify` on the
+    // raft side and a properly verified API side did not verify the API side either, and the
+    // reverse combination could not be expressed at all.
+    //
+    // The scheme had the same problem, from the same line: `tls_raft` decided whether these
+    // clients said `https`, for a URL built from `addr_api`.
+    let tls_api = node_config.tls_api.is_some();
+    crate::tls::set_api_tls_facts(
+        node_config
+            .tls_api
+            .as_ref()
+            .and_then(|c| c.ca_path())
+            .map(|s| s.to_string()),
+        node_config
+            .tls_api
+            .as_ref()
+            .map(|c| c.danger_tls_no_verify())
+            .unwrap_or(false),
+    );
+    let tls_api_no_verify = node_config
+        .tls_api
         .as_ref()
         .map(|c| c.danger_tls_no_verify())
         .unwrap_or(false);
+
+    let lifecycle = crate::lifecycle::NodeLifecycle::new();
 
     // Exclusive storage ownership, before anything touches the data directory. The restore
     // below deletes things, the state machines below that rebuild things, and a second process
@@ -86,6 +255,16 @@ where
         debug!("This node keeps no state on disk, so no storage ownership is taken");
         None
     };
+
+    // B-10: before the restore, the reset and both raft groups, so that a refused start has
+    // opened nothing. It used to run inside the cache raft's construction, after the SQLite
+    // raft had opened the database, and SQLite checkpoints its WAL and records optimizer
+    // statistics on open and close: the refusal's "Nothing was changed" was not literally true
+    // (observed by the Rauthy integration). Only the owner lock is created before this.
+    #[cfg(feature = "cache")]
+    if node_config.cache_storage_disk {
+        store::logs::ensure_cache_log_format(&node_config.data_dir).await?;
+    }
 
     #[cfg(any(feature = "s3", feature = "dashboard"))]
     node_config.init_enc_keys();
@@ -100,11 +279,49 @@ where
 
     let _do_reset_metadata = init::check_execute_reset(&node_config.data_dir).await?;
     #[cfg(feature = "sqlite")]
-    let raft_db =
-        store::start_raft_db(&node_config, raft_config.clone(), _do_reset_metadata).await?;
+    let raft_db = store::start_raft_db(
+        &node_config,
+        raft_config.clone(),
+        _do_reset_metadata,
+        lifecycle.clone(),
+    )
+    .await?;
+
+    // Again, now that the reset has run: `HQL_DANGER_RAFT_STATE_RESET` deletes `logs_cache`,
+    // marker and all, and the cache raft below would write new WAL files into a directory the
+    // next start refuses as legacy (found in review). Idempotent: a marked directory passes, and
+    // an empty one is marked.
+    #[cfg(feature = "cache")]
+    if node_config.cache_storage_disk
+        && let Err(err) = store::logs::ensure_cache_log_format(&node_config.data_dir).await
+    {
+        lifecycle.begin_shutdown();
+        #[cfg(feature = "sqlite")]
+        teardown_raft_db(raft_db).await;
+        return Err(err);
+    }
 
     #[cfg(feature = "cache")]
-    let raft_cache = store::start_raft_cache::<C>(&node_config, raft_config.clone()).await?;
+    let raft_cache = match store::start_raft_cache::<C>(
+        &node_config,
+        raft_config.clone(),
+        lifecycle.clone(),
+    )
+    .await
+    {
+        Ok(cache) => cache,
+        Err(err) => {
+            // Partial startup: the sqlite group is already running, with a WAL writer thread
+            // and a SQLite writer thread of its own. Returning without stopping them would
+            // leave two threads holding this data directory open behind a constructor that
+            // reported failure, and the storage ownership lock would only be released when the
+            // local guard below happened to drop.
+            lifecycle.begin_shutdown();
+            #[cfg(feature = "sqlite")]
+            teardown_raft_db(raft_db).await;
+            return Err(err);
+        }
+    };
 
     let (api_addr, rpc_addr) = {
         let node = node_config
@@ -122,10 +339,43 @@ where
         (api_addr, addr_raft)
     };
 
+    // Both listeners are bound here, before the node is reported started and before anything
+    // else is spawned, so an address that is already in use is a returned error and not a task
+    // that panicked after the constructor said `Ok`.
+    let rpc_listener = match bind_listener(&rpc_addr, "the internal RPC endpoint").await {
+        Ok(listener) => listener,
+        Err(err) => {
+            lifecycle.begin_shutdown();
+            teardown_partial_start(
+                #[cfg(feature = "sqlite")]
+                raft_db,
+                #[cfg(feature = "cache")]
+                raft_cache,
+            )
+            .await;
+            return Err(err);
+        }
+    };
+    let api_listener = match bind_listener(&api_addr, "the external API endpoint").await {
+        Ok(listener) => listener,
+        Err(err) => {
+            lifecycle.begin_shutdown();
+            teardown_partial_start(
+                #[cfg(feature = "sqlite")]
+                raft_db,
+                #[cfg(feature = "cache")]
+                raft_cache,
+            )
+            .await;
+            return Err(err);
+        }
+    };
+
     #[cfg(feature = "sqlite")]
     let (tx_client_stream, rx_client_stream) = flume::bounded(1);
 
     let state = Arc::new(AppState {
+        lifecycle: lifecycle.clone(),
         app_start: Utc::now(),
         storage_ownership: std::sync::Mutex::new(storage_ownership),
         is_shutting_down: AtomicBool::new(false),
@@ -139,7 +389,7 @@ where
         raft_db,
         #[cfg(feature = "cache")]
         raft_cache,
-        raft_lock: Arc::new(Mutex::new(())),
+        membership: Default::default(),
         secret_api: node_config.secret_api,
         secret_raft: node_config.secret_raft,
         #[cfg(feature = "dashboard")]
@@ -161,7 +411,7 @@ where
         state.clone(),
         node_config.nodes.clone(),
         node_config.tls_api.is_some(),
-    );
+    )?;
 
     #[cfg(all(feature = "backup", feature = "sqlite"))]
     if backup_applied {
@@ -181,29 +431,17 @@ where
 
     info!("rpc internal listening on {}", &rpc_addr);
 
-    let shutdown = shutdown_signal(rx_shutdown.clone());
-    if let Some(config) = &node_config.tls_raft {
-        let config = config.server_config(&node_config.listen_addr_raft).await;
-        task::spawn(Box::pin(async move {
-            let addr = SocketAddr::from_str(&rpc_addr).expect("valid RPC socket address");
-            // TODO find a way to do a graceful shutdown with `axum_server` or to handle TLS
-            //  properly with axum directly
-            axum_server::bind_rustls(addr, config)
-                .serve(router_internal.into_make_service())
-                .await
-                .unwrap();
-        }));
-    } else {
-        task::spawn(Box::pin(async move {
-            let listener = TcpListener::bind(rpc_addr)
-                .await
-                .expect("valid RPC socket address");
-            axum::serve(listener, router_internal.into_make_service())
-                .with_graceful_shutdown(shutdown)
-                .await
-                .unwrap()
-        }));
-    };
+    serve_router(
+        rpc_listener,
+        rpc_addr.clone(),
+        "the internal RPC endpoint",
+        router_internal,
+        node_config.tls_raft.as_ref(),
+        &node_config.listen_addr_raft,
+        rx_shutdown.clone(),
+        lifecycle.clone(),
+    )
+    .await;
 
     let default_routes = Router::new()
         .nest(
@@ -268,28 +506,18 @@ where
     dashboard::set_api_tls(node_config.tls_api.is_some());
 
     info!("api external listening on {api_addr}");
-    if let Some(config) = &node_config.tls_api {
-        let config = config.server_config(&node_config.listen_addr_api).await;
-        task::spawn(Box::pin(async move {
-            let addr = SocketAddr::from_str(&api_addr).expect("valid RPC socket address");
-            // TODO find a way to do a graceful shutdown with `axum_server` or to handle TLS
-            //  properly with axum directly
-            axum_server::bind_rustls(addr, config)
-                .serve(router_api.into_make_service())
-                .await
-                .unwrap();
-        }));
-    } else {
-        task::spawn(Box::pin(async move {
-            let listener = TcpListener::bind(api_addr)
-                .await
-                .expect("valid RPC socket address");
-            axum::serve(listener, router_api.into_make_service())
-                .with_graceful_shutdown(shutdown_signal(rx_shutdown))
-                .await
-                .unwrap()
-        }));
-    };
+
+    serve_router(
+        api_listener,
+        api_addr.clone(),
+        "the external API endpoint",
+        router_api,
+        node_config.tls_api.as_ref(),
+        &node_config.listen_addr_api,
+        rx_shutdown,
+        lifecycle.clone(),
+    )
+    .await;
 
     #[cfg(feature = "sqlite")]
     let member_db = {
@@ -303,8 +531,9 @@ where
                 &crate::app_state::RaftType::Sqlite,
                 node_id,
                 &nodes,
-                tls_raft,
-                tls_no_verify,
+                // These reach `addr_api`, so they take the API endpoint's own answers.
+                tls_api,
+                tls_api_no_verify,
             )
             .await
         }))
@@ -322,8 +551,8 @@ where
                 &crate::app_state::RaftType::Cache,
                 node_id,
                 &nodes,
-                tls_raft,
-                tls_no_verify,
+                tls_api,
+                tls_api_no_verify,
             )
             .await
         }))
@@ -338,7 +567,7 @@ where
         state,
         tls_api_client_config,
         #[cfg(feature = "cache")]
-        tls_no_verify,
+        tls_api_no_verify,
         #[cfg(feature = "sqlite")]
         tx_client_stream,
         #[cfg(feature = "sqlite")]
@@ -419,5 +648,42 @@ mod tests {
         let no_port = build_listen_addr("::", "[fd00::1]", false);
         assert_eq!(no_port, "::::1]");
         assert!(SocketAddr::from_str(&no_port).is_err());
+    }
+
+    /// F-040: the address parse and the bind were `expect`/`unwrap` inside tasks whose
+    /// `JoinHandle`s were dropped, so a listener that could not start meant the node was
+    /// reported started with an endpoint that did not exist, or the process ended, depending on
+    /// a panic profile that for an embedded node belongs to the consumer.
+    #[tokio::test]
+    async fn a_listener_that_cannot_start_is_a_startup_error() {
+        let err = bind_listener("this is not an address", "the test endpoint")
+            .await
+            .expect_err("an unparsable address is a startup error");
+        let text = err.to_string();
+        assert!(text.starts_with("Startup: "), "got: {text}");
+        assert!(text.contains("the test endpoint"), "got: {text}");
+        assert!(text.contains("not a socket address"), "got: {text}");
+
+        // An ephemeral port this test takes first, so the second bind is guaranteed to lose.
+        let held = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = held.local_addr().unwrap().to_string();
+
+        let err = bind_listener(&addr, "the test endpoint")
+            .await
+            .expect_err("an address already in use is a startup error");
+        let text = err.to_string();
+        assert!(text.starts_with("Startup: "), "got: {text}");
+        assert!(
+            text.contains("could not bind"),
+            "the operator is told what failed, got: {text}"
+        );
+        assert!(text.contains(&addr), "and on which address, got: {text}");
+
+        drop(held);
+        // And the same address binds once it is free, so the failure was the contention and not
+        // the address.
+        bind_listener(&addr, "the test endpoint")
+            .await
+            .expect("a free address binds");
     }
 }

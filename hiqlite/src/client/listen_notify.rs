@@ -19,21 +19,34 @@ pub(crate) mod remote {
     use futures_util::StreamExt;
     use std::sync::Arc;
     use std::time::Duration;
-    use tokio::sync::RwLock;
+    use tokio::sync::{RwLock, oneshot};
     use tokio::{task, time};
     use tracing::{debug, error, info};
+
+    /// How long `Client::remote` waits for the event subscription to exist before it gives up
+    /// waiting and returns anyway. See `032` KD-2 for why a timeout here is a warning and not an
+    /// error: the stream reconnects on its own, and a client whose server is not up yet is still
+    /// usable for every other operation.
+    pub(crate) const READY_TIMEOUT: Duration = Duration::from_secs(10);
 
     pub(crate) struct RemoteListener;
 
     impl RemoteListener {
+        /// Spawns the listener and returns the event receiver together with a signal that fires
+        /// once the server has confirmed the subscription.
+        ///
+        /// F-051: this used to return the receiver alone, so `Client::remote` returned before the
+        /// subscription existed and an event published immediately afterwards was dropped with
+        /// no listener to receive it, leaving `listen()` waiting forever.
         pub(crate) fn spawn(
             leader_cache: Arc<RwLock<(NodeId, String)>>,
             tls: bool,
             api_secret: String,
-        ) -> flume::Receiver<(i64, Vec<u8>)> {
+        ) -> (flume::Receiver<(i64, Vec<u8>)>, oneshot::Receiver<()>) {
             let (tx, rx) = flume::unbounded();
-            task::spawn(Self::handler(leader_cache, api_secret, tls, tx));
-            rx
+            let (tx_ready, rx_ready) = oneshot::channel();
+            task::spawn(Self::handler(leader_cache, api_secret, tls, tx, tx_ready));
+            (rx, rx_ready)
         }
 
         async fn handler(
@@ -41,7 +54,11 @@ pub(crate) mod remote {
             api_secret: String,
             tls: bool,
             tx: flume::Sender<(i64, Vec<u8>)>,
+            tx_ready: oneshot::Sender<()>,
         ) {
+            // Only the first connection is a readiness event. Later reconnects re-subscribe, but
+            // `Client::remote` has long returned by then.
+            let mut tx_ready = Some(tx_ready);
             'main: loop {
                 let client = {
                     let url = {
@@ -65,6 +82,12 @@ pub(crate) mod remote {
                         Ok(sse) => match sse {
                             SSE::Connected(c) => {
                                 info!("Opened /listen events stream: {:?}", c);
+                                // The server does not send the response head until the
+                                // subscriber is registered, so arriving here means this client
+                                // is subscribed and cannot miss a later event.
+                                if let Some(tx) = tx_ready.take() {
+                                    let _ = tx.send(());
+                                }
                             }
                             SSE::Event(event) => {
                                 let (ts, data) = event
@@ -105,6 +128,7 @@ impl Client {
     where
         T: for<'de> Deserialize<'de>,
     {
+        self.ensure_node_available()?;
         let (_ts, bytes) = self.listen_rx().recv_async().await?;
         Ok(deserialize(&bytes)?)
     }
@@ -133,6 +157,7 @@ impl Client {
     where
         T: for<'de> Deserialize<'de>,
     {
+        self.ensure_node_available()?;
         let rx = self.listen_rx();
         loop {
             let (ts, bytes) = rx.recv_async().await?;

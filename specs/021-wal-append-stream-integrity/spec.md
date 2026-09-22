@@ -196,6 +196,116 @@ wait for it, and under `LogSync::IntervalMillis` the per-append path performs no
 flush at all. Calling either of those "persisted" is the confusion `001` exists
 to prevent, and section 4 states exactly what the evidence establishes.
 
+### B-8. A torn trailing record is recovered differently from a prefix, and tested
+
+Added 2026-09-22, as evidence for behavior that already existed and had no test.
+A torn record is one whose bytes only partly reached the file. Three crash states
+are constructed and reopened from disk with no header update on the way out:
+
+- **Torn, past the header's `data_end`.** The integrity scan finds the record,
+  its CRC fails, and it is ignored. The complete prefix is recovered, readable,
+  and the next append writes over the torn bytes.
+- **Complete, past the header.** The header is rewritten only for a file's first
+  record and at a flush, so a complete record can sit past it. The scan recovers
+  it.
+- **Torn, inside the header's range.** A power loss can persist the header page
+  and not the data page, because `msync` does not order pages. With `auto-heal`
+  the WAL rolls back to the complete prefix. **Without `auto-heal` opening the
+  WAL fails with `Integrity`**, so the node refuses to start rather than serve the
+  record. Neither case ever reads a torn record as valid.
+
+**For a consumer without `auto-heal`**, which is Rahi's current feature set, the
+third case is a node that needs operator intervention after a power loss. Under
+`LogSync::Immediate` the rolled-back records were never acknowledged, because the
+acknowledgement follows the flush; under `ImmediateAsync` they may have been.
+
+### B-9. No acknowledgement in the WAL crate ends a thread, and a stalled test fails
+
+Added 2026-09-22. F-112 repaired the reader. Independent review found the same
+class in the writer: the purge and vote acknowledgements and the shutdown
+acknowledgement were `unwrap`ped, so a requester cancelled during a teardown
+ended the writer, and under `panic = "abort"` the process. They are now sends
+whose failure means only that nobody is listening. `ShutdownHandle::shutdown`
+built the reader's shutdown message with `send_async` and never awaited it, so
+the message was never sent. It is still not sent, now on purpose and said so: a
+reader that exits while the store holds senders strands every read queued
+behind the message (the mechanism below), and the reader already ends when its
+last sender drops.
+
+**F-114.** CI's `Check` on `d45826c` stalled in
+`a_truncated_append_leaves_a_recoverable_prefix_in_every_log_sync_mode` until it
+was cancelled 26 minutes in. Reproduced locally: two failures in 177 full-suite
+runs, one of them that stall and one a race in the writer tests' `append` helper,
+which `unwrap`ped an end-of-stream send into a receiver the writer had already
+dropped by rejecting the entry. The helper no longer treats that send as
+mandatory, and every wait in the stalling test is bounded and names its step.
+The bounded test then named the stall on its 162nd full-suite run:
+`immediate_async: stalled at: an append to the terminal writer`. **The defect was
+in the writer, not the test.** A terminated writer stopped reading its channel,
+but the adapter still held senders, and a queued message lives as long as any
+sender does. An `Append` that reached the one-slot queue just before the
+termination was never read and never dropped, so the entry channel inside it
+stayed open and the adapter blocked sending into it forever. The same mechanism
+hung `ShutdownHandle::shutdown` on a terminated writer, which waited for an
+acknowledgement nobody would send. The writer thread now keeps a clone of its
+receiver and, after a termination, answers every action with the terminal error
+(an `Append` drops its entry receiver first, releasing a blocked producer) until
+a shutdown arrives or the last sender is gone. Both CI jobs also have a
+sixty-minute limit.
+
+**This supersedes how `008` section 4 observes the end of service.** `008`
+asserted that the writer's sender becomes disconnected, because `run` held the
+only receiver. The thread now keeps a receiver past a termination so it can
+refuse what is queued, so the channel no longer disconnects, and a disconnect
+was never what the policy was for. Two tests
+(`persistence_failure_notifies_then_terminates_the_writer` and
+`a_truncated_entry_stream_never_reports_success_in_any_log_sync_mode`) now
+observe termination as a later append refused within five seconds with a reason
+naming the termination, on both the acknowledgement and the completion. Two
+checks that a connected channel meant a running writer were replaced with a
+later append that succeeds, because a connected channel no longer shows it.
+`008`'s text is left as it was written; this is its amendment.
+
+**Review of `e1e9135`.** A shutdown of a terminated writer was first answered as
+a clean stop, which reported success all the way up through `Client::shutdown`
+and released storage ownership as though every component had stopped. It is now
+not acknowledged, and the caller sees an error. What is already queued behind a
+shutdown is refused before the thread ends; a send that races that drain can
+still land after it, as it can after a healthy writer's shutdown, so this narrows
+the window rather than closing it. A WAL rollover failing inside the append loop
+used to `?` out of the writer with the acknowledgement and the completion
+callback both dropped, so openraft never heard about that append; it is now a
+failed append, answered once on both channels, and terminal. The rollover path
+has no test: nothing in the suite can make `roll_over` fail on demand. In
+`IntervalMillis` mode the interval syncer keeps a terminated writer's thread
+alive until a shutdown arrives, sending a `Sync` it ignores once per interval.
+
+`work_queued_behind_a_terminating_append_is_answered_not_stranded` reproduces
+the stall deterministically: it queues a second append behind one the writer is
+still reading, truncates the first, and requires the second to be refused
+without blocking its producer, and a shutdown to be answered. Against the
+writer without the post-termination loop it fails with "the producer of an
+append queued behind a termination blocked".
+
+### B-7. A rejected append reports why, not that a channel closed
+
+The adapter sends a batch's entries to the writer over a bounded channel and
+then waits on an acknowledgement. The writer stops reading a batch the moment it
+has decided that batch's outcome, so its `drop(rx)` makes the adapter's next
+send fail. Returning that `SendError` handed openraft
+`sending on a closed channel` and discarded `WalSizeExceeded`, which was already
+on its way down the acknowledgement channel that the early return abandoned.
+
+Which error a caller saw depended on nothing but who won that race. A failed
+send now waits for the writer's verdict, and three outcomes are named: the
+writer's own error; a success reported for a batch that was never finished
+being sent, which is a broken contract and is refused as one rather than
+returned to openraft as a successful append; and no verdict at all, which is
+what a panic in the writer looks like from here.
+
+F-105. B-5 is the same principle on the other channel: a terminal writer fails
+its callers with a reason instead of panicking them.
+
 ## 4. Evidence and its limits
 
 Three tests, all of which fail against the unrepaired implementation.
@@ -328,26 +438,44 @@ was measured, not assumed.
 Each command below was confirmed to select exactly one test and run it.
 
 ```verify:cli
+# Package names, not library names: the downstream release renamed the three packages
+# (`031` B-2), and `-p` takes a package name. `use hiqlite::..` is unaffected.
 # --- 008's acceptance, which is also 001's, carried forward unchanged ---
-cargo test -p hiqlite-wal --lib writer::tests::append_result_precedes_persistence_and_completion -- --exact
-cargo test -p hiqlite-wal --lib writer::tests::persistence_failure_notifies_error_before_propagating -- --exact
-cargo test -p hiqlite-wal --lib writer::tests::append_rejection_notifies_error_and_never_success -- --exact
-cargo test -p hiqlite-wal --lib reader::tests::logs_action_reports_read_errors -- --exact
-cargo test -p hiqlite-wal --lib metadata::tests::metadata_overwrite_replaces_existing -- --exact
-cargo test -p hiqlite-wal --lib wal::tests::roll_over_purge_front -- --exact
-cargo test -p hiqlite-wal --lib wal::tests::roll_over_truncate_end -- --exact
-cargo test -p hiqlite-wal --lib writer::tests::rejection_takes_precedence_over_a_failing_persistence_step -- --exact
-cargo test -p hiqlite-wal --lib writer::tests::success_notifies_once_per_append_in_every_log_sync_mode -- --exact
-cargo test -p hiqlite-wal --lib writer::tests::persistence_failure_notifies_then_terminates_the_writer -- --exact
-cargo test -p hiqlite-wal --lib writer::tests::writer_termination_is_reported -- --exact
-cargo test -p hiqlite-wal --lib writer::tests::injections_are_isolated_per_wal_and_consumed_exactly_once -- --exact
-cargo test -p hiqlite-wal --lib writer::tests::a_dropped_guard_disarms_an_unconsumed_injection -- --exact
-cargo test -p hiqlite-wal --lib log_store_impl::tests::append_adapter_forwards_a_persistence_failure_to_openraft -- --exact
-cargo test -p hiqlite-wal --lib --features oversized-entry-error log_store_impl::tests::append_adapter_reports_a_rejected_append_as_an_error -- --exact
+cargo test -p hiqlite-wal-patched --lib writer::tests::append_result_precedes_persistence_and_completion -- --exact
+cargo test -p hiqlite-wal-patched --lib writer::tests::persistence_failure_notifies_error_before_propagating -- --exact
+cargo test -p hiqlite-wal-patched --lib writer::tests::append_rejection_notifies_error_and_never_success -- --exact
+cargo test -p hiqlite-wal-patched --lib reader::tests::logs_action_reports_read_errors -- --exact
+cargo test -p hiqlite-wal-patched --lib metadata::tests::metadata_overwrite_replaces_existing -- --exact
+cargo test -p hiqlite-wal-patched --lib wal::tests::roll_over_purge_front -- --exact
+cargo test -p hiqlite-wal-patched --lib wal::tests::roll_over_truncate_end -- --exact
+cargo test -p hiqlite-wal-patched --lib writer::tests::rejection_takes_precedence_over_a_failing_persistence_step -- --exact
+cargo test -p hiqlite-wal-patched --lib writer::tests::success_notifies_once_per_append_in_every_log_sync_mode -- --exact
+cargo test -p hiqlite-wal-patched --lib writer::tests::persistence_failure_notifies_then_terminates_the_writer -- --exact
+cargo test -p hiqlite-wal-patched --lib writer::tests::writer_termination_is_reported -- --exact
+cargo test -p hiqlite-wal-patched --lib writer::tests::injections_are_isolated_per_wal_and_consumed_exactly_once -- --exact
+cargo test -p hiqlite-wal-patched --lib writer::tests::a_dropped_guard_disarms_an_unconsumed_injection -- --exact
+cargo test -p hiqlite-wal-patched --lib log_store_impl::tests::append_adapter_forwards_a_persistence_failure_to_openraft -- --exact
+cargo test -p hiqlite-wal-patched --lib --features oversized-entry-error log_store_impl::tests::append_adapter_reports_a_rejected_append_as_an_error -- --exact
 # --- what this repair adds ---
-cargo test -p hiqlite-wal --lib writer::tests::a_truncated_entry_stream_never_reports_success_in_any_log_sync_mode -- --exact
-cargo test -p hiqlite-wal --lib writer::tests::a_clean_empty_batch_succeeds_and_notifies_once -- --exact
-cargo test -p hiqlite-wal --lib log_store_impl::tests::a_truncated_append_leaves_a_recoverable_prefix_in_every_log_sync_mode -- --exact
+cargo test -p hiqlite-wal-patched --lib writer::tests::a_truncated_entry_stream_never_reports_success_in_any_log_sync_mode -- --exact
+cargo test -p hiqlite-wal-patched --lib writer::tests::a_clean_empty_batch_succeeds_and_notifies_once -- --exact
+cargo test -p hiqlite-wal-patched --lib log_store_impl::tests::a_truncated_append_leaves_a_recoverable_prefix_in_every_log_sync_mode -- --exact
+# B-8: torn versus complete trailing records, after a crash, with and without auto-heal
+cargo test -p hiqlite-wal-patched --lib wal::tests::a_torn_record_past_the_header_is_dropped_and_the_prefix_recovers -- --exact
+cargo test -p hiqlite-wal-patched --lib wal::tests::a_complete_record_past_the_header_is_recovered_not_dropped -- --exact
+cargo test -p hiqlite-wal-patched --lib wal::tests::a_torn_record_inside_the_header_is_rolled_back_or_refused -- --exact
+cargo test -p hiqlite-wal-patched --lib --features auto-heal wal::tests::a_torn_record_inside_the_header_is_rolled_back_or_refused -- --exact
+# B-9: no acknowledgement ends a thread, and the stalling test is bounded
+sh -c '! grep -nE "ack\.send\(.*\)\.unwrap\(\)|Shutdown handler to always wait" hiqlite-wal/src/writer.rs hiqlite-wal/src/reader.rs'
+sh -c '! grep -q "tx_read.send_async(reader::Action::Shutdown)" hiqlite-wal/src/shutdown.rs'
+cargo test -p hiqlite-wal-patched --lib writer::tests::work_queued_behind_a_terminating_append_is_answered_not_stranded -- --exact
+sh -c 'grep -q "fn refuse_after_termination" hiqlite-wal/src/writer.rs'
+sh -c 'grep -q "while let Ok(action) = rx_after.recv()" hiqlite-wal/src/writer.rs'
+sh -c 'grep -q "while let Ok(action) = rx_after.try_recv()" hiqlite-wal/src/writer.rs'
+sh -c '! grep -q "wal.roll_over(wal_size, &mut buf)?;\n                            {" hiqlite-wal/src/writer.rs'
+sh -c 'grep -q "rolling over to a new WAL file failed" hiqlite-wal/src/writer.rs'
+sh -c 'grep -q "stalled at: {step}" hiqlite-wal/src/log_store_impl.rs'
+sh -c 'grep -q "timeout-minutes: 60" .github/workflows/code_style.yaml'
 # the three endings, pinned at the expressions. The `while let Ok(Some(..))` that collapsed
 # the last two into the first must not come back.
 sh -c '! grep -q "while let Ok(Some((id, bytes))) = rx.recv()" hiqlite-wal/src/writer.rs'
@@ -356,4 +484,8 @@ sh -c 'grep -q "IncompleteAppend" hiqlite-wal/src/error.rs'
 sh -c '! grep -q "expect(\"Writer to always be running\")" hiqlite-wal/src/log_store_impl.rs'
 sh -c '! grep -q "expect(\"LogsReader to always be listening\")" hiqlite-wal/src/log_store_impl.rs'
 sh -c 'grep -q "fn thread_gone" hiqlite-wal/src/log_store_impl.rs'
+# B-7 / F-105: the rejection cause survives, whoever wins the race
+cargo test -p hiqlite-wal-patched --lib log_store_impl::tests::a_writer_that_stopped_reading_is_reported_by_its_verdict_not_by_the_channel -- --exact
+sh -c 'grep -q "fn writer_verdict" hiqlite-wal/src/log_store_impl.rs'
+sh -c 'grep -c "writer_verdict::<T>(ack_rx)" hiqlite-wal/src/log_store_impl.rs | grep -q "^2$"'
 ```

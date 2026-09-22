@@ -1,0 +1,244 @@
+{
+  "mapping": {
+    "amends": [
+      "011-transport-security-material",
+      "018-dashboard-service-and-ui"
+    ],
+    "dependsOn": [
+      "000-hiqlite-ownership-bootstrap",
+      "011-transport-security-material",
+      "018-dashboard-service-and-ui",
+      "027-node-lifecycle-and-startup-errors",
+      "029-consumer-surface-repairs"
+    ],
+    "implementingPaths": [
+      {
+        "path": "hiqlite.env",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite.toml",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/client/",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/config_toml.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/dashboard/",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/http_client.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/server/",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/split_brain_check.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/start.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/tls.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/tests/tls_env.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "standards/spec/adoption-plan.md",
+        "source": "spec-edge"
+      },
+      {
+        "path": "standards/spec/findings-register.md",
+        "source": "spec-edge"
+      }
+    ],
+    "resolvedUnits": [
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/client/"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/client/"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/dashboard/"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/dashboard/"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/server/"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/server/"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite.env"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite.env"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite.toml"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite.toml"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/config_toml.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/config_toml.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/http_client.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/http_client.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/split_brain_check.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/split_brain_check.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/start.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/start.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/tls.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/tls.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/tests/tls_env.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/tests/tls_env.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "standards/spec/adoption-plan.md"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/adoption-plan.md"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "standards/spec/findings-register.md"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/findings-register.md"
+        }
+      }
+    ],
+    "specId": "030-transport-security-and-dashboard-repairs",
+    "specStatus": "draft"
+  },
+  "schemaVersion": "1.1.0",
+  "shardHash": "fadda7d40e2fc1da093a05adbd696224805ffcd2740fad04291e5e4b144d70b2"
+}

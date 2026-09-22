@@ -176,7 +176,17 @@ impl Default for NodeConfig {
             prepared_statement_cache_capacity: 1024,
             read_pool_size: 4,
             wal_sync: hiqlite_wal::LogSync::ImmediateAsync,
-            wal_size: 2 * 1024 * 1024,
+            // F-035 / the oversized-entry ceiling: a single raft entry cannot span WAL files,
+            // so this is also the largest write this node can accept, and it had no
+            // environment route at all.
+            // `Default` cannot return an error, and this used to `expect`, so a malformed value
+            // panicked in every consumer that built a configuration. It now leaves `0`, which
+            // no WAL accepts, and `is_valid` refuses it by name at startup.
+            wal_size: env::var("HQL_WAL_SIZE")
+                .as_deref()
+                .unwrap_or("2097152")
+                .parse()
+                .unwrap_or(0),
             #[cfg(feature = "cache")]
             cache_storage_disk: true,
             raft_config: Self::default_raft_config(10_000),
@@ -336,7 +346,7 @@ impl NodeConfig {
                 .as_deref()
                 .unwrap_or("false")
                 .parse()
-                .expect("Cannot parse HQL_LOG_STATEMENTS as u64"),
+                .expect("Cannot parse HQL_LOG_STATEMENTS as bool"),
             prepared_statement_cache_capacity: 1024,
             read_pool_size: env::var("HQL_READ_POOL_SIZE")
                 .as_deref()
@@ -348,8 +358,14 @@ impl NodeConfig {
             #[cfg(feature = "cache")]
             cache_storage_disk,
             raft_config: Self::default_raft_config(logs_keep),
-            tls_raft: ServerTlsConfig::from_env("RAFT"),
-            tls_api: ServerTlsConfig::from_env("API"),
+            // The environment constructor is infallible, so a configuration error here still
+            // has to be a panic; `027` KD-1 carries that. What changed is that it is now a
+            // named `Error::Config` saying which variable is wrong, rather than an `expect`
+            // for one of the two booleans and a silent plaintext downgrade for the other.
+            tls_raft: ServerTlsConfig::from_env("RAFT")
+                .unwrap_or_else(|err| panic!("Invalid RAFT TLS configuration: {err}")),
+            tls_api: ServerTlsConfig::from_env("API")
+                .unwrap_or_else(|err| panic!("Invalid API TLS configuration: {err}")),
             secret_raft: env::var("HQL_SECRET_RAFT").expect("HQL_SECRET_RAFT not found"),
             secret_api: env::var("HQL_SECRET_API").expect("HQL_SECRET_API not found"),
             #[cfg(any(feature = "s3", feature = "dashboard"))]
@@ -362,7 +378,11 @@ impl NodeConfig {
             password_dashboard: DashboardState::from_env().password_dashboard,
             #[cfg(feature = "dashboard")]
             insecure_cookie,
-            health_check_delay_secs: 30,
+            health_check_delay_secs: env::var("HQL_HEALTH_CHECK_DELAY_SECS")
+                .as_deref()
+                .unwrap_or("30")
+                .parse()
+                .expect("Cannot parse HQL_HEALTH_CHECK_DELAY_SECS as u32"),
             learner_only: env::var("HQL_LEARNER_ONLY")
                 .as_deref()
                 .unwrap_or("false")
@@ -428,6 +448,21 @@ impl NodeConfig {
 
         if self.node_id as usize > self.nodes.len() {
             return Err(Error::Config("'node_id' not found in 'nodes'".into()));
+        }
+
+        // `hiqlite_wal`'s minimum, which it does not export. Below it the WAL panics in a debug
+        // build and underflows a size calculation in a release one (found in review); `0` is
+        // also what a malformed `HQL_WAL_SIZE` leaves.
+        const MIN_WAL_SIZE: u32 = 8 * 1024;
+        if self.wal_size < MIN_WAL_SIZE {
+            return Err(Error::Config(
+                format!(
+                    "'wal_size' must be at least {MIN_WAL_SIZE} bytes, got {}; if \
+                     'HQL_WAL_SIZE' is set, it must be an integer number of bytes",
+                    self.wal_size
+                )
+                .into(),
+            ));
         }
 
         if self.secret_raft.len() < 16 || self.secret_api.len() < 16 {
@@ -532,6 +567,28 @@ impl Node {
 #[cfg(test)]
 mod tests {
     use crate::{Node, NodeConfig};
+
+    /// A malformed `HQL_WAL_SIZE` used to panic inside `NodeConfig::default()`, in every
+    /// consumer that built a configuration. It now leaves `0`, and validation names it. Driven
+    /// through `is_valid` rather than the environment, which is process-wide (`009` D-3).
+    #[test]
+    fn a_wal_size_of_zero_is_refused_by_name() {
+        let mut c = NodeConfig::default();
+        c.node_id = 1;
+        c.nodes = vec![Node {
+            id: 1,
+            addr_raft: "localhost:8100".into(),
+            addr_api: "localhost:8200".into(),
+        }];
+        c.wal_size = 0;
+        let err = c.is_valid().expect_err("a zero wal_size must be refused");
+        assert!(err.to_string().contains("HQL_WAL_SIZE"), "got: {err}");
+        c.wal_size = 8 * 1024 - 1;
+        assert!(c.is_valid().is_err(), "below the WAL's minimum must be refused");
+        c.wal_size = 8 * 1024;
+        let err = c.is_valid().err().map(|e| e.to_string()).unwrap_or_default();
+        assert!(!err.contains("wal_size"), "the minimum itself is accepted, got: {err}");
+    }
 
     #[test]
     fn test_config_from_env() {

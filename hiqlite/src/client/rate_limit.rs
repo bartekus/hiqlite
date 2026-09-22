@@ -85,6 +85,9 @@ impl Client {
 
     #[cfg(feature = "cache")]
     pub(crate) async fn rate_limit_cache(&self) -> Result<(), Error> {
+        // W-22: a node that is out of service refuses every operation, with the account the
+        // health endpoint gives, rather than failing later inside openraft.
+        self.ensure_node_available()?;
         match self.try_rate_limit_cache() {
             Ok(_) => Ok(()),
             Err(err) => {
@@ -112,6 +115,9 @@ impl Client {
 
     #[cfg(feature = "sqlite")]
     pub(crate) async fn rate_limit_db(&self) -> Result<(), Error> {
+        // W-22: a node that is out of service refuses every operation, with the account the
+        // health endpoint gives, rather than failing later inside openraft.
+        self.ensure_node_available()?;
         match self.try_rate_limit_db() {
             Ok(_) => Ok(()),
             Err(err) => {

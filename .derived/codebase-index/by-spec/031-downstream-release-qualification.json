@@ -1,0 +1,143 @@
+{
+  "mapping": {
+    "amends": [
+      "003-client-consistency-and-retry-outcomes",
+      "012-cluster-integration-evidence",
+      "016-derive-macros"
+    ],
+    "dependsOn": [
+      "000-hiqlite-ownership-bootstrap",
+      "004-governance-harness",
+      "005-adoption-assessment-and-plan",
+      "029-consumer-surface-repairs",
+      "030-transport-security-and-dashboard-repairs"
+    ],
+    "implementingPaths": [
+      {
+        "path": ".github/workflows/ai-review.yaml",
+        "source": "spec-edge"
+      },
+      {
+        "path": ".github/workflows/publish.yaml",
+        "source": "spec-edge"
+      },
+      {
+        "path": "examples/",
+        "source": "spec-edge"
+      },
+      {
+        "path": "justfile",
+        "source": "spec-edge"
+      },
+      {
+        "path": "spec-spine.toml",
+        "source": "spec-edge"
+      },
+      {
+        "path": "standards/spec/adoption-plan.md",
+        "source": "spec-edge"
+      },
+      {
+        "path": "standards/spec/release-ledger.md",
+        "source": "spec-edge"
+      }
+    ],
+    "resolvedUnits": [
+      {
+        "locations": [
+          {
+            "file": ".github/workflows/ai-review.yaml"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": ".github/workflows/ai-review.yaml"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": ".github/workflows/publish.yaml"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": ".github/workflows/publish.yaml"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "standards/spec/release-ledger.md"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/release-ledger.md"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "examples/"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "directory",
+          "path": "examples/"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "justfile"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "justfile"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "spec-spine.toml"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "spec-spine.toml"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "standards/spec/adoption-plan.md"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/adoption-plan.md"
+        }
+      }
+    ],
+    "specId": "031-downstream-release-qualification",
+    "specStatus": "draft"
+  },
+  "schemaVersion": "1.1.0",
+  "shardHash": "4c243f9ecd9ad0ec422f2f01c9685185858cfc6da66a63987b36f166040fbbf2"
+}
