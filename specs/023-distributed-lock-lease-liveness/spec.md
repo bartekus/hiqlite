@@ -175,6 +175,12 @@ await no longer looks at `exp` at all, and a client whose awaits are answered at
 once repeatedly backs off. A retried `Acquire` for a lock the ticket already holds
 now refreshes the lease instead of returning one that may have run out.
 
+**AI review of `b5039d2`.** A waiter whose bounded await timed out claims through
+`Acquire`, and its earlier `Await` registration stayed in the handler's map until
+the key's queue emptied completely, which on a key that is never idle is never.
+`Acquire` now drops that ticket's registrations; `an_acquire_leaves_no_stale_await_registration`
+was observed failing without it.
+
 **Consequence for callers.** A queued caller whose holder dies acquires within
 about one lease plus the await bound of the holder's grant, instead of failing
 after 120 seconds. A promoted awaiter now always claims through a replicated
@@ -407,6 +413,7 @@ sh -c 'grep -q "time::timeout(AWAIT_BOUND, self.lock_await(" hiqlite/src/client/
 sh -c 'grep -q "LOCK_VALID_SECONDS as u64 + 2" hiqlite/src/client/dlock.rs'
 cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::a_replaced_await_is_answered_not_dropped -- --exact
 cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::an_await_does_not_judge_the_lease -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::an_acquire_leaves_no_stale_await_registration -- --exact
 sh -c '! grep -q "to always get an answer from the kv handler" hiqlite/src/network/api.rs'
 # no acknowledgement in the lock handler may panic its own task
 sh -c '! grep -q "ack.send(LockState::" hiqlite/src/store/state_machine/memory/dlock_handler.rs'

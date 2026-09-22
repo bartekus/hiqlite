@@ -341,6 +341,22 @@ first membership entry is the single-node bootstrap. Observed once in CI with on
 member reported; the log shows the rejoin itself was correct. It now waits up to
 thirty seconds for the membership.
 
+**KD-12. Findings of the AI review of `b5039d2`, and what was done.** The review
+ran through the CLI (KD-10) on the merged candidate and found the durability,
+lock-ordering, provenance, membership-gate and backup claims sound from source.
+Of its findings: the writer's `Remove` and `Vote` failures now answer the caller
+with the cause (`021` B-9); an `Acquire` drops its ticket's stale `Await`
+registration (`023` B-6); the S3 retention sweep applies the local sweep's
+timestamp floor (`026` B-10). Two are recorded here rather than changed.
+**`hiqlite::tls::build_tls_config` gained a `ca_path` parameter**, a breaking
+change B-1's inventory did not list; the handoff lists it. **B-8's "nothing in
+CI resolves another graph" holds for the workspace, not for the example smoke
+builds**: `examples/` is outside the workspace, `just clippy-examples` resolves
+each example without `--locked`, and two examples track no lockfile. Those builds
+are not part of the published packages' qualification. The review's remaining
+note, a blocking `send` in the SSE notify handler, is on the `listen_notify`
+path, which neither named consumer enables; recorded in the register as F-117.
+
 **KD-9. This spec's own `## Verification` block does not run.** `032` declares
 `amends_verification` on it, so `just spine-verify 031` executes `032`'s block.
 The F-108 and F-109 checks were first written here, where they never ran, and

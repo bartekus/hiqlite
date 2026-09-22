@@ -176,6 +176,19 @@ async fn handler(rx: flume::Receiver<LockRequest>, lease_seconds: i64) {
 
             LockRequest::Acquire(LockRequestPayload { key, log_id, ack }) => {
                 let now = Utc::now().timestamp();
+                // A client whose bounded await timed out re-requests here, and its earlier
+                // `Await` registration is still in `queues`. Nothing answers it once this ticket
+                // is granted, so it stayed until the key's queue emptied completely, which on a
+                // key that is never idle is never (found by the AI review of `b5039d2`). The
+                // client is no longer listening on it. It is answered `Released` rather than
+                // dropped, as a replaced registration is in `Await`: for a remote client the
+                // receiver is a server task that logs a dropped channel as a broken invariant.
+                if let Some(acks) = queues.get_mut(key.as_ref()) {
+                    while let Some(pos) = acks.iter().position(|(i, _)| *i == log_id) {
+                        let (_, stale) = acks.swap_remove(pos);
+                        answer(&key, log_id, stale, LockState::Released);
+                    }
+                }
                 if let Some(lock) = locks.get_mut(key.as_ref()) {
                     // F-102: a waiter's bounded await ends in this re-request, so this is where
                     // a holder whose lease ran out without a release is noticed. Before, only a
@@ -1086,5 +1099,29 @@ mod lease_tests {
             "an expired holder is noticed by `Acquire`, not answered by an await"
         );
         assert_eq!(acquire_bounded(&tx, "k", 2).await, LockState::Locked(2));
+    }
+
+    /// A ticket that re-requests through `Acquire` leaves no registration behind. Its earlier
+    /// `Await` is answered, never kept for a client that has moved on.
+    #[tokio::test]
+    async fn an_acquire_leaves_no_stale_await_registration() {
+        let tx = spawn_with_lease(SHORT_LEASE);
+
+        assert_eq!(lock_bounded(&tx, "k", 1).await, LockState::Locked(1));
+        assert_eq!(lock_bounded(&tx, "k", 2).await, LockState::Queued(2));
+        let stale = await_registered(&tx, "k", 2);
+        wait_out_the_lease().await;
+        // The client's await timed out; it claims through `Acquire` instead.
+        assert_eq!(acquire_bounded(&tx, "k", 2).await, LockState::Locked(2));
+
+        // The old registration is gone from the map: it was answered, not left open.
+        let got = tokio::time::timeout(Duration::from_secs(5), stale)
+            .await
+            .expect("the stale registration must not be held open");
+        assert_eq!(
+            got.ok(),
+            Some(LockState::Released),
+            "the stale registration is answered, not dropped"
+        );
     }
 }
