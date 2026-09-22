@@ -1,29 +1,25 @@
 {
   "mapping": {
+    "amends": [
+      "013-backup-retention-and-object-storage"
+    ],
     "dependsOn": [
       "000-hiqlite-ownership-bootstrap",
-      "009-configuration-contract",
-      "010-node-lifecycle-and-split-brain"
+      "013-backup-retention-and-object-storage",
+      "024-exclusive-storage-ownership",
+      "025-snapshot-crash-recovery-contract"
     ],
     "implementingPaths": [
       {
-        "path": "hiqlite.env",
+        "path": "hiqlite/src/backup.rs",
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite/src/http_client.rs",
+        "path": "hiqlite/src/client/",
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite/src/tls.rs",
-        "source": "spec-edge"
-      },
-      {
-        "path": "hiqlite/tests/tls_env.rs",
-        "source": "spec-edge"
-      },
-      {
-        "path": "spec-spine.toml",
+        "path": "hiqlite/src/s3.rs",
         "source": "spec-edge"
       },
       {
@@ -39,66 +35,40 @@
       {
         "locations": [
           {
-            "file": "hiqlite/src/http_client.rs"
+            "file": "hiqlite/src/client/"
           }
         ],
         "ownership": true,
-        "sourceField": "establishes",
+        "sourceField": "extends",
         "unit": {
-          "kind": "file",
-          "path": "hiqlite/src/http_client.rs"
+          "kind": "directory",
+          "path": "hiqlite/src/client/"
         }
       },
       {
         "locations": [
           {
-            "file": "hiqlite/src/tls.rs"
-          }
-        ],
-        "ownership": true,
-        "sourceField": "establishes",
-        "unit": {
-          "kind": "file",
-          "path": "hiqlite/src/tls.rs"
-        }
-      },
-      {
-        "locations": [
-          {
-            "file": "hiqlite/tests/tls_env.rs"
-          }
-        ],
-        "ownership": true,
-        "sourceField": "establishes",
-        "unit": {
-          "kind": "file",
-          "path": "hiqlite/tests/tls_env.rs"
-        }
-      },
-      {
-        "locations": [
-          {
-            "file": "hiqlite.env"
+            "file": "hiqlite/src/backup.rs"
           }
         ],
         "ownership": true,
         "sourceField": "extends",
         "unit": {
           "kind": "file",
-          "path": "hiqlite.env"
+          "path": "hiqlite/src/backup.rs"
         }
       },
       {
         "locations": [
           {
-            "file": "spec-spine.toml"
+            "file": "hiqlite/src/s3.rs"
           }
         ],
         "ownership": true,
         "sourceField": "extends",
         "unit": {
           "kind": "file",
-          "path": "spec-spine.toml"
+          "path": "hiqlite/src/s3.rs"
         }
       },
       {
@@ -128,9 +98,9 @@
         }
       }
     ],
-    "specId": "011-transport-security-material",
+    "specId": "026-backup-and-restore-integrity",
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "485c79c439f513181cdbec74ab7a3efdeb94fcc4231fdaf778a3b89ed7c1f989"
+  "shardHash": "1edc56c16a19c610b171a8f8aae0e07ceddee5f4ebb46453761b7688fab50829"
 }
