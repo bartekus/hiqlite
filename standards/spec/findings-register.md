@@ -2475,3 +2475,52 @@ files are removed after the staged image is durable and before the rename, so
 the final name never holds a database with a foreign write-ahead log, and
 F-057's rollback property is unchanged: nothing is removed until the
 replacement is on disk and synced.
+
+### F-101 `defect`, confidence `high`
+
+**A deliberate shutdown was recorded as a WAL writer failure, and took the node
+out of service on its way out.** `027`'s lifecycle watcher treats a closed
+`writer_failure` watch channel as "the writer thread ended without reporting a
+reason, which is what a panic in it looks like from outside". A shutdown closes
+that channel too, because a shutdown is what ending the writer thread looks
+like from outside as well.
+
+**Observed by execution**, on 2026-09-22, in the full-suite run: three nodes
+being shut down on purpose each logged
+`this node is out of service because the Raft log WAL writer failed` at
+`ERROR`, and each recorded a terminal failure that `ensure_available` would
+then have refused every operation with. Nothing depended on the refusal,
+because the nodes were going away, and the log said a node had failed when it
+had not.
+
+**Repaired 2026-09-22 by `027-node-lifecycle-and-startup-errors`.**
+`NodeLifecycle::begin_shutdown` is called by the shutdown path before anything
+is asked to stop, and `fail` records nothing afterwards. A failure recorded
+**before** the shutdown is kept, because that failure is still why the node is
+going away.
+
+### F-102 `evidence`, confidence `medium`
+
+**The cluster binary's two tests run concurrently in one process, and the
+distributed-lock phase was observed stalling under that load.** `test_cluster`
+and `learner_only_node_stays_non_voter_and_becomes_ready` are two tests in one
+binary, so the harness runs them on separate threads of the same process: six
+nodes, two Raft groups each, on one machine. The port ranges and data
+directories are disjoint; the machine is not.
+
+**Observed once**, on 2026-09-22, in the first of three full-suite runs on this
+tree. `test_cluster` reached the distributed-lock phase's
+`awaiting handle_1_2` while `learner_only` was shutting its three nodes down,
+made no further progress, and failed after the client's own timeout with
+`Connect: request timed out`. The other two runs of the same command on the same
+tree completed all fifteen phases. `main.rs:69` already carries the authored
+comment `TODO sometimes the test gets stuck here`.
+
+**Not repaired, and not called a flake without more than one observation.** One
+occurrence in three runs does not distinguish a lock-handler liveness gap that
+only appears under contention from a fixture that shares a machine with a second
+cluster. Repairing it properly means either serializing the two tests or
+bounding the lock phase's waits so a stall reports where it stalled, and both
+are changes to `012`'s fixture surface rather than to the handler `023`
+repaired. Recorded so the next occurrence has something to attach to, with the
+run's evidence rather than an impression. `012` KD-1, F-048.

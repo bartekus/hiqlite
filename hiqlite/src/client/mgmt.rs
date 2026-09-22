@@ -342,6 +342,9 @@ impl Client {
             is_single_instance = node_count == 1;
         }
 
+        // F-101: before anything is asked to stop, so the watchers do not report the
+        // components this shutdown is about to end as failures.
+        state.lifecycle.begin_shutdown();
         state.is_shutting_down.store(true, Ordering::Relaxed);
 
         // This pre-shutdown delay is not strictly necessary, but it makes rolling releases

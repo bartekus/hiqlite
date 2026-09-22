@@ -19,6 +19,7 @@
 //! application's decision, and hiqlite's job is to tell it.
 
 use crate::Error;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock};
 use tracing::error;
 
@@ -73,6 +74,14 @@ impl NodeFailure {
 #[derive(Debug, Clone, Default)]
 pub struct NodeLifecycle {
     failure: Arc<OnceLock<NodeFailure>>,
+    /// Set once the node is being shut down deliberately.
+    ///
+    /// F-101: every watcher here reports a component that **ended**, and a deliberate shutdown
+    /// ends all of them. Without this, a clean shutdown recorded the WAL writer thread's exit as
+    /// "the writer thread ended without reporting a reason, which is what a panic in it looks
+    /// like from outside", took the node out of service on its way out, and put a false terminal
+    /// failure in the operator's log.
+    shutting_down: Arc<AtomicBool>,
 }
 
 impl NodeLifecycle {
@@ -84,6 +93,11 @@ impl NodeLifecycle {
     ///
     /// Returns `true` when this call was the one that recorded it, so a caller can log once.
     pub(crate) fn fail(&self, component: FailedComponent, reason: impl Into<String>) -> bool {
+        if self.shutting_down.load(Ordering::Acquire) {
+            // A component ending during a shutdown is the shutdown working.
+            return false;
+        }
+
         let failure = NodeFailure {
             component,
             reason: reason.into(),
@@ -95,6 +109,19 @@ impl NodeLifecycle {
         } else {
             false
         }
+    }
+
+    /// Stop treating a component's exit as a failure.
+    ///
+    /// Called once, by the shutdown path, before anything is asked to stop. A failure recorded
+    /// **before** this is kept: the node did fail, and that is still why it is going away.
+    pub(crate) fn begin_shutdown(&self) {
+        self.shutting_down.store(true, Ordering::Release);
+    }
+
+    /// Whether a deliberate shutdown has begun.
+    pub fn is_shutting_down(&self) -> bool {
+        self.shutting_down.load(Ordering::Acquire)
     }
 
     /// The recorded failure, if there is one.
@@ -120,6 +147,10 @@ impl NodeLifecycle {
 /// three: a reported failure, a **closed** channel (the thread ended without reporting, which is
 /// what a panic looks like from outside it), and still running. The third is the only one that
 /// does nothing.
+///
+/// A deliberate shutdown closes the channel too, and `NodeLifecycle::fail` declines to record
+/// anything once `begin_shutdown` has been called, so the second state means "ended unexpectedly"
+/// rather than "ended". F-101.
 pub(crate) fn watch_wal_writer(
     lifecycle: NodeLifecycle,
     mut rx: tokio::sync::watch::Receiver<Option<String>>,
@@ -165,6 +196,45 @@ mod tests {
         let failure = lifecycle.failure().expect("a failure was recorded");
         assert_eq!(failure.component, FailedComponent::WalWriter);
         assert!(failure.reason.contains("disk went away"));
+    }
+
+    /// F-101: a deliberate shutdown ends every component these watchers are watching, so a
+    /// shutdown must not be reported as a failure. Observed in the cluster suite's log as the
+    /// WAL writer "ending without reporting a reason" on three nodes that were being shut down
+    /// on purpose, each taking its node out of service on the way out.
+    #[test]
+    fn a_deliberate_shutdown_is_not_a_failure() {
+        let lifecycle = NodeLifecycle::new();
+        assert!(!lifecycle.is_shutting_down());
+
+        lifecycle.begin_shutdown();
+        assert!(lifecycle.is_shutting_down());
+
+        assert!(
+            !lifecycle.fail(FailedComponent::WalWriter, "the writer thread ended"),
+            "a component ending during a shutdown is the shutdown working"
+        );
+        assert!(
+            lifecycle.failure().is_none(),
+            "and nothing is recorded, so the node is not described as out of service"
+        );
+        assert!(lifecycle.ensure_available().is_ok());
+    }
+
+    /// The other direction: a node that failed and is then shut down still says why it failed.
+    #[test]
+    fn a_failure_recorded_before_the_shutdown_survives_it() {
+        let lifecycle = NodeLifecycle::new();
+        assert!(lifecycle.fail(FailedComponent::SqliteWriter, "disk went away"));
+
+        lifecycle.begin_shutdown();
+
+        let failure = lifecycle.failure().expect("the failure is kept");
+        assert!(failure.reason.contains("disk went away"));
+        assert!(
+            lifecycle.ensure_available().is_err(),
+            "the node is still out of service, and that is still why it is going away"
+        );
     }
 
     #[test]

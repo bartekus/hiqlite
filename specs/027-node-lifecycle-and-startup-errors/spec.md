@@ -204,6 +204,19 @@ All three are handled. The third is still a terminated writer and still not a
 healthy node, and hiqlite does not invent a cause for it. This is an
 observation, not supervision: nothing joins the thread and nothing restarts it.
 
+**A shutdown closes that channel too**, because ending the writer thread is
+exactly what a shutdown does, and the third state cannot tell the two apart on
+its own. `NodeLifecycle::begin_shutdown` is therefore called by the shutdown
+path before anything is asked to stop, and `fail` records nothing after it. The
+third state then means "ended unexpectedly" rather than "ended", which is what
+it was always supposed to mean.
+
+A failure recorded **before** the shutdown is kept: the node did fail, that is
+still why it is going away, and `ensure_available` still says so. This is F-101,
+and it was this spec's own defect: three nodes shut down on purpose each logged
+`this node is out of service because the Raft log WAL writer failed` and
+recorded a terminal failure that was not one.
+
 ### B-7. The minimum public API this release freezes
 
 Four things, and no more:
@@ -257,7 +270,7 @@ whether each returned an error. Run and observed: all five returned errors, exit
 `HQL_SPLIT_BRAIN_INTERVAL` parse restored to its `.expect(..)`, the same binary
 aborted with exit `134`, which is `SIGABRT`.
 
-Under unwind, three unit tests:
+Under unwind, four unit tests:
 
 - a malformed and a zero split-brain interval are startup errors, and the
   documented default of sixty seconds is unchanged;
@@ -266,7 +279,11 @@ Under unwind, three unit tests:
 - the lifecycle record keeps the first failure, refuses with an account naming
   the component and both the recovery path and the fact that the process is not
   ended, and fails the node both for a reported writer failure and for a writer
-  thread that ended **without** one.
+  thread that ended **without** one;
+- a deliberate shutdown is not a failure, and a failure recorded before one
+  survives it. Added 2026-09-22 for F-101, and observed failing against this
+  spec's first implementation, which recorded every clean shutdown as a WAL
+  writer that had ended without reporting a reason.
 
 What the acceptance does **not** establish:
 
@@ -430,6 +447,11 @@ cargo test -p hiqlite-patched --lib --no-default-features --features sqlite,cach
 cargo test -p hiqlite-patched --lib --no-default-features --features sqlite,cache lifecycle::tests::a_failed_node_refuses_with_an_account_of_why -- --exact
 cargo test -p hiqlite-patched --lib --no-default-features --features sqlite,cache lifecycle::tests::a_writer_thread_that_ends_without_a_reason_still_fails_the_node -- --exact
 cargo test -p hiqlite-patched --lib --no-default-features --features sqlite,cache lifecycle::tests::a_reported_writer_failure_names_its_cause -- --exact
+# F-101: a deliberate shutdown is not a failure, and a real one still survives it
+cargo test -p hiqlite-patched --lib --no-default-features --features sqlite,cache lifecycle::tests::a_deliberate_shutdown_is_not_a_failure -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features sqlite,cache lifecycle::tests::a_failure_recorded_before_the_shutdown_survives_it -- --exact
+sh -c 'grep -q "state.lifecycle.begin_shutdown();" hiqlite/src/client/mgmt.rs'
+sh -c 'grep -A3 "fn fail(&self" hiqlite/src/lifecycle.rs | grep -q "self.shutting_down.load"'
 # the abort-profile half. The build is what puts it under `panic = "abort"`; these two are a
 # pair and running a stale binary would prove nothing.
 cargo build --release -p hiqlite-patched --features __abort-probe,s3 --bin hiqlite-abort-probe
