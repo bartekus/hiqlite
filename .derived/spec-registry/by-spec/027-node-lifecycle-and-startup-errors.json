@@ -119,6 +119,7 @@
       "B-6. The WAL writer's termination has a consumer",
       "B-7. The minimum public API this release freezes",
       "B-8. The split-brain watchdog is removed",
+      "B-9. A node leaving its own cluster may not change anyone else's membership",
       "4. Evidence and its limits",
       "5. Known defects",
       "6. Resolved decisions",
@@ -130,6 +131,6 @@
     "summary": "Repairs F-009, F-014, F-025, F-039 and F-040 as one policy. Expected configuration and startup failures are returned as named errors instead of depending on a panic profile that belongs to the consumer; both listeners are bound before a node is reported started and shut down gracefully on both the TLS and plaintext paths; a partial startup tears down what it started; and a WAL writer that ends, for any reason including a panic inside it, takes the node out of service instead of leaving it answering as though it were healthy. Defines the minimum public error and lifecycle API and runs the expected failure paths under an abort profile no test can use.\n",
     "title": "Return startup failures as errors, observe background failures, and define the node lifecycle API"
   },
-  "shardHash": "c4daf67b076a99745cf7d9c4c8964520f048b42afb8b68d97a6db8a45aa43628",
+  "shardHash": "d782d20bfebdbde9955c7c5fedb79758f3d723a11cf378a13413293f9bf12a60",
   "specVersion": "1.3.0"
 }

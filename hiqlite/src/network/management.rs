@@ -171,27 +171,82 @@ pub(crate) async fn become_member(
     }
 }
 
-async fn are_we_leader(state: &AppStateExt, raft_type: &RaftType) -> Result<(), Error> {
-    if let Some(leader_id) = helpers::get_raft_leader(state, raft_type).await {
-        if leader_id == state.id {
-            Ok(())
-        } else {
-            let metrics = helpers::get_raft_metrics(state, raft_type).await;
-            let Some(leader) = metrics.membership_config.membership().get_node(&leader_id) else {
-                return Err(Error::Error(
-                    format!("Leader {leader_id} not found in membership config").into(),
-                ));
-            };
-
-            let err = RaftError::APIError(CheckIsLeaderError::ForwardToLeader(ForwardToLeader {
-                leader_id: Some(leader_id),
-                leader_node: Some(leader.clone()),
-            }));
-            Err(Error::CheckIsLeaderError(Box::new(err)))
-        }
-    } else {
-        Err(Error::LeaderChange("Leader election in progress".into()))
+/// Why a node may not commit a membership change, or `Ok` if it may.
+///
+/// Extracted as a pure decision so the reasoning can be tested without a running cluster.
+/// F-107 was a hole in exactly this decision, and the sequence that exposed it is not one a
+/// test can schedule: this node left the cache cluster and a peer's leave request arrived one
+/// millisecond later.
+pub(crate) fn membership_change_allowed(
+    is_shutting_down: bool,
+    leader: Option<NodeId>,
+    this_node: NodeId,
+    this_node_is_voter: bool,
+) -> Result<(), Error> {
+    // A node on its way out of the membership it would be changing. The leaving is not atomic
+    // with the answer given here, so refusing early sends the caller to a node that will still
+    // be a member when it acts.
+    if is_shutting_down {
+        return Err(Error::LeaderChange(
+            "this node is shutting down and cannot serve a membership change; ask another node"
+                .into(),
+        ));
     }
+
+    match leader {
+        None => Err(Error::LeaderChange("Leader election in progress".into())),
+        Some(leader_id) if leader_id != this_node => Err(Error::LeaderChange(
+            "this node is not the leader for this raft".into(),
+        )),
+        // Being the leader is not sufficient, and this is the invariant openraft asserts
+        // internally. A leader that has removed **itself** from the voters keeps reporting
+        // leadership for a window, and a membership change committed in that window reaches
+        // `append_membership` on a node openraft no longer considers entitled to make one. In a
+        // test build that is a `debug_assert!` panic; in a release build it is the same state
+        // change, unchecked.
+        Some(_) if !this_node_is_voter => Err(Error::LeaderChange(
+            "this node reports itself leader but is no longer a voter, so it cannot commit a \
+             membership change; ask another node"
+                .into(),
+        )),
+        Some(_) => Ok(()),
+    }
+}
+
+async fn are_we_leader(state: &AppStateExt, raft_type: &RaftType) -> Result<(), Error> {
+    let leader = helpers::get_raft_leader(state, raft_type).await;
+
+    // The non-leader case keeps its richer error, which carries the leader's address so a
+    // caller can forward rather than guess. Everything else goes through the decision above.
+    if let Some(leader_id) = leader
+        && leader_id != state.id
+    {
+        let metrics = helpers::get_raft_metrics(state, raft_type).await;
+        let Some(leader_node) = metrics.membership_config.membership().get_node(&leader_id) else {
+            return Err(Error::Error(
+                format!("Leader {leader_id} not found in membership config").into(),
+            ));
+        };
+
+        let err = RaftError::APIError(CheckIsLeaderError::ForwardToLeader(ForwardToLeader {
+            leader_id: Some(leader_id),
+            leader_node: Some(leader_node.clone()),
+        }));
+        return Err(Error::CheckIsLeaderError(Box::new(err)));
+    }
+
+    let this_node_is_voter = helpers::get_raft_metrics(state, raft_type)
+        .await
+        .membership_config
+        .voter_ids()
+        .any(|id| id == state.id);
+
+    membership_change_allowed(
+        state.is_shutting_down.load(std::sync::atomic::Ordering::Relaxed),
+        leader,
+        state.id,
+        this_node_is_voter,
+    )
 }
 
 pub(crate) async fn get_membership(
@@ -380,4 +435,71 @@ pub(crate) async fn metrics(
 
     let metrics = helpers::get_raft_metrics(&state, &raft_type).await;
     fmt_ok(headers, &metrics)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// F-107, driven as a decision rather than as a race.
+    ///
+    /// The sequence that produced the defect cannot be scheduled by a test: this node left the
+    /// cache cluster and a peer's leave request arrived one millisecond later, so
+    /// `are_we_leader` said yes and openraft then refused the membership append the answer had
+    /// authorized. Every input combination is enumerated here instead.
+    #[test]
+    fn a_node_leaving_its_own_cluster_may_not_commit_a_membership_change() {
+        // The case that was missing, and the whole reason this exists: leader by its own
+        // metrics, already out of the voter set.
+        let err = membership_change_allowed(false, Some(1), 1, false)
+            .expect_err("a leader that is no longer a voter must be refused");
+        let msg = err.to_string();
+        assert!(msg.contains("no longer a voter"), "got: {msg}");
+        assert!(
+            msg.contains("ask another node"),
+            "the caller must be told what to do instead, got: {msg}"
+        );
+
+        // Shutting down wins over everything, including a node that still looks healthy.
+        let err = membership_change_allowed(true, Some(1), 1, true)
+            .expect_err("a shutting-down node must be refused");
+        assert!(err.to_string().contains("shutting down"), "got: {err}");
+
+        // No leader, and a leader that is someone else.
+        assert!(
+            membership_change_allowed(false, None, 1, true)
+                .expect_err("no leader")
+                .to_string()
+                .contains("election in progress")
+        );
+        assert!(
+            membership_change_allowed(false, Some(2), 1, true)
+                .expect_err("not the leader")
+                .to_string()
+                .contains("not the leader")
+        );
+
+        // And the one case that must still be allowed, or nothing could ever join or leave.
+        membership_change_allowed(false, Some(1), 1, true)
+            .expect("a voting leader that is not shutting down may commit a membership change");
+    }
+
+    /// The refusals are all `LeaderChange`, which the HTTP layer maps to `409 CONFLICT`, and
+    /// `leave_remote_cluster` already walks to the next node on a non-success. A refusal is
+    /// therefore a redirect, not a failed leave.
+    #[test]
+    fn every_refusal_tells_the_caller_to_try_elsewhere() {
+        for (shutting, leader, voter) in [
+            (true, Some(1u64), true),
+            (false, Some(1u64), false),
+            (false, None, true),
+        ] {
+            let err = membership_change_allowed(shutting, leader, 1, voter)
+                .expect_err("this combination must be refused");
+            assert!(
+                matches!(err, Error::LeaderChange(_)),
+                "a refusal must be retryable elsewhere, got: {err:?}"
+            );
+        }
+    }
 }

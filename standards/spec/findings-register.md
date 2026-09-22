@@ -2604,6 +2604,85 @@ not a check, and this release adds the gate that would have relied on it.
 replaced through `amends_verification`, which replaces whole blocks, and every
 other command in both blocks is carried forward unchanged.
 
+### F-107 `defect`, confidence `high`
+
+**A leader that has removed itself from the voters still accepted membership
+changes for other nodes.** `leave_cluster`'s guard is `are_we_leader`, which
+asked only whether this node reports itself leader. A node that removes **itself**
+from the voter set keeps reporting leadership for a window, so the guard said
+yes and openraft then refused the membership append that the answer had
+authorized:
+
+    debug_assert!(
+        self.state.server_state == ServerState::Leader,
+        "Only leader is allowed to call update_effective_membership()"
+    );
+
+**Observed by execution**, twice, on 2026-09-22: once in CI and once locally.
+The local log gives the sequence exactly, inside two milliseconds:
+
+    15:29:29.841  Node 1 (Cache) has left the cluster: configs: [{2, 3}]
+    15:29:29.842  Shutting down raft cache layer
+    15:29:29.8428 Node 3 (Cache) is a cluster member - removing it
+    15:29:29.8436 change_membership: start to commit joint config RemoveVoters({3})
+    15:29:29.8478 panicked: Only leader is allowed to call update_effective_membership()
+
+Node 1 left the cache cluster while shutting down, and a peer's leave request
+for node 3 arrived one millisecond later. Node 1 was no longer a voter and
+answered anyway.
+
+**It is a `debug_assert!`, and that cuts both ways.** It is compiled out of a
+release build, so a consumer does not get this panic; what a consumer gets
+instead is the unchecked version of the same thing, a membership append applied
+on a node openraft no longer considers entitled to make one. The assertion is
+**byte-identical in 0.9.24 and 0.9.25**, so the openraft version is not the
+variable.
+
+**Repaired 2026-09-22 by `027-node-lifecycle-and-startup-errors`.** The decision
+is now a pure function, `membership_change_allowed`, which refuses on three
+grounds: the node is shutting down, there is no leader, the node is not the
+leader, or **the node is the leader but not a voter**. The last is the hole.
+Every refusal is `Error::LeaderChange`, which the HTTP layer maps to `409`, and
+`leave_remote_cluster` already walks to the next node on a non-success, so a
+refusal is a redirect rather than a failed leave.
+
+**A first repair attempt was wrong and is recorded as such.** It took
+`raft_lock` around both raft shutdowns on the theory that a shutdown was tearing
+down a raft mid-membership-change. The timestamps above refute it: the two
+operations are a millisecond apart and sequential, and `raft_lock` was free the
+whole time. That change was reverted rather than kept as a plausible-looking
+guard on a false premise.
+
+**Tested as a decision, not as a race.** The sequence above cannot be scheduled
+by a test, so all five input combinations are enumerated directly, and both
+tests were observed failing with the voter check removed.
+
+**Consumer triage.** Reaches both named consumers in principle and neither as a
+crash: both embed a node and shut it down, and both ship release builds where
+the assertion is absent. What they were exposed to is the unchecked membership
+append on a node leaving the cluster, which is why this is an ordering defect
+rather than a durability one.
+
+### F-108 `evidence`, confidence `high`
+
+**Local runs and CI were resolving different dependency trees, and nothing said
+so.** The workspace `Cargo.lock` is deliberately untracked, which is the normal
+choice for a library, so CI resolves fresh on every run while a developer's
+checkout keeps whatever it resolved first. This repository's local lock held
+`openraft 0.9.24`; CI resolved `0.9.25`, published 2026-07-28. **Every local
+gate result recorded for this release before 2026-09-22 was therefore taken
+against a dependency tree no consumer and no CI run would get.**
+
+Found 2026-09-22 by reading a CI panic's path, which named
+`openraft-0.9.25/src/...` where the local tree had `0.9.24`.
+
+Not repaired by tracking the lock: committing a `Cargo.lock` for a published
+library pins nothing for consumers, who resolve their own, and would only move
+the divergence rather than remove it. Handled instead by qualifying against what
+consumers resolve: the local tree was moved to `0.9.25` and the full gate and
+the whole acceptance sweep were re-run there. What the release states it was
+tested against is recorded in the handoff.
+
 ### F-103 `defect`, confidence `high`
 
 **The pull-request style workflow ran with a writable token.**

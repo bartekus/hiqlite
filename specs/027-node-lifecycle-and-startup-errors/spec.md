@@ -251,6 +251,26 @@ An `assert!` in a task nobody joins is not a safety net under either profile. It
 is removed, and what replaces it is the checker no longer having a panic to be a
 net for: its one unvalidated read is validated before the task is spawned (B-1).
 
+### B-9. A node leaving its own cluster may not change anyone else's membership
+
+`leave_cluster`'s guard asked only whether this node reports itself leader. A
+node that removes **itself** from the voter set keeps reporting leadership for a
+window, so the guard authorized a membership change that openraft then refused,
+because openraft's own invariant is about being a **voter** and not about the
+reported leader id.
+
+The decision is now a pure function with four refusals: the node is shutting
+down; there is no leader; the node is not the leader; or the node is the leader
+and **not a voter**. The last one is the hole that was there.
+
+Every refusal is `Error::LeaderChange`, which the HTTP layer maps to `409`, and
+`leave_remote_cluster` already walks to the next node on a non-success. A
+refusal is therefore a redirect, not a failed leave, and the self-removal path
+that a shutting-down leader legitimately performs is untouched.
+
+F-107. The sequence that exposed it spans two milliseconds and cannot be
+scheduled by a test, so section 4 says how it is tested instead.
+
 ## 4. Evidence and its limits
 
 **The abort-profile half is real and is the unusual part.**
@@ -284,6 +304,15 @@ Under unwind, four unit tests:
   survives it. Added 2026-09-22 for F-101, and observed failing against this
   spec's first implementation, which recorded every clean shutdown as a WAL
   writer that had ended without reporting a reason.
+- a node leaving its own cluster may not commit a membership change, and every
+  refusal is one the caller can retry elsewhere. Added 2026-09-22 for F-107.
+  All five input combinations are enumerated, because the sequence that produced
+  the defect spans two milliseconds between two tasks and no test can schedule
+  it. **Both tests were observed failing with the voter check removed.** The
+  panic itself was reproduced twice, once in CI and once locally, and three
+  further full cluster runs after the repair are clean; three clean runs are
+  reported as what they are, which is not proof for a defect that appeared once
+  in roughly seven.
 
 What the acceptance does **not** establish:
 
@@ -452,6 +481,12 @@ cargo test -p hiqlite-patched --lib --no-default-features --features sqlite,cach
 cargo test -p hiqlite-patched --lib --no-default-features --features sqlite,cache lifecycle::tests::a_failure_recorded_before_the_shutdown_survives_it -- --exact
 sh -c 'grep -q "state.lifecycle.begin_shutdown();" hiqlite/src/client/mgmt.rs'
 sh -c 'grep -A3 "fn fail(&self" hiqlite/src/lifecycle.rs | grep -q "self.shutting_down.load"'
+# B-9 / F-107: a node that is not a voter may not commit a membership change
+cargo test -p hiqlite-patched --lib --no-default-features --features cache network::management::tests::a_node_leaving_its_own_cluster_may_not_commit_a_membership_change -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features cache network::management::tests::every_refusal_tells_the_caller_to_try_elsewhere -- --exact
+sh -c 'grep -q "fn membership_change_allowed" hiqlite/src/network/management.rs'
+sh -c 'grep -q "Some(_) if !this_node_is_voter" hiqlite/src/network/management.rs'
+sh -c 'grep -q "membership_change_allowed(" hiqlite/src/network/management.rs'
 # the abort-profile half. The build is what puts it under `panic = "abort"`; these two are a
 # pair and running a stale binary would prove nothing.
 cargo build --release -p hiqlite-patched --features __abort-probe,s3 --bin hiqlite-abort-probe
