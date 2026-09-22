@@ -392,7 +392,10 @@ drift).** B-8 and B-10 changed the syntax two greps matched: the local sweep's
 predicate is now a `filter_map`, and the staged image is synced under its
 staging name before the rename that commits it. The behaviors those greps stand
 for, one predicate (B-1) and a synced image before anything is destroyed (B-3),
-are unchanged and still asserted. Each replaced line is marked in the block.
+are unchanged and still asserted. Each replaced line is marked in the block. A
+third, F-100's check that the old write-ahead log is removed before the rename,
+matched by proximity and broke when the review's directory syncs were inserted
+between the two; it now compares line order, which is the property.
 
 ## 7. Out of scope
 
@@ -470,14 +473,15 @@ cargo test -p hiqlite-patched --lib --features sqlite,backup,s3 backup::tests::m
 # F-100: the restore removes the discarded database's write-ahead log too
 cargo test -p hiqlite-patched --lib --features sqlite,backup backup::tests::a_restore_removes_the_previous_write_ahead_log_and_not_only_the_database -- --exact
 sh -c 'grep -q "{path_db_full}-wal" hiqlite/src/backup.rs'
-sh -c 'grep -B4 "fs::rename(&path_db_staged, &path_db_full)" hiqlite/src/backup.rs | grep -q "remove_file_reported(&sidecar)"'
+# F-100, by line order rather than proximity: B-8's directory syncs now sit between the two
+sh -c 'a=$(grep -n "remove_file_reported(&sidecar)" hiqlite/src/backup.rs | head -1 | cut -d: -f1); b=$(grep -n "fs::rename(&path_db_staged, &path_db_full)" hiqlite/src/backup.rs | head -1 | cut -d: -f1); test -n "$a" && test -n "$b" && test "$a" -lt "$b"'
 # B-8 / B-9 / B-10: roll-forward, durable backup, and a retention floor of one
 cargo test -p hiqlite-patched --lib --features sqlite,backup backup::tests::an_interrupted_restore_is_rolled_forward_on_the_next_start -- --exact
 cargo test -p hiqlite-patched --lib --features sqlite,backup backup::tests::retention_never_deletes_the_newest_backup -- --exact
 cargo test -p hiqlite-patched --lib --features sqlite,backup backup::tests::local_cleanup_with_zero_keep_days_keeps_the_backup_it_follows -- --exact
 sh -c 'grep -A6 "fn restore_backup_start" hiqlite/src/backup.rs | grep -q "finish_staged_restore(node_config)"'
 sh -c 'grep -q "expired_backups(&backups, threshold)" hiqlite/src/backup.rs'
-sh -c 'grep -B2 "fs::rename(&path_db_staged, &path_db_full)" hiqlite/src/backup.rs | grep -q "sync_parent_dir(parent)"'
+sh -c 'a=$(grep -n "sync_parent_dir(parent)" hiqlite/src/backup.rs | head -1 | cut -d: -f1); b=$(grep -n "fs::rename(&path_db_staged, &path_db_full)" hiqlite/src/backup.rs | head -1 | cut -d: -f1); test -n "$a" && test -n "$b" && test "$a" -lt "$b"'
 sh -c 'test "$(grep -c "expired_backups(&backups, threshold)" hiqlite/src/backup.rs)" -eq 2'
 sh -c 'grep -B3 "sync_file_blocking(&path_temp)" hiqlite/src/store/state_machine/sqlite/writer.rs | grep -q "persist_metadata(&conn_bkp, &StateMachineData::default())?;"'
 ```

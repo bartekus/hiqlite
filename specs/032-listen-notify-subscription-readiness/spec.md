@@ -312,4 +312,22 @@ sh -c 'grep -q "032-listen-notify-subscription-readiness" standards/spec/finding
 spec-spine check --fail-on-unresolved --fail-on-warn
 spec-spine lint --fail-on-warn
 sh -c '! grep -rl "$(printf "\342\200\224")" specs/032-listen-notify-subscription-readiness'
+# --- 031 B-8 / F-108 / F-109, added 2026-09-22. This block replaces 031's, so 031's
+# additions have to live here to run at all ---
+# B-8 / F-108: the qualification graph is committed and enforced, and openraft is exact
+git ls-files --error-unmatch Cargo.lock
+cargo metadata --locked --format-version 1 --no-deps
+sh -c 'grep -q "^openraft = { version = \"=0.9.25\"" Cargo.toml'
+sh -c 'grep -A1 "^name = \"openraft\"$" Cargo.lock | grep -q "^version = \"0.9.25\"$"'
+sh -c 'grep -q "cargo metadata --locked --format-version 1 > /dev/null" .github/workflows/code_style.yaml'
+sh -c 'grep -q "git diff --exit-code -- Cargo.lock" .github/workflows/code_style.yaml'
+sh -c 'grep -q "cargo metadata --locked --format-version 1 > /dev/null" .github/workflows/publish.yaml'
+sh -c 'grep -q "git diff --exit-code -- Cargo.lock" .github/workflows/publish.yaml'
+sh -c 'grep -q "^qualify:" justfile'
+# F-109: the containerized jobs run bash, and git may read the checkout before it is asked about the lock
+sh -c 'test "$(grep -c "shell: bash" .github/workflows/publish.yaml)" -eq 2'
+sh -c 'grep -q "shell: bash" .github/workflows/code_style.yaml'
+sh -c 'grep -q "shell: bash" .github/workflows/acceptance.yaml'
+sh -c 'grep -q "safe.directory" .github/workflows/code_style.yaml'
+sh -c 'grep -q "safe.directory" .github/workflows/publish.yaml'
 ```

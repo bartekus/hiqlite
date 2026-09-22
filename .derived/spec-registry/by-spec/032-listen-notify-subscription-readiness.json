@@ -71,6 +71,6 @@
     "summary": "Repairs F-051. A remote client's event subscription was established by a detached task that nobody waited for, so `Client::remote` returned before the server had registered the listener and an event published in that window was delivered to no one, leaving `listen()` waiting forever. The server now acknowledges the registration before it answers the HTTP request, and the client waits for that acknowledgement, bounded, before it returns. This is what the repository's full-suite gate was stalled on.\n",
     "title": "A remote client is subscribed to the event bus before it is handed back"
   },
-  "shardHash": "7cb7e6dd4cfebd3a17007fbe84ea2c7fdc3f5b237bdc8c281019d30bbbbedf10",
+  "shardHash": "7a1da931e9b0d91932b132d48d5e09050b933f33e2e60de718af625e2df7a6a4",
   "specVersion": "1.3.0"
 }

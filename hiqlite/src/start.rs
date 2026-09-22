@@ -292,6 +292,7 @@ where
             // leave two threads holding this data directory open behind a constructor that
             // reported failure, and the storage ownership lock would only be released when the
             // local guard below happened to drop.
+            lifecycle.begin_shutdown();
             #[cfg(feature = "sqlite")]
             teardown_raft_db(raft_db).await;
             return Err(err);
@@ -320,6 +321,7 @@ where
     let rpc_listener = match bind_listener(&rpc_addr, "the internal RPC endpoint").await {
         Ok(listener) => listener,
         Err(err) => {
+            lifecycle.begin_shutdown();
             teardown_partial_start(
                 #[cfg(feature = "sqlite")]
                 raft_db,
@@ -333,6 +335,7 @@ where
     let api_listener = match bind_listener(&api_addr, "the external API endpoint").await {
         Ok(listener) => listener,
         Err(err) => {
+            lifecycle.begin_shutdown();
             teardown_partial_start(
                 #[cfg(feature = "sqlite")]
                 raft_db,

@@ -1637,6 +1637,122 @@ mod tests {
         Ok(())
     }
 
+    /// W-07: a torn trailing record is not a prefix, and recovery tells them apart.
+    ///
+    /// Each case writes records 1 to 3 with the header covering them, then record 4, then
+    /// **drops the mapping without the header update** a clean close performs (`Drop` rewrites
+    /// the header), and reopens from disk with `read_from_file`. That is a crash, not a close.
+    ///
+    /// - `tear`: the second half of record 4's payload is zeroed, as if it never reached disk.
+    /// - `header_covers_4`: the header was persisted after record 4 was appended, which a power
+    ///   loss can produce because the header and the data are different pages of one mapping
+    ///   and `msync` does not order them.
+    ///
+    /// What this does not establish: which bytes a real power loss keeps. The states are
+    /// constructed; what is shown is what recovery does with each.
+    fn reopen_after_crash(
+        case: &str,
+        tear: bool,
+        header_covers_4: bool,
+    ) -> (Result<WalFile, Error>, String) {
+        let base_path = format!("{}/torn_tail_{case}", PATH);
+        let _ = fs::remove_dir_all(&base_path);
+        fs::create_dir_all(&base_path).unwrap();
+
+        let mut buf = Vec::with_capacity(32);
+        let mut wal = WalFile::new(1, &base_path, 0, 0, MB2).unwrap();
+        wal.create_file(&mut buf).unwrap();
+        wal.mmap_mut().unwrap();
+        for id in 1..=3 {
+            buf.clear();
+            wal.append_log(id, format!("record {id}").as_bytes(), &mut buf)
+                .unwrap();
+        }
+        buf.clear();
+        wal.update_header(&mut buf).unwrap();
+
+        let start = wal.data_end.unwrap() as usize + 1;
+        let data = vec![4u8; 64];
+        buf.clear();
+        wal.append_log(4, &data, &mut buf).unwrap();
+        if header_covers_4 {
+            buf.clear();
+            wal.update_header(&mut buf).unwrap();
+        }
+        if tear {
+            let mmap = wal.mmap_mut.as_mut().unwrap();
+            for b in &mut mmap[start + 16 + data.len() / 2..start + 16 + data.len()] {
+                *b = 0;
+            }
+        }
+        wal.flush().unwrap();
+        let path = wal.path.clone();
+        // a crash: no header update on the way out. `Drop` rewrites the header while the
+        // writable mapping exists, so the mapping goes first.
+        wal.mmap_mut = None;
+        drop(wal);
+
+        let res = (|| {
+            let mut reopened = WalFile::read_from_file(path)?;
+            reopened.mmap_mut()?;
+            buf.clear();
+            reopened.check_repair_data_integrity(&mut buf)?;
+            Ok(reopened)
+        })();
+        (res, base_path)
+    }
+
+    fn read_ids(wal: &WalFile, from: u64, until: u64) -> Vec<(u64, Vec<u8>)> {
+        let mut memo = None;
+        let mut logs = Vec::new();
+        wal.read_logs(from, until, &mut memo, &mut logs).unwrap();
+        logs
+    }
+
+    #[test]
+    fn a_torn_record_past_the_header_is_dropped_and_the_prefix_recovers() {
+        let (res, base_path) = reopen_after_crash("past_header", true, false);
+        let mut wal = res.expect("a torn tail past the header is not an integrity failure");
+        assert_eq!(wal.id_until, 3, "the torn record 4 is not recovered");
+        assert_eq!(read_ids(&wal, 1, 3).len(), 3, "the complete prefix is readable");
+
+        // the log continues from the prefix, over the torn bytes
+        let mut buf = Vec::with_capacity(32);
+        wal.append_log(4, b"record 4, again", &mut buf).unwrap();
+        assert_eq!(read_ids(&wal, 4, 4)[0].1, b"record 4, again");
+        let _ = fs::remove_dir_all(&base_path);
+    }
+
+    #[test]
+    fn a_complete_record_past_the_header_is_recovered_not_dropped() {
+        let (res, base_path) = reopen_after_crash("complete", false, false);
+        let wal = res.unwrap();
+        assert_eq!(wal.id_until, 4, "a complete record the header missed is recovered");
+        assert_eq!(read_ids(&wal, 1, 4).len(), 4);
+        let _ = fs::remove_dir_all(&base_path);
+    }
+
+    /// A torn record the header already covers. With `auto-heal` the log is rolled back to the
+    /// complete prefix; without it, opening the WAL refuses with `Integrity` rather than serving
+    /// a record whose CRC does not match. Either way nothing torn is ever read as valid.
+    #[test]
+    fn a_torn_record_inside_the_header_is_rolled_back_or_refused() {
+        let (res, base_path) = reopen_after_crash("inside_header", true, true);
+        #[cfg(feature = "auto-heal")]
+        {
+            let wal = res.expect("auto-heal rolls a torn tail back instead of failing");
+            assert_eq!(wal.id_until, 3);
+            assert_eq!(read_ids(&wal, 1, 3).len(), 3);
+        }
+        #[cfg(not(feature = "auto-heal"))]
+        assert!(
+            matches!(res, Err(Error::Integrity(_))),
+            "without auto-heal a torn record inside the header is refused, got {:?}",
+            res.map(|w| w.id_until)
+        );
+        let _ = fs::remove_dir_all(&base_path);
+    }
+
     #[test]
     fn deep_integrity_check_stops_before_eof() -> Result<(), Error> {
         // Regression test: when the last record ends close to the end of the file, the phase-2

@@ -351,6 +351,48 @@ raft stream that carries the replication a remote leave needs. `Raft::initialize
 is outside the gate: it runs only on a pristine node during startup, before the
 API serves.
 
+### B-10. An upgrade from hiqlite 0.14.x carries the database and not the cache
+
+Added 2026-09-22, after the Rauthy integration observed the patched build abort
+with exit `134` on a data directory Rauthy v0.36.2 (hiqlite 0.14.0) had written.
+Three defects stacked, and this is the contract that replaces them.
+
+**The cache raft's log format changed upstream.** PR #362 (`1a4e345`, inside
+this fork's upstream baseline) inserted `GetRemove` and `Replace` at indices 2
+and 3 of `CacheRequest` and made every variant feature-independent. hiqlite
+0.14.0 wrote the old, feature-dependent layout. A 0.14.0 cache log is therefore
+unreadable by any build from upstream's post-0.14.0 tree, and worse than
+unreadable: some entries decode **as a different command** (a legacy `Delete`
+as `GetRemove`), so decoding it at all risks silent divergence (F-111). The
+SQLite raft's `QueryWrite` layout is unchanged for builds with `backup`, which
+Rauthy and Rahi both enable.
+
+**The contract.** The SQLite database and its raft log are carried across an
+upgrade from 0.14.x, and across a downgrade to it. The cache raft's log and
+snapshots are not, in either direction. A disk-backed cache (`cache_storage_disk
+= true`, the default) marks the log directory it creates with its format. On
+start, a `logs_cache` holding WAL files, or a `state_machine_cache/snapshots`
+holding anything, **without** that marker is refused with `Error::Startup`,
+before anything decodes it, naming both directories, the opt-in and the manual
+procedure. With `HQL_CACHE_LEGACY_MOVE_ASIDE=true` (exported as
+`hiqlite::CACHE_LEGACY_MOVE_ASIDE_ENV`) the start instead moves both directories
+into `{data_dir}/pre-upgrade-<unix seconds>/`, logs what it moved, and starts
+with an empty cache. The opt-in does nothing when the marker is present or the
+cache is in memory. A downgrade to 0.14.x must move `logs_cache` and
+`state_machine_cache` aside first, by hand: 0.14.0 has no marker check, and this
+release's cache log would decode there as the wrong commands.
+
+**The abort that hid it (F-112).** The WAL reader thread `unwrap`ped every send.
+The failed start dropped its receiver, the next send panicked, and under a
+consumer's `panic = "abort"` the process ended before the startup error could be
+returned. A requester that stops reading now abandons its request, and the
+reader keeps serving.
+
+**The failure that was not one (F-113).** The failed start's log store, dropped
+on the error path, ended its writer, and the watch recorded that as "the Raft log
+WAL writer failed". A raft that fails to construct, and every teardown after a
+partial start, now marks the lifecycle as shutting down first.
+
 ## 4. Evidence and its limits
 
 **The abort-profile half is real and is the unusual part.**
@@ -472,6 +514,15 @@ openraft 0.9.25 both checks in `append_membership` are `debug_assert!`. Read fro
 source, a release build appends the membership to the effective state and
 rebuilds replication streams on a node whose server state is no longer `Leader`.
 What that does to commit and to the cluster's membership was never executed.
+
+**KD-11. B-10's cross-version evidence is one directory and no snapshot.** The
+upgrade, downgrade and re-upgrade cycle was run once, on the directory Rauthy
+v0.36.2 wrote, with builds from this tree and from upstream `v0.14.0` on the same
+machine: the database carried in both directions, with rows written on each side
+of each transition read back on the other. No SQLite snapshot existed at any
+point, so snapshot readability across versions is read from source (the naming
+is unchanged), not executed. A 0.14.x node built **without** `backup` has a
+different `QueryWrite` layout and is not covered by the contract at all.
 
 **KD-6. `010` KD-1 and KD-2 are untouched.** The bracketed IPv6 listen address
 and the two meanings of `node_id` are not repaired here. The IPv6 one is now a
@@ -632,6 +683,14 @@ sh -c 'grep -q "Ok(res) => res," hiqlite/src/client/shutdown_handle.rs'
 sh -c 'grep -q "Ok(res) => res," hiqlite/src/client/mgmt.rs'
 sh -c 'grep -q "REMOTE_LEAVE_BOUND," hiqlite/src/client/mgmt.rs'
 sh -c 'grep -q "mark_stopped(&held, first_err.is_none())" hiqlite/src/client/mgmt.rs'
+# B-10 / F-111 to F-113: the upgrade guard, the reader that no longer aborts
+cargo test -p hiqlite-patched --lib --no-default-features --features cache store::logs::tests::a_legacy_cache_log_is_refused_and_left_untouched -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features cache store::logs::tests::the_opt_in_moves_the_legacy_cache_aside_and_marks_the_new_one -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features cache store::logs::tests::a_fresh_directory_is_marked_and_a_foreign_marker_is_refused -- --exact
+cargo test -p hiqlite-wal-patched --lib reader::tests::a_requester_that_stops_reading_does_not_end_the_reader -- --exact
+sh -c '! grep -q "ack.send(.*).unwrap()" hiqlite-wal/src/reader.rs'
+sh -c 'grep -B1 "StateMachineMemory::new::<C>" hiqlite/src/store/mod.rs | grep -q "ensure_cache_log_format" || grep -B3 "StateMachineMemory::new::<C>" hiqlite/src/store/mod.rs | grep -q "ensure_cache_log_format"'
+sh -c 'test "$(grep -c "lifecycle.begin_shutdown();" hiqlite/src/store/mod.rs)" -ge 2'
 # F-110: an out-of-service node refuses its embedded client
 sh -c 'test "$(grep -c "self.ensure_node_available()?;" hiqlite/src/client/rate_limit.rs)" -eq 2'
 sh -c 'test "$(grep -c "self.ensure_node_available()?;" hiqlite/src/client/query.rs)" -eq 7'

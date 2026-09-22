@@ -309,6 +309,12 @@ not every graph the ranges admit.
 0.9 patch release, including a security fix, without a new `-patched.N` release
 of this crate.
 
+**KD-9. This spec's own `## Verification` block does not run.** `032` declares
+`amends_verification` on it, so `just spine-verify 031` executes `032`'s block.
+The F-108 and F-109 checks were first written here, where they never ran, and
+were moved into `032`'s block on 2026-09-22 once the run's command count showed
+it. A check added to this block is inert.
+
 **KD-6. Nothing prevents a second publication of a different tree under the same
 version.** The workflow skips a version the registry already serves, which makes
 a re-run safe; it does not compare what is on the registry with what is in the
@@ -427,22 +433,7 @@ spec-spine lint --fail-on-warn
 spec-spine index coverage
 sh -c '! grep -rl "$(printf "\342\200\224")" specs/012-cluster-integration-evidence'
 # --- what this release adds ---
-# B-8 / F-108: the qualification graph is committed and enforced, and openraft is exact
-git ls-files --error-unmatch Cargo.lock
-cargo metadata --locked --format-version 1 --no-deps
-sh -c 'grep -q "^openraft = { version = \"=0.9.25\"" Cargo.toml'
-sh -c 'grep -A1 "^name = \"openraft\"$" Cargo.lock | grep -q "^version = \"0.9.25\"$"'
-sh -c 'grep -q "cargo metadata --locked --format-version 1 > /dev/null" .github/workflows/code_style.yaml'
-sh -c 'grep -q "git diff --exit-code -- Cargo.lock" .github/workflows/code_style.yaml'
-sh -c 'grep -q "cargo metadata --locked --format-version 1 > /dev/null" .github/workflows/publish.yaml'
-sh -c 'grep -q "git diff --exit-code -- Cargo.lock" .github/workflows/publish.yaml'
-sh -c 'grep -q "^qualify:" justfile'
-# F-109: the containerized jobs run bash, and git may read the checkout before it is asked about the lock
-sh -c 'test "$(grep -c "shell: bash" .github/workflows/publish.yaml)" -eq 2'
-sh -c 'grep -q "shell: bash" .github/workflows/code_style.yaml'
-sh -c 'grep -q "shell: bash" .github/workflows/acceptance.yaml'
-sh -c 'grep -q "safe.directory" .github/workflows/code_style.yaml'
-sh -c 'grep -q "safe.directory" .github/workflows/publish.yaml'
+# B-8 / F-108 / F-109: carried in `032`'s block, which replaces this one (`amends_verification`)
 # the three packages are renamed and the three libraries are not
 sh -c 'grep -q "^name = \"hiqlite-patched\"" hiqlite/Cargo.toml'
 sh -c 'grep -q "^name = \"hiqlite-wal-patched\"" hiqlite-wal/Cargo.toml'

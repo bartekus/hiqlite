@@ -179,11 +179,14 @@ impl Default for NodeConfig {
             // F-035 / the oversized-entry ceiling: a single raft entry cannot span WAL files,
             // so this is also the largest write this node can accept, and it had no
             // environment route at all.
+            // `Default` cannot return an error, and this used to `expect`, so a malformed value
+            // panicked in every consumer that built a configuration. It now leaves `0`, which
+            // no WAL accepts, and `is_valid` refuses it by name at startup.
             wal_size: env::var("HQL_WAL_SIZE")
                 .as_deref()
                 .unwrap_or("2097152")
                 .parse()
-                .expect("Cannot parse HQL_WAL_SIZE as u32"),
+                .unwrap_or(0),
             #[cfg(feature = "cache")]
             cache_storage_disk: true,
             raft_config: Self::default_raft_config(10_000),
@@ -447,6 +450,14 @@ impl NodeConfig {
             return Err(Error::Config("'node_id' not found in 'nodes'".into()));
         }
 
+        if self.wal_size == 0 {
+            return Err(Error::Config(
+                "'wal_size' must be greater than 0; if 'HQL_WAL_SIZE' is set, it must be an \
+                 integer number of bytes"
+                    .into(),
+            ));
+        }
+
         if self.secret_raft.len() < 16 || self.secret_api.len() < 16 {
             return Err(Error::Config(
                 "'secret_raft' and 'secret_api' should be at least 16 characters long".into(),
@@ -549,6 +560,23 @@ impl Node {
 #[cfg(test)]
 mod tests {
     use crate::{Node, NodeConfig};
+
+    /// A malformed `HQL_WAL_SIZE` used to panic inside `NodeConfig::default()`, in every
+    /// consumer that built a configuration. It now leaves `0`, and validation names it. Driven
+    /// through `is_valid` rather than the environment, which is process-wide (`009` D-3).
+    #[test]
+    fn a_wal_size_of_zero_is_refused_by_name() {
+        let mut c = NodeConfig::default();
+        c.node_id = 1;
+        c.nodes = vec![Node {
+            id: 1,
+            addr_raft: "localhost:8100".into(),
+            addr_api: "localhost:8200".into(),
+        }];
+        c.wal_size = 0;
+        let err = c.is_valid().expect_err("a zero wal_size must be refused");
+        assert!(err.to_string().contains("HQL_WAL_SIZE"), "got: {err}");
+    }
 
     #[test]
     fn test_config_from_env() {

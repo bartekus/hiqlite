@@ -1418,6 +1418,16 @@ the code under test rather than as a test smell: the sleep is the evidence, not
 the fault. **Confidence medium** because the mismatch itself was not reproduced;
 the authored admission and the workaround are what is established. `012` KD-7.
 
+**Disposition 2026-09-22, for the supported topology only.** An external consumer
+of the release candidate, built against the packages with Rauthy's and with Rahi's
+exact feature sets, starts a single node, writes, shuts it down, restarts it at
+once on the same data directory in the same process, and writes to both the
+SQLite and the cache raft with no sleep. Six runs per feature set, all passed,
+and the row written before the restart survived it. That is evidence that the
+race, whatever it is, does not appear at N=1; it is not a diagnosis, and the
+three-node phase that carries the sleep is outside this release's supported
+topology. Stays open for N=3.
+
 ### F-055 `defect`, confidence `medium`
 
 **Two concurrently running tests share process-wide environment mutation.**
@@ -2736,6 +2746,49 @@ owner's direction of 2026-09-22 separates them:
 
 Earlier results are kept as evidence about the graph they ran on (`0.9.24`
 locally before 2026-09-22), not as evidence about the committed one.
+
+### F-111 `contradiction`, confidence `high`
+
+**The cache raft's replicated command layout changed between hiqlite 0.14.0 and
+this release's upstream baseline, and nothing refused the old log.** Upstream PR
+#362 (`1a4e345`) inserted `GetRemove` and `Replace` at indices 2 and 3 of
+`CacheRequest` and made every variant feature-independent; 0.14.0's layout was
+feature-dependent. A 0.14.0 cache log fails to decode here, or decodes some
+entries as different commands.
+
+**Observed by execution** on 2026-09-22 by the Rauthy integration (CI and a local
+Linux arm64 container, deterministic on both architectures), and reproduced here
+from the same directory: `cannot create the cache raft: when Read Logs: bincode
+DecodeError UnexpectedEnd { additional: 8 }`, once F-112 no longer hid it.
+
+**Repaired 2026-09-22 by `027` B-10, as a contract rather than a decoder:** the
+cache is not carried across the upgrade, a legacy cache log is refused before it
+is decoded, and `HQL_CACHE_LEGACY_MOVE_ASIDE=true` moves it aside. A legacy
+decoder was declined: 0.14.0's layout depends on the features of the build that
+wrote it, so no single decoder is right, and a wrong one diverges silently.
+
+**Consumer triage.** Reaches both named consumers on their first start of this
+release on an existing directory: `cache_storage_disk = true` is the default.
+
+### F-112 `defect`, confidence `high`
+
+**The WAL reader thread panicked when a requester stopped reading**, and under a
+consumer's `panic = "abort"` that ended the process and hid the error that had
+made the requester stop. `hiqlite-wal/src/reader.rs` `unwrap`ped every send.
+**Observed** by the Rauthy integration as exit `134` at `reader.rs:123` and `:135`.
+**Repaired 2026-09-22** by `027` B-10; the regression test panics at `reader.rs:123`
+against the unrepaired reader, the same line as the first observation.
+
+### F-113 `defect`, confidence `high`
+
+**A raft that failed to construct was recorded as a failed WAL writer.** Its log
+store, dropped on the error path, ended the writer thread, and the lifecycle
+watch logged "this node is out of service because the Raft log WAL writer
+failed" for a node that had never started. **Observed** in the same reproduction.
+**Repaired 2026-09-22** by `027` B-10: the lifecycle is marked as shutting down
+before a failed construction returns and before every partial-start teardown. The
+repaired reproduction no longer logs it; no unit test drives it (`027` KD-10's
+limitation applies: no test starts a node).
 
 ### F-110 `defect`, confidence `high`
 

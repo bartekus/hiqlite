@@ -213,6 +213,14 @@ no concept of.
   `Default` and the environment route both used 1024. One value.
 - **F-036.** A `bool` was parsed with a message saying `u64`.
 
+**Added 2026-09-22: a malformed `HQL_WAL_SIZE` no longer panics every
+consumer.** It was parsed with `expect` inside `NodeConfig::default()`, which
+every embedded consumer calls, so a bad value ended the process before any
+configuration was built. `Default` cannot return an error; it now leaves
+`wal_size` at `0`, which no WAL accepts, and `is_valid`, which startup runs,
+refuses it naming the variable. Found by the read-only audit of this release.
+The environment constructor's other `expect`s are unchanged (`027` KD-1).
+
 ### B-6. The derive accepts what it claims to
 
 - **F-078.** `core::option::Option<T>` took the non-optional branch, so a
@@ -419,6 +427,8 @@ sh -c 'spec-spine index owner hiqlite.toml | grep -q 009-configuration-contract'
 sh -c 'spec-spine index owner hiqlite.env | grep -q 009-configuration-contract'
 sh -c 'spec-spine registry relationships 009-configuration-contract | grep -q 001-wal-durability-and-completion'
 # was documented_tls_api_no_verify_key_is_rejected_as_unknown, which pinned F-031
+cargo test -p hiqlite-patched --lib --features sqlite config::tests::a_wal_size_of_zero_is_refused_by_name -- --exact
+sh -c '! grep -q "Cannot parse HQL_WAL_SIZE as u32" hiqlite/src/config.rs'
 cargo test -p hiqlite-patched --lib --features toml config_toml::tests::the_documented_tls_api_no_verify_key_is_consumed_and_honoured -- --exact
 cargo test -p hiqlite-patched --lib --features toml config_toml::tests::tls_api_no_verify_stays_false_when_the_raft_key_is_set -- --exact
 # was prepared_statement_cache_capacity_default_differs_from_the_env_path, which pinned F-034

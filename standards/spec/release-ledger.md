@@ -60,13 +60,20 @@ under upstream's name would say otherwise. All three were checked available on
 | R-04 | distributed-lock handler liveness, and the lease limits it does not remove | merged | `023`; eight tests, four observed failing |
 | R-05 | exclusive storage ownership | merged | `024`; ten tests, four using two real processes |
 | R-06 | snapshot publication, installation and restart selection as one contract | merged | `025`; eight tests, five observed failing, deterministic injection |
-| R-07 | backup retention, restore ordering, validation and configuration failure | merged | `026`; eight tests, five observed failing, the eighth against this spec's own first implementation (F-100) |
-| R-08 | startup errors, background-failure observation, the lifecycle API | merged | `027`; three tests **plus** an abort-profile binary, observed catching the defect at exit `134` |
-| R-09 | the coverage denominator, the enforcement rungs, post-merge acceptance | merged | `028`; probes at the pin, recorded with their numbers |
-| R-10 | the defects that reach a consumer, and a gate for every exclusion | merged | `029`; F-098 found and repaired; five acceptance blocks carried |
-| R-11 | transport security and the dashboard's pre-auth surface | merged | `030`; nine tests; two defects recorded rather than repaired, with the argument |
-| R-12 | package rename, version, publication and review workflows | merged | `031`; this ledger |
-| R-18 | the remote client's event subscription, and the full-suite gate it was blocking | merged | `032`; three tests; the cluster integration suite runs to completion for the first time in this repository |
+| R-07 | backup retention, restore ordering, validation and configuration failure | tested | `026`; eight tests, five observed failing, the eighth against this spec's own first implementation (F-100) |
+| R-08 | startup errors, background-failure observation, the lifecycle API | tested | `027`; three tests **plus** an abort-profile binary, observed catching the defect at exit `134` |
+| R-09 | the coverage denominator, the enforcement rungs, post-merge acceptance | tested | `028`; probes at the pin, recorded with their numbers |
+| R-10 | the defects that reach a consumer, and a gate for every exclusion | tested | `029`; F-098 found and repaired; five acceptance blocks carried |
+| R-11 | transport security and the dashboard's pre-auth surface | tested | `030`; nine tests; two defects recorded rather than repaired, with the argument |
+| R-12 | package rename, version, publication and review workflows | tested | `031`; this ledger |
+| R-18 | the remote client's event subscription, and the full-suite gate it was blocking | tested | `032`; three tests; the cluster integration suite runs to completion for the first time in this repository |
+| R-19 | F-107: one membership gate, decided under its lock, and a shutdown that drains before it stops | reviewed | `027` B-9, D-8; six interleaving tests, four mutations each observed failing; fresh-context review of `a51cb3f`, findings acted on in `d45826c` |
+| R-20 | F-108: the committed qualification graph, and `openraft = "=0.9.25"` | reviewed | `031` B-8; `cargo metadata --locked` in both qualifying workflows; same review |
+| R-21 | F-102: a lock waiter bounded by the lease, and an await that changes nothing | reviewed | `023` B-6; six tests, each observed failing against the handler before it; the review's release-blocking finding was in this work and is repaired |
+| R-22 | backup: restore roll-forward, a durable backup, a retention floor of one | reviewed | `026` B-8 to B-10; three tests, each observed failing under mutation; same review |
+| R-23 | F-110: an out-of-service node refuses its embedded client | implemented | `027` B-9; observed by the Rauthy integration; the refusal is not injected here (`027` KD-10) |
+| R-24 | F-109: the containerized workflows run bash | implemented | `031` B-8; observed failing in CI on `a51cb3f`; proven only by the next run |
+| R-25 | W-07: torn versus complete trailing WAL records | tested | `021` B-8; three tests, with and without `auto-heal`; evidence for existing behavior |
 | R-13 | independent AI review of the candidate | reviewed | `.github/workflows/ai-review.yaml`, run against the tagged commit; findings and their disposition in `031` section 4 |
 | R-14 | publication to crates.io | published | the registry's own response per crate, recorded in `031` section 4 |
 | R-15 | external consumer verification | consumer-verified | a build outside this checkout with no workspace patch and no path dependency, recorded in `031` section 4 |

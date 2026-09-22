@@ -77,6 +77,11 @@ fn run(
                     wal.clone_files_from_no_mmap(&wal_upd.files);
                 }
 
+                // A requester that stopped reading, because it failed to decode an entry or was
+                // dropped, abandons its request; it is not a reason to end this thread. These
+                // sends used to `unwrap`, so a failed startup's teardown panicked here, which
+                // under `panic = "abort"` ended the process and hid the error that caused it.
+                let mut abandoned = false;
                 let mut from_next = from;
                 'logs: for log in wal.files.iter_mut() {
                     if log.id_until < from_next {
@@ -97,7 +102,10 @@ fn run(
                             Ok(_) => {
                                 for (_id, data) in buf.drain(..) {
                                     debug_assert!(_id >= from_next && _id <= until);
-                                    ack.send(Some(Ok(data))).unwrap()
+                                    if ack.send(Some(Ok(data))).is_err() {
+                                        abandoned = true;
+                                        break 'logs;
+                                    }
                                 }
 
                                 // If the until goes beyond our current file, we want to remove the `mmap`
@@ -107,7 +115,7 @@ fn run(
                             }
                             Err(err) => {
                                 error!("Error reading logs: {:?}", err);
-                                ack.send(Some(Err(err))).unwrap();
+                                abandoned = ack.send(Some(Err(err))).is_err();
                                 break 'logs;
                             }
                         }
@@ -120,19 +128,26 @@ fn run(
                         match log.read_logs(from_next, until, &mut memo, &mut buf) {
                             Ok(_) => {
                                 for (_, data) in buf.drain(..) {
-                                    ack.send(Some(Ok(data))).unwrap();
+                                    if ack.send(Some(Ok(data))).is_err() {
+                                        abandoned = true;
+                                        break 'logs;
+                                    }
                                 }
                             }
                             Err(err) => {
                                 error!("Error reading logs: {:?}", err);
-                                ack.send(Some(Err(err))).unwrap();
+                                abandoned = ack.send(Some(Err(err))).is_err();
                             }
                         }
                         break;
                     };
                 }
 
-                ack.send(None).unwrap();
+                if abandoned {
+                    debug!("WAL Reader - the requester of logs {from}..={until} stopped reading");
+                } else {
+                    let _ = ack.send(None);
+                }
             }
             Action::LogState(ack) => {
                 debug!("WAL Reader - Action::LogState");
@@ -185,12 +200,12 @@ fn run(
                     "WAL Reader - Action::LogState -> latest_log_id: {:?}\n{:?}",
                     latest_log_id, st
                 );
-                ack.send(Ok(st)).unwrap();
+                let _ = ack.send(Ok(st));
             }
             Action::Vote(ack) => {
                 debug!("WAL Reader - Action::Vote");
                 let vote = meta.read().unwrap().vote.clone();
-                ack.send(Ok(vote)).unwrap();
+                let _ = ack.send(Ok(vote));
             }
             Action::Shutdown => {
                 debug!("Raft logs store reader is being shut down");
@@ -268,6 +283,69 @@ mod tests {
         }
         assert!(got_err);
 
+        Ok(())
+    }
+
+    /// A requester that stops reading mid-stream abandons its request and nothing else.
+    ///
+    /// Observed by the Rauthy integration: a node whose cache raft could not decode an entry
+    /// dropped the receiver during its failed start, the reader's next `send(..).unwrap()`
+    /// panicked, and under `panic = "abort"` the whole process ended with exit `134`, hiding the
+    /// error that caused it. The reader must survive that and keep answering.
+    #[test]
+    fn a_requester_that_stops_reading_does_not_end_the_reader() -> Result<(), Error> {
+        let base_path = format!("{}/reader_abandoned_request", PATH);
+        let _ = fs::remove_dir_all(&base_path);
+        fs::create_dir_all(&base_path)?;
+
+        let mut buf = Vec::with_capacity(32);
+        let mut wal = WalFile::new(1, &base_path, 0, 0, MB2).unwrap();
+        wal.create_file(&mut buf)?;
+        wal.mmap_mut()?;
+        for id in 1..=5 {
+            buf.clear();
+            wal.append_log(id, b"payload", &mut buf)?;
+        }
+        buf.clear();
+        wal.update_header(&mut buf)?;
+        let path = wal.path.clone();
+        drop(wal);
+
+        let set = WalFileSet {
+            active: Some(0),
+            base_path,
+            files: VecDeque::from([WalFile::read_from_file(path)?]),
+        };
+        let meta = Arc::new(RwLock::new(Metadata {
+            last_purged_log_id: None,
+            vote: None,
+        }));
+        let tx = spawn(meta, Arc::new(RwLock::new(set)))?;
+
+        // Room for one entry, then the requester goes away, as a failed decode does.
+        let (ack, rx) = flume::bounded(1);
+        tx.send(Action::Logs { from: 1, until: 5, ack })
+            .expect("reader to be listening");
+        assert!(matches!(rx.recv(), Ok(Some(Ok(_)))));
+        drop(rx);
+
+        // The reader is still there and still answers. Every wait is bounded: against the
+        // unrepaired reader this test hung rather than failed, which is its own way of showing
+        // the defect and not an acceptable way for a test to report it.
+        let (ack, mut rx) = oneshot::channel();
+        tx.send_timeout(Action::LogState(ack), std::time::Duration::from_secs(5))
+            .expect("the reader must still be listening after an abandoned request");
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        let st = loop {
+            match rx.try_recv() {
+                Ok(st) => break st?,
+                Err(oneshot::error::TryRecvError::Empty) if std::time::Instant::now() < deadline => {
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+                Err(err) => panic!("the reader must answer after an abandoned request: {err}"),
+            }
+        };
+        assert!(st.last_log.is_some());
         Ok(())
     }
 }

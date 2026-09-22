@@ -116,7 +116,12 @@ pub(crate) async fn start_raft_db(
         state_machine_store,
     )
     .await
-    .map_err(|err| Error::Startup(format!("cannot create the sqlite raft: {err}").into()))?;
+    .map_err(|err| {
+            // A start that failed is not a component that failed: the log store dropped here
+            // ends its writer, and without this the watch recorded that as a WAL writer failure.
+            lifecycle.begin_shutdown();
+            Error::Startup(format!("cannot create the sqlite raft: {err}").into())
+        })?;
 
     init::init_pristine_node_1_db(
         &raft,
@@ -159,6 +164,9 @@ where
     let is_raft_stopped = Arc::new(AtomicBool::new(true));
     let is_startup_finished = Arc::new(AtomicBool::new(false));
 
+    if node_config.cache_storage_disk {
+        logs::ensure_cache_log_format(&node_config.data_dir).await?;
+    }
     let state_machine_store = Arc::new(
         StateMachineMemory::new::<C>(&node_config.data_dir, !node_config.cache_storage_disk)
             .await?,
@@ -208,7 +216,12 @@ where
             state_machine_store,
         )
         .await
-        .map_err(|err| Error::Startup(format!("cannot create the cache raft: {err}").into()))?;
+        .map_err(|err| {
+            // A start that failed is not a component that failed: the log store dropped here
+            // ends its writer, and without this the watch recorded that as a WAL writer failure.
+            lifecycle.begin_shutdown();
+            Error::Startup(format!("cannot create the cache raft: {err}").into())
+        })?;
 
         (raft, Some(shutdown_handle))
     } else {
@@ -220,7 +233,12 @@ where
             state_machine_store,
         )
         .await
-        .map_err(|err| Error::Startup(format!("cannot create the cache raft: {err}").into()))?;
+        .map_err(|err| {
+            // A start that failed is not a component that failed: the log store dropped here
+            // ends its writer, and without this the watch recorded that as a WAL writer failure.
+            lifecycle.begin_shutdown();
+            Error::Startup(format!("cannot create the cache raft: {err}").into())
+        })?;
 
         (raft, None)
     };

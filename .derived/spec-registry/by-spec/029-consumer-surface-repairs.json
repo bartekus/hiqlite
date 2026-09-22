@@ -177,6 +177,6 @@
     "summary": "Triages the whole findings register against the feature sets the two named consumers actually enable, repairs the defects that reach them, and records a source-backed reason for every one that does not. The largest is unrecorded until now: an entry larger than the WAL panicked the writer by default, which under an aborting profile ends the embedding application because one of its own writes was too big.\n",
     "title": "Repair the defects that reach a consumer of this release, and say which ones do not"
   },
-  "shardHash": "5a9b7afe22b08b58c91285eb8c23b8c26ca21e273696e40c9ae62a4d26701f20",
+  "shardHash": "5e0405f8fc92b6068dc2f96162f4b39ba105dc7448c3739f57205dbde8acb1ba",
   "specVersion": "1.3.0"
 }

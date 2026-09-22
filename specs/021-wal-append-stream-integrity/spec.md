@@ -196,6 +196,29 @@ wait for it, and under `LogSync::IntervalMillis` the per-append path performs no
 flush at all. Calling either of those "persisted" is the confusion `001` exists
 to prevent, and section 4 states exactly what the evidence establishes.
 
+### B-8. A torn trailing record is recovered differently from a prefix, and tested
+
+Added 2026-09-22, as evidence for behavior that already existed and had no test.
+A torn record is one whose bytes only partly reached the file. Three crash states
+are constructed and reopened from disk with no header update on the way out:
+
+- **Torn, past the header's `data_end`.** The integrity scan finds the record,
+  its CRC fails, and it is ignored. The complete prefix is recovered, readable,
+  and the next append writes over the torn bytes.
+- **Complete, past the header.** The header is rewritten only for a file's first
+  record and at a flush, so a complete record can sit past it. The scan recovers
+  it.
+- **Torn, inside the header's range.** A power loss can persist the header page
+  and not the data page, because `msync` does not order pages. With `auto-heal`
+  the WAL rolls back to the complete prefix. **Without `auto-heal` opening the
+  WAL fails with `Integrity`**, so the node refuses to start rather than serve the
+  record. Neither case ever reads a torn record as valid.
+
+**For a consumer without `auto-heal`**, which is Rahi's current feature set, the
+third case is a node that needs operator intervention after a power loss. Under
+`LogSync::Immediate` the rolled-back records were never acknowledged, because the
+acknowledgement follows the flush; under `ImmediateAsync` they may have been.
+
 ### B-7. A rejected append reports why, not that a channel closed
 
 The adapter sends a batch's entries to the writer over a bounded channel and
@@ -369,6 +392,11 @@ cargo test -p hiqlite-wal-patched --lib --features oversized-entry-error log_sto
 cargo test -p hiqlite-wal-patched --lib writer::tests::a_truncated_entry_stream_never_reports_success_in_any_log_sync_mode -- --exact
 cargo test -p hiqlite-wal-patched --lib writer::tests::a_clean_empty_batch_succeeds_and_notifies_once -- --exact
 cargo test -p hiqlite-wal-patched --lib log_store_impl::tests::a_truncated_append_leaves_a_recoverable_prefix_in_every_log_sync_mode -- --exact
+# B-8: torn versus complete trailing records, after a crash, with and without auto-heal
+cargo test -p hiqlite-wal-patched --lib wal::tests::a_torn_record_past_the_header_is_dropped_and_the_prefix_recovers -- --exact
+cargo test -p hiqlite-wal-patched --lib wal::tests::a_complete_record_past_the_header_is_recovered_not_dropped -- --exact
+cargo test -p hiqlite-wal-patched --lib wal::tests::a_torn_record_inside_the_header_is_rolled_back_or_refused -- --exact
+cargo test -p hiqlite-wal-patched --lib --features auto-heal wal::tests::a_torn_record_inside_the_header_is_rolled_back_or_refused -- --exact
 # the three endings, pinned at the expressions. The `while let Ok(Some(..))` that collapsed
 # the last two into the first must not come back.
 sh -c '! grep -q "while let Ok(Some((id, bytes))) = rx.recv()" hiqlite-wal/src/writer.rs'
