@@ -27,6 +27,9 @@ jobs:
     if: github.event.pull_request.draft == false
     name: Check
     runs-on: ubuntu-latest
+    # F-114: a stalled test held this job until it was cancelled 26 minutes in. A full green run
+    # takes about 25 minutes.
+    timeout-minutes: 60
     container:
       image: ghcr.io/sebadob/rauthy-builder:20260519
     # The container's default shell is `sh`, which rejects `set -o pipefail`. F-109.

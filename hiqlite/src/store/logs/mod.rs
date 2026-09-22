@@ -60,13 +60,17 @@ async fn move_legacy_cache_aside(data_dir: &str) -> Result<(), crate::Error> {
             Err(e) => return Err(err(&format!("moving {from}"), e)),
         }
     }
+    // Both sides of each rename: the entries left `data_dir` and arrived in `target`, and a
+    // power loss must not keep one and lose the other (found in review).
     #[cfg(unix)]
-    fs::File::open(data_dir)
-        .await
-        .map_err(|e| err("opening the data directory", e))?
-        .sync_all()
-        .await
-        .map_err(|e| err("syncing the data directory", e))?;
+    for dir in [target.as_str(), data_dir] {
+        fs::File::open(dir)
+            .await
+            .map_err(|e| err(&format!("opening {dir}"), e))?
+            .sync_all()
+            .await
+            .map_err(|e| err(&format!("syncing {dir}"), e))?;
+    }
     Ok(())
 }
 
@@ -101,10 +105,9 @@ async fn check_cache_log_format(data_dir: &str, move_aside: bool) -> Result<(), 
     use tokio::fs;
 
     let dir_logs = logs_dir_cache(data_dir);
-    let dir_snapshots = format!("{data_dir}/state_machine_cache/snapshots");
     let marker = format!("{dir_logs}/{CACHE_LOG_FORMAT_FILE}");
 
-    async fn holds_files(dir: &str, only_wal: bool) -> std::io::Result<bool> {
+    async fn holds_wal_files(dir: &str) -> std::io::Result<bool> {
         let mut entries = match fs::read_dir(dir).await {
             Ok(entries) => entries,
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(false),
@@ -113,7 +116,7 @@ async fn check_cache_log_format(data_dir: &str, move_aside: bool) -> Result<(), 
         while let Some(entry) = entries.next_entry().await? {
             let name = entry.file_name();
             let name = name.to_string_lossy();
-            if !only_wal || name.ends_with(".wal") {
+            if name.ends_with(".wal") {
                 return Ok(true);
             }
         }
@@ -140,9 +143,12 @@ async fn check_cache_log_format(data_dir: &str, move_aside: bool) -> Result<(), 
         Err(err) => return Err(io(err)),
     }
 
-    if holds_files(&dir_logs, true).await.map_err(io)?
-        || holds_files(&dir_snapshots, false).await.map_err(io)?
-    {
+    // The WAL files are the evidence, and only they. A disk-backed hiqlite 0.14.x cache always
+    // has them. Snapshots alone are not: a memory-only node of this same build writes snapshots
+    // under `state_machine_cache` too, and treating those as legacy refused a node whose only
+    // change was switching `cache_storage_disk` on (found in review). The snapshot directory is
+    // still moved aside with the log when the log is legacy.
+    if holds_wal_files(&dir_logs).await.map_err(io)? {
         if !move_aside {
             return Err(crate::Error::Startup(
                 format!(
@@ -212,11 +218,14 @@ mod tests {
         assert!(fs::try_exists(format!("{dir}/logs_cache/0000000000000001.wal")).await.unwrap());
         assert!(!fs::try_exists(format!("{dir}/logs_cache/{CACHE_LOG_FORMAT_FILE}")).await.unwrap());
 
-        // Legacy snapshots alone are refused too.
-        let dir2 = fresh("legacy-snap").await;
+        // Snapshots with no log are what a memory-only run of this build leaves; switching the
+        // cache to disk must not be refused as an upgrade from 0.14.
+        let dir2 = fresh("memory-snap").await;
         fs::create_dir_all(format!("{dir2}/state_machine_cache/snapshots")).await.unwrap();
         fs::write(format!("{dir2}/state_machine_cache/snapshots/s"), b"x").await.unwrap();
-        assert!(check_cache_log_format(&dir2, false).await.is_err());
+        check_cache_log_format(&dir2, false)
+            .await
+            .expect("snapshots without a cache log are not a legacy cache");
 
         let _ = fs::remove_dir_all(&dir).await;
         let _ = fs::remove_dir_all(&dir2).await;

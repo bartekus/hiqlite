@@ -428,15 +428,22 @@ mod tests {
         ] {
             let base = format!("test_data/adapter_truncated_recovery_{label}");
             let _ = std::fs::remove_dir_all(&base);
-            let mut store = LogStore::<TestTypeConfig>::start(base.clone(), mode.clone(), WAL_SIZE)
-                .await
-                .unwrap();
+            let mut store = bounded(
+                label,
+                "start",
+                LogStore::<TestTypeConfig>::start(base.clone(), mode.clone(), WAL_SIZE),
+            )
+            .await
+            .unwrap();
 
             // A healthy append first, so the truncated one lands on top of existing state.
-            store
-                .blocking_append(vec![blank_ent::<TestTypeConfig>(1, 1, 1)])
-                .await
-                .unwrap_or_else(|err| panic!("{label}: the healthy append must succeed: {err}"));
+            bounded(
+                label,
+                "healthy append",
+                store.blocking_append(vec![blank_ent::<TestTypeConfig>(1, 1, 1)]),
+            )
+            .await
+            .unwrap_or_else(|err| panic!("{label}: the healthy append must succeed: {err}"));
 
             // A truncated batch, dispatched on the writer channel the adapter uses. The entry
             // sender is dropped without the end-of-stream marker, which is what the adapter
@@ -444,25 +451,29 @@ mod tests {
             let (ack_tx, ack_rx) = oneshot::channel();
             let (entry_tx, entry_rx) = flume::bounded(1);
             let (note_tx, note_rx) = std::sync::mpsc::channel();
-            store
-                .writer
-                .send_async(writer::Action::Append {
+            bounded(
+                label,
+                "dispatch the truncated append",
+                store.writer.send_async(writer::Action::Append {
                     rx: entry_rx,
                     callback: Box::new(move |res| {
                         let _ = note_tx.send(res);
                     }),
                     ack: ack_tx,
-                })
-                .await
-                .unwrap();
+                }),
+            )
+            .await
+            .unwrap();
             for index in 2..=BATCH {
                 let entry = blank_ent::<TestTypeConfig>(1, 1, index);
                 let bytes = serialize(&entry).unwrap();
-                entry_tx.send_async(Some((index, bytes))).await.unwrap();
+                bounded(label, "send an entry", entry_tx.send_async(Some((index, bytes))))
+                    .await
+                    .unwrap();
             }
             drop(entry_tx);
 
-            let err = ack_rx
+            let err = bounded(label, "the truncated append's acknowledgement", ack_rx)
                 .await
                 .unwrap_or_else(|_| panic!("{label}: the truncated append must be acknowledged"))
                 .expect_err(&format!("{label}: a truncated append is never a success"));
@@ -479,14 +490,22 @@ mod tests {
             // The writer is terminal. Queued work must come back as a storage error rather than
             // panic the calling task or leave it waiting forever, which is what the `unwrap`s
             // on these channels used to do.
-            let queued = store
-                .blocking_append(vec![blank_ent::<TestTypeConfig>(1, 1, BATCH + 1)])
-                .await;
+            let queued = bounded(
+                label,
+                "an append to the terminal writer",
+                store.blocking_append(vec![blank_ent::<TestTypeConfig>(1, 1, BATCH + 1)]),
+            )
+            .await;
             assert!(
                 queued.is_err(),
                 "{label}: an append dispatched to a terminal writer must fail, not succeed"
             );
-            let vote = store.save_vote(&Vote::new(1, 1)).await;
+            let vote = bounded(
+                label,
+                "a vote to the terminal writer",
+                store.save_vote(&Vote::new(1, 1)),
+            )
+            .await;
             assert!(
                 vote.is_err(),
                 "{label}: a vote write to a terminal writer must fail, not panic"
@@ -528,11 +547,17 @@ mod tests {
             // Reopen and read through the adapter. The lock file is left behind by a terminal
             // writer, so this is the not-a-clean-start path, which runs the deep integrity
             // check.
-            let mut reopened = LogStore::<TestTypeConfig>::start(base, mode, WAL_SIZE)
-                .await
-                .unwrap_or_else(|err| panic!("{label}: the store must reopen: {err}"));
+            let mut reopened = bounded(
+                label,
+                "reopen",
+                LogStore::<TestTypeConfig>::start(base, mode, WAL_SIZE),
+            )
+            .await
+            .unwrap_or_else(|err| panic!("{label}: the store must reopen: {err}"));
 
-            let state = reopened.get_log_state().await.unwrap();
+            let state = bounded(label, "log state", reopened.get_log_state())
+                .await
+                .unwrap();
             let last = state
                 .last_log_id
                 .unwrap_or_else(|| panic!("{label}: the healthy entry at least must survive"))
@@ -546,7 +571,9 @@ mod tests {
                 "{label}: the store must not report entries beyond the batch it was sent, got {last}"
             );
 
-            let entries = reopened.try_get_log_entries(1..=last).await.unwrap();
+            let entries = bounded(label, "read the prefix", reopened.try_get_log_entries(1..=last))
+                .await
+                .unwrap();
             assert_eq!(
                 entries.len() as u64,
                 last,
@@ -561,13 +588,24 @@ mod tests {
             }
 
             // Reading past the end is answered, not fatal.
-            let beyond = reopened
-                .try_get_log_entries(last + 1..last + 10)
-                .await
-                .unwrap();
+            let beyond = bounded(
+                label,
+                "read past the end",
+                reopened.try_get_log_entries(last + 1..last + 10),
+            )
+            .await
+            .unwrap();
             assert!(beyond.is_empty(), "{label}: nothing exists past the prefix");
 
-            reopened.stop().await.unwrap();
+            bounded(label, "stop", reopened.stop()).await.unwrap();
+        }
+
+        /// Every wait in this test is bounded and names itself, so a stall is a failure that
+        /// says where it stalled. The test used to hang CI for as long as the job allowed.
+        async fn bounded<T>(label: &str, step: &str, fut: impl std::future::Future<Output = T>) -> T {
+            tokio::time::timeout(std::time::Duration::from_secs(20), fut)
+                .await
+                .unwrap_or_else(|_| panic!("{label}: stalled at: {step}"))
         }
     }
 

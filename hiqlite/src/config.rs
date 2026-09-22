@@ -450,11 +450,18 @@ impl NodeConfig {
             return Err(Error::Config("'node_id' not found in 'nodes'".into()));
         }
 
-        if self.wal_size == 0 {
+        // `hiqlite_wal`'s minimum, which it does not export. Below it the WAL panics in a debug
+        // build and underflows a size calculation in a release one (found in review); `0` is
+        // also what a malformed `HQL_WAL_SIZE` leaves.
+        const MIN_WAL_SIZE: u32 = 8 * 1024;
+        if self.wal_size < MIN_WAL_SIZE {
             return Err(Error::Config(
-                "'wal_size' must be greater than 0; if 'HQL_WAL_SIZE' is set, it must be an \
-                 integer number of bytes"
-                    .into(),
+                format!(
+                    "'wal_size' must be at least {MIN_WAL_SIZE} bytes, got {}; if \
+                     'HQL_WAL_SIZE' is set, it must be an integer number of bytes",
+                    self.wal_size
+                )
+                .into(),
             ));
         }
 
@@ -576,6 +583,11 @@ mod tests {
         c.wal_size = 0;
         let err = c.is_valid().expect_err("a zero wal_size must be refused");
         assert!(err.to_string().contains("HQL_WAL_SIZE"), "got: {err}");
+        c.wal_size = 8 * 1024 - 1;
+        assert!(c.is_valid().is_err(), "below the WAL's minimum must be refused");
+        c.wal_size = 8 * 1024;
+        let err = c.is_valid().err().map(|e| e.to_string()).unwrap_or_default();
+        assert!(!err.contains("wal_size"), "the minimum itself is accepted, got: {err}");
     }
 
     #[test]

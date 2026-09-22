@@ -219,6 +219,11 @@ every embedded consumer calls, so a bad value ended the process before any
 configuration was built. `Default` cannot return an error; it now leaves
 `wal_size` at `0`, which no WAL accepts, and `is_valid`, which startup runs,
 refuses it naming the variable. Found by the read-only audit of this release.
+Review then found that anything below the WAL's 8 KiB minimum reached the WAL,
+which panics on it in a debug build and underflows a size calculation in a
+release one, so `is_valid` refuses everything under 8 KiB. A malformed
+`wal_size` in TOML is still silently replaced by the default (`config_toml`'s
+`t_u32` drops the parse error); recorded, not repaired.
 The environment constructor's other `expect`s are unchanged (`027` KD-1).
 
 ### B-6. The derive accepts what it claims to

@@ -30,7 +30,11 @@ impl ShutdownHandle {
         info!("WAL writer Shutdown complete");
 
         debug!("Sending Action::Shutdown to WAL reader");
-        self.tx_read.send_async(reader::Action::Shutdown);
+        // This was `send_async(..)` without `.await`: the future was built and dropped, so the
+        // reader was never told. `try_send` because a reader that is busy, or already gone,
+        // still ends once every sender is dropped; the message is a courtesy, not a
+        // precondition, and a shutdown must not wait on it (found in review).
+        let _ = self.tx_read.try_send(reader::Action::Shutdown);
 
         Ok(())
     }

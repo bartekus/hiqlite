@@ -219,6 +219,29 @@ third case is a node that needs operator intervention after a power loss. Under
 `LogSync::Immediate` the rolled-back records were never acknowledged, because the
 acknowledgement follows the flush; under `ImmediateAsync` they may have been.
 
+### B-9. No acknowledgement in the WAL crate ends a thread, and a stalled test fails
+
+Added 2026-09-22. F-112 repaired the reader. Independent review found the same
+class in the writer: the purge and vote acknowledgements and the shutdown
+acknowledgement were `unwrap`ped, so a requester cancelled during a teardown
+ended the writer, and under `panic = "abort"` the process. They are now sends
+whose failure means only that nobody is listening. `ShutdownHandle::shutdown`
+built the reader's shutdown message with `send_async` and never awaited it, so
+the message was never sent; it is now a `try_send`, because the reader also ends
+when its last sender drops and a shutdown must not wait on it.
+
+**F-114.** CI's `Check` on `d45826c` stalled in
+`a_truncated_append_leaves_a_recoverable_prefix_in_every_log_sync_mode` until it
+was cancelled 26 minutes in. Reproduced locally: two failures in 177 full-suite
+runs, one of them that stall and one a race in the writer tests' `append` helper,
+which `unwrap`ped an end-of-stream send into a receiver the writer had already
+dropped by rejecting the entry. The helper no longer treats that send as
+mandatory, and every wait in the stalling test is bounded and names its step.
+After both changes the full suite ran 400 times without a failure. **The stalled
+step was never identified**, so this is evidence that the stall no longer
+appears, not a diagnosis; a recurrence now fails naming its step instead of
+holding a runner, and both CI jobs have a sixty-minute limit.
+
 ### B-7. A rejected append reports why, not that a channel closed
 
 The adapter sends a batch's entries to the writer over a bounded channel and
@@ -397,6 +420,11 @@ cargo test -p hiqlite-wal-patched --lib wal::tests::a_torn_record_past_the_heade
 cargo test -p hiqlite-wal-patched --lib wal::tests::a_complete_record_past_the_header_is_recovered_not_dropped -- --exact
 cargo test -p hiqlite-wal-patched --lib wal::tests::a_torn_record_inside_the_header_is_rolled_back_or_refused -- --exact
 cargo test -p hiqlite-wal-patched --lib --features auto-heal wal::tests::a_torn_record_inside_the_header_is_rolled_back_or_refused -- --exact
+# B-9: no acknowledgement ends a thread, and the stalling test is bounded
+sh -c '! grep -nE "ack\.send\(.*\)\.unwrap\(\)|Shutdown handler to always wait" hiqlite-wal/src/writer.rs hiqlite-wal/src/reader.rs'
+sh -c 'grep -q "self.tx_read.try_send(reader::Action::Shutdown)" hiqlite-wal/src/shutdown.rs'
+sh -c 'grep -q "stalled at: {step}" hiqlite-wal/src/log_store_impl.rs'
+sh -c 'grep -q "timeout-minutes: 60" .github/workflows/code_style.yaml'
 # the three endings, pinned at the expressions. The `while let Ok(Some(..))` that collapsed
 # the last two into the first must not come back.
 sh -c '! grep -q "while let Ok(Some((id, bytes))) = rx.recv()" hiqlite-wal/src/writer.rs'

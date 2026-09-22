@@ -136,6 +136,6 @@
     "summary": "Repairs F-009, F-014, F-025, F-039 and F-040 as one policy. Expected configuration and startup failures are returned as named errors instead of depending on a panic profile that belongs to the consumer; both listeners are bound before a node is reported started and shut down gracefully on both the TLS and plaintext paths; a partial startup tears down what it started; and a WAL writer that ends, for any reason including a panic inside it, takes the node out of service instead of leaving it answering as though it were healthy. Defines the minimum public error and lifecycle API and runs the expected failure paths under an abort profile no test can use.\n",
     "title": "Return startup failures as errors, observe background failures, and define the node lifecycle API"
   },
-  "shardHash": "90b1eacbd6dc523b01155033c5a4caed6d8d101130f51f429b5664faca96aea4",
+  "shardHash": "a5986f8948a99a2d1f1974cb108e055030c9660395e015cd1aeb0339de7b2817",
   "specVersion": "1.3.0"
 }

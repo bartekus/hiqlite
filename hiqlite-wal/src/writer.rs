@@ -587,7 +587,10 @@ fn run(
                             lock.active = wal.active;
                             lock.clone_files_from_no_mmap(&wal.files);
                         }
-                        ack.send(Ok(())).unwrap();
+                        // A requester that went away (a cancelled future during teardown) is
+                        // not a reason to end the writer: that `unwrap` could abort the
+                        // process under `panic = "abort"`, the same class as F-112.
+                        let _ = ack.send(Ok(()));
                     }
                     Err(err) => {
                         if persist_purged {
@@ -608,7 +611,7 @@ fn run(
                                 );
                             }
                         }
-                        ack.send(Err(err)).unwrap();
+                        let _ = ack.send(Err(err));
                     }
                 }
             }
@@ -622,7 +625,7 @@ fn run(
                 meta.write()?.vote = Some(value);
                 let res = Metadata::write(meta.clone(), &wal.base_path);
 
-                ack.send(res).unwrap();
+                let _ = ack.send(res);
             }
             Action::Sync => {
                 // The ticker is the only flush in `IntervalMillis` mode and no append waits on
@@ -647,11 +650,15 @@ fn run(
 
     // drop the lockfile before trying to remove it to unlock it
     drop(lockfile);
-    LockFile::remove(&wal.base_path).expect("LockFile removal failed");
+    if let Err(err) = LockFile::remove(&wal.base_path) {
+        // The lock itself was released by dropping it above; a leftover file only means the
+        // next start takes the not-a-clean-start path. Not worth ending the process for.
+        error!("Could not remove the WAL lock file in {}: {err}", wal.base_path);
+    }
 
     if let Some(ack) = shutdown_ack {
-        ack.send(())
-            .expect("Shutdown handler to always wait for ack from logs");
+        // A shutdown caller that stopped waiting is not a failure of the writer.
+        let _ = ack.send(());
     }
 
     Ok(())
@@ -1275,8 +1282,12 @@ mod tests {
             ack: ack_tx,
         })
         .unwrap();
-        entry_tx.send(Some((id, bytes))).unwrap();
-        entry_tx.send(None).unwrap();
+        // The acknowledgement carries the verdict. A writer that rejects an entry drops the
+        // entry receiver, and whether that happens before or after these sends is a race, so a
+        // failed send is expected and not a test failure. It used to `unwrap`, which failed
+        // this suite about once in forty full runs.
+        let _ = entry_tx.send(Some((id, bytes)));
+        let _ = entry_tx.send(None);
         ack_rx.blocking_recv().unwrap()
     }
 

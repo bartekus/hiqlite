@@ -367,12 +367,20 @@ as `GetRemove`), so decoding it at all risks silent divergence (F-111). The
 SQLite raft's `QueryWrite` layout is unchanged for builds with `backup`, which
 Rauthy and Rahi both enable.
 
+**Stop every node, then upgrade.** The marker guards a node's own disk; it does
+not guard the network. A node of this release in a cluster whose leader still
+runs 0.14.x would receive legacy cache entries and snapshots over replication and
+decode them in the new layout, which is F-111's divergence by another route. A
+mixed-version cluster is not supported in either direction. This release
+supports N=1, where the question does not arise; at N>1 every node is stopped
+before any is upgraded. Found in independent review of `34641b0`.
+
 **The contract.** The SQLite database and its raft log are carried across an
 upgrade from 0.14.x, and across a downgrade to it. The cache raft's log and
 snapshots are not, in either direction. A disk-backed cache (`cache_storage_disk
 = true`, the default) marks the log directory it creates with its format. On
-start, a `logs_cache` holding WAL files, or a `state_machine_cache/snapshots`
-holding anything, **without** that marker is refused with `Error::Startup`,
+start, a `logs_cache` holding WAL files **without** that marker is refused with
+`Error::Startup`,
 before anything decodes it, naming both directories, the opt-in and the manual
 procedure. With `HQL_CACHE_LEGACY_MOVE_ASIDE=true` (exported as
 `hiqlite::CACHE_LEGACY_MOVE_ASIDE_ENV`) the start instead moves both directories
@@ -388,10 +396,23 @@ consumer's `panic = "abort"` the process ended before the startup error could be
 returned. A requester that stops reading now abandons its request, and the
 reader keeps serving.
 
+**Review of the first form, 2026-09-22.** Snapshots alone were first treated as
+legacy too, which refused a node of this very build whose only change was
+switching `cache_storage_disk` on: a memory-only run leaves snapshots under
+`state_machine_cache`. Only WAL files are evidence now, and the snapshot
+directory still moves with a legacy log. The move-aside now syncs the destination
+as well as the source directory. A downgrade to 0.14.x that skipped the manual
+move-aside leaves the marker beside legacy entries, and the next upgrade accepts
+them; that is the operator's step and the guard cannot see it.
+
 **The failure that was not one (F-113).** The failed start's log store, dropped
 on the error path, ended its writer, and the watch recorded that as "the Raft log
 WAL writer failed". A raft that fails to construct, and every teardown after a
-partial start, now marks the lifecycle as shutting down first.
+partial start, now marks the lifecycle as shutting down first. Review found the
+same class one step later: a failure in `init_pristine_node_1_*`, after the raft
+had been built, returned with the raft and its WAL writer still running, so the
+writer's lock outlived the failed start and the next start in the same process
+panicked on it. Both groups now stop what they started before returning.
 
 ## 4. Evidence and its limits
 
@@ -690,7 +711,10 @@ cargo test -p hiqlite-patched --lib --no-default-features --features cache store
 cargo test -p hiqlite-wal-patched --lib reader::tests::a_requester_that_stops_reading_does_not_end_the_reader -- --exact
 sh -c '! grep -q "ack.send(.*).unwrap()" hiqlite-wal/src/reader.rs'
 sh -c 'grep -B1 "StateMachineMemory::new::<C>" hiqlite/src/store/mod.rs | grep -q "ensure_cache_log_format" || grep -B3 "StateMachineMemory::new::<C>" hiqlite/src/store/mod.rs | grep -q "ensure_cache_log_format"'
-sh -c 'test "$(grep -c "lifecycle.begin_shutdown();" hiqlite/src/store/mod.rs)" -ge 2'
+sh -c 'test "$(grep -c "lifecycle.begin_shutdown();" hiqlite/src/store/mod.rs)" -ge 4'
+sh -c '! grep -q "holds_files(&dir_snapshots" hiqlite/src/store/logs/mod.rs'
+sh -c 'grep -q "if let Err(err) = init::init_pristine_node_1_db(" hiqlite/src/store/mod.rs'
+sh -c 'grep -q "if let Err(err) = init::init_pristine_node_1_cache(" hiqlite/src/store/mod.rs'
 # F-110: an out-of-service node refuses its embedded client
 sh -c 'test "$(grep -c "self.ensure_node_available()?;" hiqlite/src/client/rate_limit.rs)" -eq 2'
 sh -c 'test "$(grep -c "self.ensure_node_available()?;" hiqlite/src/client/query.rs)" -eq 7'

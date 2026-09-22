@@ -123,7 +123,7 @@ pub(crate) async fn start_raft_db(
             Error::Startup(format!("cannot create the sqlite raft: {err}").into())
         })?;
 
-    init::init_pristine_node_1_db(
+    if let Err(err) = init::init_pristine_node_1_db(
         &raft,
         node_config.node_id,
         &node_config.nodes,
@@ -135,7 +135,24 @@ pub(crate) async fn start_raft_db(
             .map(|c| c.danger_tls_no_verify())
             .unwrap_or(false),
     )
-    .await?;
+    .await
+    {
+        // The raft, its WAL writer and the SQLite writer are all running by now. Returning
+        // without stopping them leaked the WAL writer's lock past a failed start, and the next
+        // start in the same process panicked on it (found in review).
+        lifecycle.begin_shutdown();
+        let _ = raft.shutdown().await;
+        let _ = shutdown_handle.shutdown().await;
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        if sql_writer
+            .send_async(state_machine::sqlite::writer::WriterRequest::Shutdown(tx))
+            .await
+            .is_ok()
+        {
+            let _ = rx.await;
+        }
+        return Err(err);
+    }
 
     Ok(StateRaftDB {
         raft,
@@ -243,7 +260,7 @@ where
         (raft, None)
     };
 
-    init::init_pristine_node_1_cache(
+    if let Err(err) = init::init_pristine_node_1_cache(
         &raft,
         node_config.cache_storage_disk,
         node_config.node_id,
@@ -256,7 +273,16 @@ where
             .map(|c| c.danger_tls_no_verify())
             .unwrap_or(false),
     )
-    .await?;
+    .await
+    {
+        // As for the SQLite group: nothing started here may outlive a failed start.
+        lifecycle.begin_shutdown();
+        let _ = raft.shutdown().await;
+        if let Some(handle) = &shutdown_handle {
+            let _ = handle.shutdown().await;
+        }
+        return Err(err);
+    }
 
     Ok(StateRaftCache {
         raft,

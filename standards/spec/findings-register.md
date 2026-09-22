@@ -2747,6 +2747,23 @@ owner's direction of 2026-09-22 separates them:
 Earlier results are kept as evidence about the graph they ran on (`0.9.24`
 locally before 2026-09-22), not as evidence about the committed one.
 
+### F-114 `defect`, confidence `medium`
+
+**A WAL adapter test could stall CI indefinitely, and the writer tests' helper
+raced the writer.** CI's `Check` on `d45826c` stalled in
+`log_store_impl::tests::a_truncated_append_leaves_a_recoverable_prefix_in_every_log_sync_mode`
+and was cancelled 26 minutes in; every earlier run had passed it. Reproduced
+locally in the full `hiqlite-wal` suite: two failures in 177 runs, one that stall
+and one a panic in `writer::tests::append`, which `unwrap`ped an end-of-stream
+send into a receiver the writer had dropped by rejecting the entry.
+
+**Repaired as far as it was diagnosed, 2026-09-22, `021` B-9:** the helper's race
+is fixed, every wait in the stalling test is bounded and names its step, and CI
+jobs have a sixty-minute limit. Four hundred consecutive full-suite runs then
+passed. **Confidence medium because the stalled step was never identified**: it
+did not recur once the test was instrumented. A recurrence now fails and names
+where. Whether the stall was in the test or in the adapter is not established.
+
 ### F-111 `contradiction`, confidence `high`
 
 **The cache raft's replicated command layout changed between hiqlite 0.14.0 and
