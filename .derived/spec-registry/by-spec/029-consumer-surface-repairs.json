@@ -1,0 +1,182 @@
+{
+  "record": {
+    "amends": [
+      "005-adoption-assessment-and-plan",
+      "009-configuration-contract",
+      "014-schema-migration-contract",
+      "015-server-binary-and-proxy",
+      "016-derive-macros"
+    ],
+    "amendsSections": [
+      "3-behavior",
+      "5-known-defects"
+    ],
+    "amendsVerification": [
+      "005-adoption-assessment-and-plan",
+      "009-configuration-contract",
+      "014-schema-migration-contract",
+      "015-server-binary-and-proxy",
+      "016-derive-macros"
+    ],
+    "created": "2026-09-21",
+    "dependsOn": [
+      "000-hiqlite-ownership-bootstrap",
+      "005-adoption-assessment-and-plan",
+      "009-configuration-contract",
+      "014-schema-migration-contract",
+      "015-server-binary-and-proxy",
+      "016-derive-macros",
+      "027-node-lifecycle-and-startup-errors"
+    ],
+    "extends": [
+      {
+        "nature": "superseding",
+        "spec": "009-configuration-contract",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/config_toml.rs"
+        }
+      },
+      {
+        "nature": "superseding",
+        "spec": "009-configuration-contract",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite.env"
+        }
+      },
+      {
+        "nature": "superseding",
+        "spec": "014-schema-migration-contract",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/migration.rs"
+        }
+      },
+      {
+        "nature": "superseding",
+        "spec": "015-server-binary-and-proxy",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/server/"
+        }
+      },
+      {
+        "nature": "superseding",
+        "spec": "016-derive-macros",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite-derive/src/from_row.rs"
+        }
+      },
+      {
+        "nature": "superseding",
+        "spec": "016-derive-macros",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite-derive/src/into_cache_data.rs"
+        }
+      },
+      {
+        "nature": "superseding",
+        "spec": "001-wal-durability-and-completion",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite-wal/src/"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "001-wal-durability-and-completion",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/config.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "010-node-lifecycle-and-split-brain",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/app_state.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "003-client-consistency-and-retry-outcomes",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/client/"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "003-client-consistency-and-retry-outcomes",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/network/"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "006-cache-state-machine",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/store/state_machine/memory/"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "014-schema-migration-contract",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/tests/cluster/migrations/"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "005-adoption-assessment-and-plan",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/findings-register.md"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "005-adoption-assessment-and-plan",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/adoption-plan.md"
+        }
+      }
+    ],
+    "id": "029-consumer-surface-repairs",
+    "implementation": "complete",
+    "owner": "hiqlite maintainers",
+    "risk": "critical",
+    "sectionHeadings": [
+      "029: Repair the defects that reach a consumer of this release, and say which ones do not",
+      "1. Purpose",
+      "2. Territory",
+      "3. Behavior",
+      "B-1. An entry larger than the WAL is a rejected append, not a dead writer",
+      "B-2. An unknown raft type is a bad request",
+      "B-3. Migration validation returns named errors",
+      "B-4. The proxy's router can be built, and its secret is compared in constant time",
+      "B-5. Four configuration keys mean what they say",
+      "B-6. The derive accepts what it claims to",
+      "B-7. Two things a caller can now bound",
+      "4. What is excluded, and why",
+      "5. Known defects",
+      "6. Resolved decisions",
+      "7. Out of scope",
+      "Verification"
+    ],
+    "specPath": "specs/029-consumer-surface-repairs/spec.md",
+    "status": "draft",
+    "summary": "Triages the whole findings register against the feature sets the two named consumers actually enable, repairs the defects that reach them, and records a source-backed reason for every one that does not. The largest is unrecorded until now: an entry larger than the WAL panicked the writer by default, which under an aborting profile ends the embedding application because one of its own writes was too big.\n",
+    "title": "Repair the defects that reach a consumer of this release, and say which ones do not"
+  },
+  "shardHash": "82cdd549f71ab8c976f2a774df5ea6f0ca9e0a9c36e216732392264a9b75b839",
+  "specVersion": "1.3.0"
+}

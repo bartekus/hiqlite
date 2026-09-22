@@ -1,46 +1,74 @@
 use rust_embed::RustEmbed;
 use serde::{Deserialize, Serialize};
-use std::borrow::Cow;
 
 pub struct Migrations;
 
 impl Migrations {
-    pub fn build<T: RustEmbed>() -> Vec<Migration> {
-        let mut files = T::iter()
-            .map(|name| {
-                let (id, _) = name
-                    .split_once('_')
-                    .expect("Migration file names must start with `<integer>_<migration_name>");
-                let id = id.parse::<u32>().expect(
-                    "Migration scripts must start with an increasing integer with \
-                    no gaps and starting at index 1",
-                );
-                (id, name)
-            })
-            .collect::<Vec<(u32, Cow<'static, str>)>>();
+    /// Build the migration set, or say what is wrong with it.
+    ///
+    /// Five rules, each with its own named error. They used to be five `expect`s and two
+    /// `panic!`s inside a function returning `Vec<Migration>`, which the caller in
+    /// `client/migrate.rs` then invoked from a function that returns `Result`: a bad migration
+    /// set ended the process under an aborting profile instead of failing the deployment
+    /// (F-066). Two of the messages were also wrong about which rule had been broken:
+    ///
+    /// - a name with no `_` reported the **gap** rule rather than the missing separator,
+    ///   because the `split_once` `expect` fired first and the id parse's message is the one a
+    ///   reader sees for `create_users.sql` (F-064);
+    /// - a **duplicate** index reported "Migration index has a gap: 1 does not follow 1",
+    ///   which is neither true nor actionable (F-065).
+    pub fn try_build<T: RustEmbed>() -> Result<Vec<Migration>, crate::Error> {
+        let invalid = |msg: String| crate::Error::Config(msg.into());
 
-        if files.is_empty() {
-            return Vec::default();
+        let mut files = Vec::new();
+        for name in T::iter() {
+            let Some((id, _)) = name.split_once('_') else {
+                return Err(invalid(format!(
+                    "migration file `{name}` must be named `<integer>_<migration_name>.sql`; it \
+                     has no `_` separating the index from the name"
+                )));
+            };
+            let id = id.parse::<u32>().map_err(|err| {
+                invalid(format!(
+                    "migration file `{name}` must start with an integer index: `{id}` does not \
+                     parse ({err})"
+                ))
+            })?;
+            files.push((id, name));
         }
 
-        files.sort_by(|(a, _), (b, _)| a.partial_cmp(b).unwrap());
-        if let Some((first_id, _)) = files.first()
+        if files.is_empty() {
+            return Ok(Vec::default());
+        }
+
+        files.sort_by_key(|(id, _)| *id);
+        if let Some((first_id, first_name)) = files.first()
             && *first_id != 1
         {
-            panic!("Migrations must start at index 1");
+            return Err(invalid(format!(
+                "migrations must start at index 1; the lowest is {first_id} (`{first_name}`)"
+            )));
         }
 
         let mut res: Vec<Migration> = Vec::with_capacity(files.len());
 
         for (id, file_name) in files {
-            let data = T::get(file_name.as_ref()).unwrap();
+            let Some(data) = T::get(file_name.as_ref()) else {
+                return Err(invalid(format!(
+                    "migration file `{file_name}` disappeared between listing and reading"
+                )));
+            };
             let hash = hex::encode(data.metadata.sha256_hash());
             let content = data.data.to_vec();
 
-            let stripped = file_name
-                .strip_suffix(".sql")
-                .expect("Migration scripts must always end with .sql");
-            let (_, name) = stripped.split_once('_').unwrap();
+            let Some(stripped) = file_name.strip_suffix(".sql") else {
+                return Err(invalid(format!(
+                    "migration file `{file_name}` must end with `.sql`"
+                )));
+            };
+            let (_, name) = stripped
+                .split_once('_')
+                .expect("the separator was checked when the id was parsed");
 
             let migration = Migration {
                 id,
@@ -49,19 +77,36 @@ impl Migrations {
                 content,
             };
 
-            let len = res.len();
-            if len > 0 && migration.id != (res[len - 1].id + 1) {
-                panic!(
-                    "Migration index has a gap: {} does not follow {}",
-                    migration.id,
-                    res[len - 1].id
-                );
+            if let Some(previous) = res.last() {
+                if migration.id == previous.id {
+                    return Err(invalid(format!(
+                        "migration index {} is used twice: `{}` and `{file_name}`",
+                        migration.id, previous.name
+                    )));
+                }
+                if migration.id != previous.id + 1 {
+                    return Err(invalid(format!(
+                        "migration index has a gap: {} does not follow {}",
+                        migration.id, previous.id
+                    )));
+                }
             }
 
             res.push(migration);
         }
 
-        res
+        Ok(res)
+    }
+
+    /// [`Self::try_build`], panicking on an invalid set.
+    ///
+    /// Kept because it is the published signature and the `migrate!` macro expands to it. New
+    /// code should call `try_build`, which is what the client's migration path now does.
+    pub fn build<T: RustEmbed>() -> Vec<Migration> {
+        match Self::try_build::<T>() {
+            Ok(migrations) => migrations,
+            Err(err) => panic!("{err}"),
+        }
     }
 }
 
@@ -162,19 +207,61 @@ mod tests {
         assert_eq!(migrations[0].name, "filename_ok");
     }
 
-    /// F-064: the fixture is named for a missing leading index, and the panic
-    /// that fires is the one about increasing integers with no gaps. The
-    /// `split_once` message about `<integer>_<migration_name>` is reachable
-    /// only for a file name with no underscore at all, which no fixture has.
+    /// Replaces `a_name_without_a_numeric_index_panics_with_the_other_rules_message`, which
+    /// pinned F-064: the fixture is named for a missing leading index and the message that
+    /// fired was the one about increasing integers with no gaps, because the id parse is what
+    /// a reader sees for `create_users.sql`.
+    ///
+    /// The message now names the rule that was actually broken, and it is a returned error.
     #[test]
-    #[should_panic(expected = "Migration scripts must start with an increasing integer")]
-    fn a_name_without_a_numeric_index_panics_with_the_other_rules_message() {
-        let _ = Migrations::build::<Bad1>();
+    fn a_name_without_a_numeric_index_names_that_rule() {
+        let err = Migrations::try_build::<Bad1>()
+            .expect_err("a migration with no numeric index is not a valid set");
+        let text = err.to_string();
+        assert!(
+            text.contains("must start with an integer index")
+                || text.contains("no `_` separating"),
+            "the message must name the rule that was broken, got: {text}"
+        );
+        assert!(
+            !text.contains("no gaps"),
+            "and must not name the gap rule, got: {text}"
+        );
     }
 
     #[test]
-    #[should_panic(expected = "Migrations must start at index 1")]
-    fn an_index_set_that_does_not_start_at_one_panics() {
-        let _ = Migrations::build::<Bad2>();
+    fn an_index_set_that_does_not_start_at_one_is_an_error() {
+        let err = Migrations::try_build::<Bad2>().expect_err("indices must start at 1");
+        assert!(err.to_string().contains("must start at index 1"), "got: {err}");
+    }
+
+    /// F-065: a duplicate index was reported as "Migration index has a gap: 1 does not follow
+    /// 1", which is neither true nor actionable. The fixture is two files claiming index 1.
+    #[test]
+    fn a_duplicate_index_says_so() {
+        #[derive(RustEmbed)]
+        #[folder = "tests/cluster/migrations/duplicate"]
+        struct Duplicate;
+
+        let err = Migrations::try_build::<Duplicate>()
+            .expect_err("two files cannot both be migration 1");
+        let text = err.to_string();
+        assert!(
+            text.contains("used twice"),
+            "the message must name the duplicate, got: {text}"
+        );
+        assert!(
+            !text.contains("gap"),
+            "and must not call it a gap, got: {text}"
+        );
+    }
+
+    /// F-066: `build` panicked inside a function whose caller returns `Result`. `try_build` is
+    /// what the client now calls, and `build` is kept as the published panicking wrapper.
+    #[test]
+    fn the_panicking_wrapper_still_panics_for_source_compatibility() {
+        assert!(Migrations::try_build::<Good>().is_ok());
+        let res = std::panic::catch_unwind(|| Migrations::build::<Bad2>());
+        assert!(res.is_err(), "`build` keeps its published behavior");
     }
 }

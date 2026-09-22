@@ -109,7 +109,11 @@ fn is_field_ty_opt(ty: &Type) -> Option<bool> {
     let mut iter = ty.path.segments.iter();
 
     let mut s = iter.next()?.ident.to_string();
-    if s == "std" {
+    // F-078: `core` was missing, so a nullable column spelled `core::option::Option<T>` took
+    // the non-optional branch and failed at runtime on a NULL. The prelude re-exports
+    // `Option` from `core`, and `core::` is the spelling a `no_std`-adjacent codebase reaches
+    // for, so it is not a hypothetical path.
+    if s == "std" || s == "core" {
         s = iter.next()?.ident.to_string();
     }
     if s == "option" {
@@ -289,33 +293,26 @@ mod tests {
         );
     }
 
-    /// F-078: `is_field_ty_opt` strips a leading `std` and an `option`
-    /// segment, but not `core`, so `core::option::Option<T>` takes the
-    /// non-optional branch and the generated code asks the row for a bare
-    /// `i64`.
+    /// Replaces `the_core_spelling_of_option_is_not_recognised`, which pinned F-078 as
+    /// expected behavior: `is_field_ty_opt` stripped a leading `std` and an `option` segment
+    /// but not `core`, so `core::option::Option<T>` took the non-optional branch and the
+    /// generated code asked the row for a bare `i64`, which fails at runtime on a NULL.
     #[test]
-    fn the_core_spelling_of_option_is_not_recognised() {
-        let std_path = generate(
-            r#"struct Test { #[column(from_i64)] a: std::option::Option<i64> }"#,
-        )
-        .replace(' ', "");
-        assert!(
-            std_path.contains("row.get::<Option<i64>>"),
-            "std::option::Option should take the optional branch: {std_path}"
-        );
-
-        let core_path = generate(
-            r#"struct Test { #[column(from_i64)] a: core::option::Option<i64> }"#,
-        )
-        .replace(' ', "");
-        assert!(
-            core_path.contains("row.get::<i64>(\"a\").into()"),
-            "F-078: core::option::Option takes the non-optional branch: {core_path}"
-        );
-        assert!(
-            !core_path.contains("row.get::<Option<i64>>"),
-            "F-078: core::option::Option takes the non-optional branch: {core_path}"
-        );
+    fn both_spellings_of_option_take_the_optional_branch() {
+        for path in ["std::option::Option<i64>", "core::option::Option<i64>", "Option<i64>"] {
+            let out = generate(&format!(
+                r#"struct Test {{ #[column(from_i64)] a: {path} }}"#
+            ))
+            .replace(' ', "");
+            assert!(
+                out.contains("row.get::<Option<i64>>"),
+                "{path} must take the optional branch: {out}"
+            );
+            assert!(
+                !out.contains("row.get::<i64>(\"a\").into()"),
+                "{path} must not take the non-optional branch: {out}"
+            );
+        }
     }
 
     /// Every conversion the derive emits is infallible by construction, because

@@ -29,7 +29,9 @@ impl Client {
             .query_map("SELECT * FROM _migrations ORDER BY id ASC", Params::new())
             .await
             .unwrap_or_default();
-        let mut migrations = Migrations::build::<T>();
+        // F-066: this was `Migrations::build`, which panics. Inside a function that returns
+        // `Result`, on a deployment path, under a profile that may abort.
+        let mut migrations = Migrations::try_build::<T>()?;
 
         // At least the beginning of the just built and already applied migrations must match.
         // We can skip already existing ones early, so they are not sent through the Raft each

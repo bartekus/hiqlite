@@ -810,6 +810,19 @@ scheduled, authorized, or approved by this document.
 | W-23 | enforcement rungs 1 to 4 | `000` owns the configuration; measured by **`028`**, 2026-09-21 | **still not enabled, and now for a measured reason.** Rung 0 is done (W-14) | both rungs probed at the pin: rung 1 (`require_ownership = true`) refuses `dashboard/src/lib/components/Button.svelte`, which `018` D-3 left unclaimed **on purpose**; rung 2 (`--fail-on-untraced`) exits `1` with 71 unclaimed | **taken** (`028` D-3): enable nothing. `require_ownership` is a **global boolean** with no per-area scope at this pin, so it cannot be enabled for the adopted areas alone, and describing it as per-area enforcement would be a claim the tool does not support | W-14, delivered; M1 across the adopted scope, not reached | each enabled refusal is demonstrated against the exact pin. Nothing is enabled, so nothing is claimed; `028` KD-5 records that rung 1 additionally needs a way to say "deliberately unclaimed", which the pin does not have |
 | W-24 | whether acceptance blocks should be executed by an automated control, given that CI deliberately abstains. Surfaced by F-030, which is itself repaired | **`028-enforcement-readiness-and-acceptance-control`**, 2026-09-21 | **delivered**: `.github/workflows/acceptance.yaml` runs `spec-spine verify` for every spec on a **push to the integration branch**, which is a reviewed and merged commit and therefore the same trust level as a maintainer running it by hand. `permissions: contents: read`, no `secrets` referenced, never `pull_request` | the workflow is authored and its restrictions are asserted by `028`'s block; it has not run, because it runs when that spec merges | **taken** (`028` D-4): post-merge rather than pull-request, because the alternative reopens the trust boundary `004` exists to hold | none | **closed**, with its limit stated: `028` KD-1 records that it is a detector and not a gate, so F-096, the exact failure it is for, would have been reported one run later and not prevented |
 
+**Findings triaged against the release's consumers, 2026-09-21.**
+`029-consumer-surface-repairs` triaged the whole register against the two feature
+sets this release is qualified for, repaired the defects that reach them, and
+gave a source-backed gate for every exclusion. `030` does the same for transport
+security and the dashboard. Neither is a wave in the sense section 3 uses: they
+are release qualification, and what they change about this table is that the
+findings columns of the delivered rows are no longer the whole story. `029`
+section 4 is.
+
+Two things that table did not have identifiers for are now in the register:
+F-098, an entry larger than the WAL panicking the writer by default, and F-099,
+two defects this register counts and never defines.
+
 **Not in this table, and deliberately.** Publication, release and upstream
 acceptance. This document is an adoption plan; a release candidate is qualified
 against a chosen release scope, which nothing here selects.

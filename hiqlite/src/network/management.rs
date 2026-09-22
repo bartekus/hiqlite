@@ -36,6 +36,9 @@ pub(crate) async fn add_learner(
     body: body::Bytes,
 ) -> Result<Response, Error> {
     validate_secret(&state, &headers)?;
+    // F-069: `unknown` is a value this path parameter deserializes to, and the helpers below
+    // answered it with a panic about a build configuration.
+    raft_type.selected()?;
 
     if helpers::is_raft_stopped(&state, &raft_type)
         || !helpers::is_raft_initialized(&state, &raft_type).await?
@@ -99,6 +102,9 @@ pub(crate) async fn become_member(
     body: body::Bytes,
 ) -> Result<Response, Error> {
     validate_secret(&state, &headers)?;
+    // F-069: `unknown` is a value this path parameter deserializes to, and the helpers below
+    // answered it with a panic about a build configuration.
+    raft_type.selected()?;
 
     if helpers::is_raft_stopped(&state, &raft_type)
         || !helpers::is_raft_initialized(&state, &raft_type).await?
@@ -194,6 +200,9 @@ pub(crate) async fn get_membership(
     Path(raft_type): Path<RaftType>,
 ) -> Result<Response, Error> {
     validate_secret(&state, &headers)?;
+    // F-069: `unknown` is a value this path parameter deserializes to, and the helpers below
+    // answered it with a panic about a build configuration.
+    raft_type.selected()?;
 
     if helpers::is_raft_stopped(&state, &raft_type)
         || !helpers::is_raft_initialized(&state, &raft_type).await?
@@ -228,6 +237,9 @@ pub(crate) async fn post_membership(
     body: body::Bytes,
 ) -> Result<Response, Error> {
     validate_secret(&state, &headers)?;
+    // F-069: `unknown` is a value this path parameter deserializes to, and the helpers below
+    // answered it with a panic about a build configuration.
+    raft_type.selected()?;
 
     if helpers::is_raft_stopped(&state, &raft_type)
         || !helpers::is_raft_initialized(&state, &raft_type).await?
@@ -250,6 +262,9 @@ pub async fn leave_cluster(
     body: body::Bytes,
 ) -> Result<Response, Error> {
     validate_secret(&state, &headers)?;
+    // F-069: `unknown` is a value this path parameter deserializes to, and the helpers below
+    // answered it with a panic about a build configuration.
+    raft_type.selected()?;
 
     if helpers::is_raft_stopped(&state, &raft_type)
         || !helpers::is_raft_initialized(&state, &raft_type).await?
@@ -361,6 +376,7 @@ pub(crate) async fn metrics(
     Path(raft_type): Path<RaftType>,
 ) -> Result<Response, Error> {
     validate_secret(&state, &headers)?;
+    raft_type.selected()?;
 
     let metrics = helpers::get_raft_metrics(&state, &raft_type).await;
     fmt_ok(headers, &metrics)

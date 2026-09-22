@@ -42,6 +42,9 @@ impl Config {
                 .map(|n| n.addr_api)
                 .collect::<Vec<_>>(),
             tls_config: ServerTlsConfig::from_env("API"),
+            // F-009's shape, in the proxy. Left as a panic here and recorded as such: the
+            // proxy's configuration constructor is infallible and making it fallible is a
+            // change to `015`'s surface, not this spec's.
             secret_api: env::var("HQL_SECRET_API").expect("HQL_SECRET_API not found"),
             // password_dashboard,
         }
@@ -54,7 +57,8 @@ impl Config {
 
         if self.secret_api.len() < 16 {
             return Err(Error::Config(
-                "'secret_raft' and 'secret_api' should be at least 16 characters long".into(),
+                // F-074: this named `secret_raft`, which the proxy has no concept of.
+                "'secret_api' should be at least 16 characters long".into(),
             ));
         }
 
@@ -75,11 +79,13 @@ mod tests {
         }
     }
 
-    /// Characterizes the proxy's only validation, including F-074: the message
-    /// for a short secret names `secret_raft`, which the proxy has no concept
-    /// of. Nothing validates the port, the TLS material or node reachability.
+    /// Replaces `proxy_validation_covers_two_fields_and_names_a_third`, which pinned F-074:
+    /// the message for a short secret named `secret_raft`, which the proxy has no concept of.
+    ///
+    /// Still characterizes what the validation does **not** cover, which is unchanged: nothing
+    /// validates the port, the TLS material or node reachability.
     #[test]
-    fn proxy_validation_covers_two_fields_and_names_a_third() {
+    fn proxy_validation_covers_two_fields_and_names_the_right_one() {
         let ok = cfg(vec!["127.0.0.1:8200".to_string()], "0123456789abcdef");
         assert!(ok.is_valid().is_ok());
 
@@ -97,8 +103,12 @@ mod tests {
         let short = cfg(vec!["127.0.0.1:8200".to_string()], "short");
         let err = short.is_valid().unwrap_err().to_string();
         assert!(
-            err.contains("'secret_raft'"),
-            "F-074: the proxy reports a secret_raft it does not have: {err}"
+            err.contains("'secret_api'"),
+            "the message must name the field the proxy actually has: {err}"
+        );
+        assert!(
+            !err.contains("'secret_raft'"),
+            "and not one it does not: {err}"
         );
     }
 }

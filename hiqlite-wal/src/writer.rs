@@ -446,15 +446,23 @@ fn run(
                         received += 1;
 
                         if bytes.len() > data_len_limit {
-                            // A single raft entry cannot span WAL files. By default an
-                            // oversized entry is a non-recoverable setup issue (it needs a
-                            // config change with a full restart, or code changes), so the
-                            // writer panics. With the `oversized-entry-error` feature the
-                            // append instead fails with `Error::WalSizeExceeded` and the
-                            // writer keeps serving subsequent requests. With the default
-                            // `wal_size` of 2MB this is easily reached by a single large
-                            // INSERT, transaction or batch.
-                            #[cfg(feature = "oversized-entry-error")]
+                            // A single raft entry cannot span WAL files, so an entry larger
+                            // than the WAL cannot be written. **That is a rejected append, not
+                            // a reason to end the writer**, and it is the default now.
+                            //
+                            // It used to be a `panic!`, on the reasoning that an oversized
+                            // entry is a non-recoverable setup issue. The comment beside it
+                            // said what is wrong with that: "With the default `wal_size` of
+                            // 2MB this is easily reached by a single large INSERT, transaction
+                            // or batch." An application's own data ending the storage thread,
+                            // and under an aborting profile the whole process, is not a setup
+                            // issue; it is a large write. The caller gets
+                            // `Error::WalSizeExceeded` on the acknowledgement and on the
+                            // completion, and the writer keeps serving.
+                            //
+                            // `oversized-entry-error` is kept as a no-op so a consumer that
+                            // enables it still builds; it selects what is now the only
+                            // behavior.
                             {
                                 res = Err(Error::WalSizeExceeded(
                                     format!(
@@ -466,14 +474,6 @@ fn run(
                                     .into(),
                                 ));
                                 break;
-                            }
-                            #[cfg(not(feature = "oversized-entry-error"))]
-                            {
-                                panic!(
-                                    "`data` length must not exceed `wal_size` -> data length \
-                                    is {} vs wal_size (without header) is {data_len_limit}",
-                                    bytes.len(),
-                                );
                             }
                         }
 
@@ -1266,7 +1266,6 @@ mod tests {
         );
     }
 
-    #[cfg(feature = "oversized-entry-error")]
     fn append(tx: &flume::Sender<Action>, id: u64, bytes: Vec<u8>) -> Result<(), Error> {
         let (ack_tx, ack_rx) = oneshot::channel();
         let (entry_tx, entry_rx) = flume::bounded(1);
@@ -1281,7 +1280,14 @@ mod tests {
         ack_rx.blocking_recv().unwrap()
     }
 
-    #[cfg(feature = "oversized-entry-error")]
+    /// An entry larger than the WAL is a rejected append, and the writer keeps serving.
+    ///
+    /// This used to require the `oversized-entry-error` feature; the default was a `panic!`,
+    /// which under an aborting profile ends the embedding application because its own write
+    /// was too big. The comment beside that panic said the default `wal_size` of 2 MiB is
+    /// "easily reached by a single large INSERT, transaction or batch", which is what makes it
+    /// a large write rather than a setup issue. The test is now unconditional and the one that
+    /// pinned the panic is gone.
     #[test]
     fn oversized_entry_errors_without_killing_writer() {
         let base = "test_data/oversized_entry".to_string();
@@ -1316,65 +1322,4 @@ mod tests {
         ack_rx.blocking_recv().unwrap();
     }
 
-    #[cfg(not(feature = "oversized-entry-error"))]
-    #[test]
-    fn oversized_entry_panics_and_kills_writer() {
-        let base = "test_data/oversized_entry_panic".to_string();
-        let _ = std::fs::remove_dir_all(&base);
-        std::fs::create_dir_all(&base).unwrap();
-
-        let lockfile = LockFile::create(&base).unwrap();
-        lockfile.lock().unwrap();
-        let meta = Arc::new(RwLock::new(Metadata::read_or_create(&base).unwrap()));
-
-        let (tx, _wal, _fail) = spawn(
-            base.clone(),
-            lockfile,
-            LogSync::Immediate,
-            64 * 1024,
-            false,
-            meta.clone(),
-        )
-        .unwrap();
-
-        let send_append = |id: u64, bytes: Vec<u8>| {
-            let (ack_tx, ack_rx) = oneshot::channel();
-            let (entry_tx, entry_rx) = flume::bounded(1);
-            // The writer thread may already be dead, so every send can fail and is ignored;
-            // the assertion is that the append is never acked.
-            let _ = tx.send(Action::Append {
-                rx: entry_rx,
-                callback: Box::new(|_| {}),
-                ack: ack_tx,
-            });
-            let _ = entry_tx.send(Some((id, bytes)));
-            let _ = entry_tx.send(None);
-            ack_rx
-        };
-
-        // an oversized entry panics the writer thread by default; the append is never acked
-        let mut ack = send_append(1, vec![0u8; 70 * 1024]);
-        assert!(
-            !recv_with_timeout(&mut ack),
-            "oversized entry must panic the writer (no ack)"
-        );
-
-        // the writer thread is dead: a subsequent append is never acked either
-        let mut ack = send_append(2, b"ok".to_vec());
-        assert!(
-            !recv_with_timeout(&mut ack),
-            "writer must be dead after the panic"
-        );
-    }
-
-    #[cfg(not(feature = "oversized-entry-error"))]
-    fn recv_with_timeout(ack: &mut tokio::sync::oneshot::Receiver<Result<(), Error>>) -> bool {
-        for _ in 0..10 {
-            if ack.try_recv().is_ok() {
-                return true;
-            }
-            std::thread::sleep(std::time::Duration::from_millis(100));
-        }
-        false
-    }
 }

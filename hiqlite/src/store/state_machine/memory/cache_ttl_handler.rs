@@ -67,9 +67,18 @@ async fn ttl_handler(
                     // only delete if this expiry is still the current one for the key
                     if exp_of.get(&key) == Some(&exp) {
                         exp_of.remove(&key);
-                        tx_kv
-                            .send(CacheRequestHandler::Delete(key))
-                            .expect("kv handler to always be running");
+                        // F-025: this was `.expect(..)`. The TTL handler is a task nobody
+                        // joins, so a panic here ends TTL expiry for this cache silently
+                        // under unwinding and ends the process under abort. The kv handler
+                        // going away means this cache is being torn down; log it and keep
+                        // this loop alive until its own channel closes, which is the exit
+                        // this handler is written around.
+                        if let Err(err) = tx_kv.send(CacheRequestHandler::Delete(key)) {
+                            warn!(
+                                "Cache TTL handler cannot reach its kv handler, so expiry has \
+                                 stopped for this cache: {err}"
+                            );
+                        }
                     }
                     continue;
                 } else {
@@ -106,7 +115,9 @@ async fn ttl_handler(
                             exp_of.remove(&key);
                         }
                         TtlRequest::SnapshotBuild(ack) => {
-                            ack.send(data.clone()).unwrap();
+                            if ack.send(data.clone()).is_err() {
+                                warn!("Snapshot build requester for a cache TTL handler has gone away");
+                            }
                         }
                         TtlRequest::SnapshotInstall((snap, ack)) => {
                             data.clear();
@@ -116,7 +127,12 @@ async fn ttl_handler(
                                 exp_of.insert(key.clone(), exp);
                                 data.insert(exp, key);
                             }
-                            ack.send(()).unwrap();
+                            if ack.send(()).is_err() {
+                                warn!(
+                                    "Snapshot install requester for a cache TTL handler has \
+                                     gone away"
+                                );
+                            }
                         }
                     }
                 } else {

@@ -13,8 +13,12 @@ repository = "https://github.com/sebadob/hiqlite"
 [features]
 auto-heal = []
 migration = []
-# Oversized raft entries panic the writer by default (a non-recoverable setup issue).
-# Enable this to fail the append with `Error::WalSizeExceeded` and keep the writer alive.
+# No-op, kept so a consumer that enables it still builds.
+#
+# It used to select the behavior that is now the only one: an entry larger than `wal_size`
+# fails the append with `Error::WalSizeExceeded` and the writer keeps serving. The default it
+# replaced was a `panic!`, which under an aborting profile ends the embedding application
+# because one of its own writes was too big.
 oversized-entry-error = []
 
 [lib]

@@ -570,7 +570,7 @@ mod tests {
 
     /// An append the writer rejects must not reach openraft as a successful storage call. The
     /// rejection surfaces on the acknowledgement path, which is what `append` returns.
-    #[cfg(feature = "oversized-entry-error")]
+    /// No longer feature-gated: the rejection is the default behavior now.
     #[tokio::test(flavor = "multi_thread")]
     async fn append_adapter_reports_a_rejected_append_as_an_error() {
         let base = "test_data/adapter_append_rejection";

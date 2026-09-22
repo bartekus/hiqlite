@@ -14,6 +14,34 @@ mod notify;
 mod state;
 mod stream;
 
+/// The proxy's route table, separated from its state so it can be constructed by a test.
+///
+/// F-067 was a route literal that panics at construction, and nothing in this repository ever
+/// constructed this router: `start_proxy` needs a live upstream client, and CI never enables
+/// the `server` feature (F-019). Splitting the table out is what makes the defect reachable by
+/// a test that costs nothing.
+fn routes() -> Router<Arc<AppStateProxy>> {
+    Router::new()
+        .nest(
+            "/cluster",
+            Router::new()
+                // .route("/add_learner/{raft_type}", post(management::add_learner))
+                // .route("/become_member/{raft_type}", post(management::become_member))
+                // .route(
+                //     "/membership/{raft_type}",
+                //     get(management::get_membership).post(management::post_membership),
+                // )
+                // F-067: this was `"/metrics/:raft_type"`, axum 0.7's path-parameter spelling.
+                // axum 0.8 panics at router construction on a `:` segment, so `hiqlite proxy`
+                // has not started at all since that upgrade.
+                .route("/metrics/{raft_type}", get(handlers::metrics)),
+        )
+        .route("/listen", get(handlers::listen))
+        .route("/stream", get(handlers::stream))
+        // .route("/health", get(api::health))
+        .route("/ping", get(handlers::ping))
+}
+
 pub async fn start_proxy(config: Config) -> Result<(), Error> {
     if config.tls_config.is_some() {
         rustls::crypto::ring::default_provider()
@@ -47,23 +75,7 @@ pub async fn start_proxy(config: Config) -> Result<(), Error> {
         // dashboard_password: config.password_dashboard,
     });
 
-    let router = Router::new()
-        .nest(
-            "/cluster",
-            Router::new()
-                // .route("/add_learner/:raft_type", post(management::add_learner))
-                // .route("/become_member/:raft_type", post(management::become_member))
-                // .route(
-                //     "/membership/:raft_type",
-                //     get(management::get_membership).post(management::post_membership),
-                // )
-                .route("/metrics/:raft_type", get(handlers::metrics)),
-        )
-        .route("/listen", get(handlers::listen))
-        .route("/stream", get(handlers::stream))
-        // .route("/health", get(api::health))
-        .route("/ping", get(handlers::ping))
-        .with_state(state.clone());
+    let router = routes().with_state(state.clone());
 
     let addr_str = format!("0.0.0.0:{}", config.listen_port);
     info!("listening on {}", addr_str);
@@ -91,14 +103,25 @@ mod tests {
     use super::*;
     use axum::routing::get;
 
-    /// F-067. `start_proxy` above registers `/metrics/:raft_type`, which is
-    /// axum 0.7 path syntax. The pinned axum is 0.8, which rejects a segment
-    /// starting with `:` at router construction, so `start_proxy` panics on its
-    /// first route and never reaches the bind. This asserts the rejection
-    /// against the exact literal and the real handler that router uses.
+    /// Replaces `the_proxy_metrics_route_is_rejected_by_the_pinned_axum`, which pinned F-067
+    /// by asserting that the literal the proxy used panics. It does; the proxy no longer uses
+    /// it.
+    ///
+    /// This constructs the **real** route table instead. Under the defect this line panics, so
+    /// it is the test the proxy never had: `start_proxy` needs a live upstream client, and CI
+    /// never enables the `server` feature (F-019), which is why a router that could not be
+    /// built at all went unnoticed through a whole axum major version.
+    #[test]
+    fn the_proxy_route_table_can_be_constructed() {
+        let _routes = routes();
+    }
+
+    /// The 0.7 spelling is still rejected by the pinned axum, which is what made F-067 a
+    /// divergence rather than a version gap. Kept so the reason the repair was needed stays
+    /// asserted rather than remembered.
     #[test]
     #[should_panic(expected = "Path segments must not start with `:`")]
-    fn the_proxy_metrics_route_is_rejected_by_the_pinned_axum() {
+    fn the_zero_seven_spelling_is_still_rejected() {
         let _router: Router<Arc<AppStateProxy>> = Router::new().nest(
             "/cluster",
             Router::new().route("/metrics/:raft_type", get(handlers::metrics)),

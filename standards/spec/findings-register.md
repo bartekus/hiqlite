@@ -861,6 +861,12 @@ variant. Consequence: **fail-closed**. API certificate verification stays
 enabled, so no security boundary is weakened; a documented escape hatch is
 unusable and using it prevents startup. `009` KD-1.
 
+
+**Repaired 2026-09-21 by `029-consumer-surface-repairs`.** The API TLS block now
+reads its own key. This was the one configuration defect that is
+release-blocking on its own: a deployment that sets the documented key could not
+start at all, because the unconsumed key reached the unknown-key check and the
+whole file was refused.
 ### F-032 `contradiction`, confidence `high`
 
 **`HQL_HEALTH_CHECK_DELAY_SECS` is documented and read nowhere.**
@@ -873,6 +879,11 @@ when `env_var.is_empty()`. Both constructors hardcode 30 (`config.rs:199`,
 documented variable does nothing. `network/api.rs:65` names it in a log line,
 which makes it look supported. `009` KD-2.
 
+
+**Repaired 2026-09-21 by `029-consumer-surface-repairs`.** Both routes read the
+documented variable. The parser is given a named constant rather than a string
+literal so a test can assert it is given the right one, which is what an empty
+argument in that position made impossible to notice.
 ### F-033 `contradiction`, confidence `high`
 
 **`HQL_ENC_KEYS_FROM` is documented and read nowhere.** `hiqlite.env:118`
@@ -885,6 +896,13 @@ offers therefore does not exist on the environment path; the TOML path's
 `secrets_file` / `HQL_SECRETS_FILE` mechanism is a different thing that works.
 `009` KD-3.
 
+
+**Resolved 2026-09-21 by `029-consumer-surface-repairs`, by removal rather than
+by implementation.** There was never a value of this variable that changed
+anything: the environment route builds its keys with `cryptr::EncKeys::from_env`,
+which has no file mode to select. Implementing it means adding a second key
+source, which is a feature. The reference file no longer documents it, and says
+why.
 ### F-034 `contradiction`, confidence `high`
 
 **One setting has two defaults and two documented defaults.**
@@ -896,6 +914,9 @@ in the doc comment at `config.rs:58-60`). **Observed by execution** by the test
 `config_toml::tests`. The setting has no environment variable in either
 path. `009` KD-4.
 
+
+**Repaired 2026-09-21 by `029-consumer-surface-repairs`.** One value, 1024,
+which is what two of the three routes already used.
 ### F-035 `limit`, confidence `high`
 
 **The environment constructor cannot select the WAL durability mode.**
@@ -920,6 +941,11 @@ source, not executed. `009` KD-5's sibling, recorded at `009` B-5.
 `expect("Cannot parse HQL_LOG_STATEMENTS as u64")`. Operator-visible and
 trivially wrong. Untested. `009` KD-5.
 
+
+**Corrected 2026-09-21 by `029-consumer-surface-repairs`.** The message names
+`bool`. The `expect` itself remains, and `027` KD-1 carries it: making
+`NodeConfig::from_env` fallible is a public API change this release does not
+make.
 ### F-037 `defect`, confidence `high`
 
 **A bracketed IPv6 advertised address produces an unparsable listen address.**
@@ -1244,6 +1270,13 @@ side by side.
 The unbounded shape is source-established; that the suite can hang indefinitely
 is **observed** (F-051). The library half is in `003`'s unit. `012` KD-3.
 
+
+**Partly repaired 2026-09-21 by `029-consumer-surface-repairs`.** The library
+half: `wait_until_healthy_db_timeout` and `wait_until_healthy_cache_timeout`
+return the last health error at a deadline and stop early on a terminal node
+failure. The unbounded originals keep their signatures, because they are
+published, and now document that they never return if the node never becomes
+healthy. The test half is in `hiqlite/tests/cluster/` and is unchanged.
 ### F-051 `defect`, confidence `high`
 
 **`Client::remote` returns before its event subscription exists, so an event
@@ -1547,6 +1580,9 @@ for a name with no underscore at all.
 `migration::tests::a_name_without_a_numeric_index_panics_with_the_other_rules_message`
 asserts the message that fires. `014` KD-1.
 
+
+**Repaired 2026-09-21 by `029-consumer-surface-repairs`.** The message names the
+rule that was broken. The test that pinned the wrong one was replaced.
 ### F-065 `defect`, confidence `high`
 
 **A duplicate migration index is reported as a gap.**
@@ -1558,6 +1594,10 @@ different deployment mistakes with different fixes, and the message describes th
 one that did not happen. Source-established; no fixture reaches it, and `014` D-2
 records why none was added. `014` KD-2.
 
+
+**Repaired 2026-09-21 by `029-consumer-surface-repairs`.** A duplicate index says
+the index is used twice and names both files, with a fixture of two files
+claiming index 1.
 ### F-066 `defect`, confidence `high`
 
 **Every migration validation failure is a panic, and the signature cannot carry
@@ -1577,6 +1617,11 @@ knows how to assert. Same class as F-009 and F-042, and also a public-API
 question, which is W-17's. Source-established, with three of the five panic sites
 executed. `014` KD-3.
 
+
+**Repaired 2026-09-21 by `029-consumer-surface-repairs`.** `Migrations::try_build`
+returns a named error for each of the five rules and is what the client's
+migration path calls. `Migrations::build` is kept as a panicking wrapper because
+it is the published signature and `migrate!` expands to it.
 ### F-067 `defect`, confidence `high`
 
 **The proxy panics on its first route registration and never binds.**
@@ -1600,6 +1645,16 @@ panics with the real handler and the same `nest`, and
 `the_same_capture_in_zero_eight_syntax_is_accepted` shows the node's spelling is
 accepted. `015` KD-1.
 
+
+**Repaired 2026-09-21 by `029-consumer-surface-repairs`.** The route literal is
+axum 0.8's spelling. The route table is also split out of `start_proxy` so a
+test can construct it without a live upstream client, which is what nothing ever
+did and is why a router that could not be built went unnoticed through a whole
+major version.
+
+Not release-blocking for either named consumer, which is recorded rather than
+used as a reason to skip it: neither enables `server`. It **is** release-blocking
+for the published crate, which offers that binary (`029` D-3).
 ### F-068 `defect`, confidence `high`
 
 **The proxy compares the API secret in non-constant time.**
@@ -1619,6 +1674,10 @@ Source-established; no timing measurement was taken and none is claimed.
 Reachable only once F-067 is fixed, which is the order a repair has to consider.
 `015` KD-2.
 
+
+**Repaired 2026-09-21 by `029-consumer-surface-repairs`.** The proxy compares the
+API secret in constant time, as the node four files away already did for the
+same secret.
 ### F-069 `defect`, confidence `high`
 
 **A valid path value reaches an unconditional panic.** `RaftType`
@@ -1642,6 +1701,12 @@ match on both surfaces, so the caller must already hold `secret_api`. Under
 unwinding the consequence is a dropped connection; under `panic = abort` it is
 the process, which is `010` B-7's split. Source-established. `015` KD-3.
 
+
+**Repaired 2026-09-21 by `029-consumer-surface-repairs`.** `RaftType::selected()`
+returns a `BadRequest` naming the raft groups this build serves, and every
+handler that takes the path parameter calls it first. The panicking arms stay
+and are now unreachable from a request, which is the shape `022` B-1 used for
+the cache index.
 ### F-070 `defect`, confidence `high`
 
 **The proxy's documented default configuration file can never be loaded.**
@@ -1714,6 +1779,9 @@ that does not exist in the file they are editing. **Observed by execution**
 (`server::proxy::config::tests::proxy_validation_covers_two_fields_and_names_a_third`).
 `015` KD-8.
 
+
+**Repaired 2026-09-21 by `029-consumer-surface-repairs`.** The message names
+`secret_api`, which is the field the proxy has.
 ### F-075 `contradiction`, confidence `high`
 
 **A declared module contains nothing but commented-out code.**
@@ -1769,6 +1837,11 @@ probes are not committed, because a source file that fails to compile cannot liv
 in a crate CI builds; `016` D-2 records that and why no compile-fail harness was
 added. `016` KD-1.
 
+
+**Repaired 2026-09-21 by `029-consumer-surface-repairs`.** The generics are
+emitted after `impl` rather than after `for`, so a generic cache enum compiles. A
+data-carrying variant and a non-enum input each get a `compile_error!` naming the
+rule instead of E0533 or `unimplemented!()` pointing at the derive.
 ### F-078 `defect`, confidence `high`
 
 **`core::option::Option` is treated as a non-optional type.**
@@ -1783,6 +1856,10 @@ a bare value and fails at runtime rather than yielding `None`. **Observed by
 execution**, both spellings
 (`from_row::tests::the_core_spelling_of_option_is_not_recognised`). `016` KD-2.
 
+
+**Repaired 2026-09-21 by `029-consumer-surface-repairs`.** `core` is accepted
+alongside `std`. The test that pinned the defect was replaced by one that
+asserts all three spellings take the optional branch.
 ### F-079 `limit`, confidence `high`
 
 **The derived row conversion cannot report a failure.**
@@ -2181,6 +2258,22 @@ expressions, including this one. Recorded rather than tidied away, because the
 rule it breaks is a real one and the failure mode is invisible until someone runs
 a command that CI deliberately does not.
 
+**A second occurrence, found 2026-09-21 by the same sweep that found the
+first.** `020-cache-log-store-contract-repair` rewrote the status line of
+`standards/spec/cache-log-repair-proposal.md` from "proposed, not authorized" to
+"delivered", which is correct and is what `005`'s acceptance greps verbatim.
+`020` declared the `extends` edge on that unit and did not declare
+`amends_verification` on `005`, so `005`'s block began failing at that command
+the moment `020` merged.
+
+Two occurrences of one rule being broken, by two different specs, in one
+release. That is not a coincidence: the rule is checked only by a command
+nobody runs on a pull request. `028`'s post-merge acceptance job is what detects
+it, and `028` KD-1 records that it cannot prevent it.
+
+**Repaired 2026-09-21 by `029-consumer-surface-repairs`**, which takes `005`'s
+acceptance along with four others.
+
 ### F-097 `contradiction`, confidence `high`
 
 **A recorded probe result was wrong, and it blocked a queue row for two days.**
@@ -2217,3 +2310,45 @@ delivered what W-14 asked for.
 **Resolved 2026-09-21 by `028-enforcement-readiness-and-acceptance-control`**,
 which applies the correct form and replaces the conclusion in the plan rather
 than adding a note beside it.
+
+### F-098 `defect`, confidence `high`
+
+**An entry larger than the WAL panicked the writer, by default.** A single raft
+entry cannot span WAL files, so an entry larger than `wal_size` cannot be
+written. `hiqlite-wal/src/writer.rs` answered that with `panic!` unless the
+`oversized-entry-error` feature was enabled, on the reasoning recorded beside it
+that an oversized entry is "a non-recoverable setup issue (it needs a config
+change with a full restart, or code changes)".
+
+The comment two lines below says what is wrong with that reasoning: "With the
+default `wal_size` of 2MB this is easily reached by a single large INSERT,
+transaction or batch." An application's own data ending its storage thread is a
+large write, not a setup issue, and under an aborting profile it ends the
+embedding application's whole process. Neither named consumer of this release
+enables the feature, and `hiqlite/src/config.rs` hardcoded `wal_size` on both
+the `Default` and the environment routes, so the ceiling could not be raised
+from the constructor most deployments use either (F-035).
+
+**Found 2026-09-21** while triaging the register against the two consumers'
+feature sets. It had no identifier: the behavior is documented in
+`hiqlite-wal/Cargo.toml`'s feature comment and in the source, and no finding
+recorded it as a defect.
+
+**Repaired 2026-09-21 by `029-consumer-surface-repairs`.** The rejection is the
+only behavior: `Error::WalSizeExceeded` on the acknowledgement and on the
+completion, and the writer keeps serving. The feature is kept as a no-op so a
+consumer that enables it still builds, and the test that pinned the panic is
+gone. `HQL_WAL_SIZE` makes the ceiling selectable from the environment, and
+`hiqlite.env` documents both the variable and what it bounds.
+
+### F-099 `contradiction`, confidence `high`
+
+**This register counts two defects it never defines.** F-092 and F-093 appear in
+F-012's disposition as prose and in this document's own class tables, and
+neither has a `###` entry of its own. A reader following the class counts finds
+fifty-six defects and fifty-four definitions.
+
+Found 2026-09-21 while triaging the register for the release. Not repaired:
+the register's structure is `005`'s, and adding two entries is a change to it
+rather than to any code. Recorded so the count and the content stop disagreeing
+silently.
