@@ -10,6 +10,13 @@ use tokio::{fs, task};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
+/// How many published snapshots are kept.
+///
+/// Two, so a startup that finds the newest unreadable has something to fall back to. One was
+/// the old value and is why F-006 had no fallback available even after selection could look
+/// for one.
+pub(crate) const SNAPSHOTS_KEPT: usize = 2;
+
 #[derive(Debug, Clone)]
 pub struct SQLiteSnapshotBuilder {
     // pub last_applied_log_id: Option<LogId<NodeId>>,
@@ -47,12 +54,28 @@ impl RaftSnapshotBuilder<TypeConfigSqlite> for SQLiteSnapshotBuilder {
             .expect("Sender to always be listening");
 
         let resp = rx.await.expect("to always receive a snapshot response")?;
-        fs::copy(path_temp, &path)
+
+        // Publication is a same-directory rename, not a copy.
+        //
+        // `fs::copy` wrote the final UUID name byte by byte, so an interrupted copy left a
+        // short file under a name that startup selection accepts, which is F-003. The writer
+        // has already produced a complete, synced image at the staging name, and `.temp` is
+        // not a UUID so nothing selects it; renaming publishes it in one step that either
+        // happened or did not.
+        fs::rename(&path_temp, &path)
             .await
             .map_err(|err| StorageError::IO {
                 source: StorageIOError::write_state_machine(&err),
             })?;
-        let snapshot = fs::File::open(path).await.map_err(|err| StorageError::IO {
+        // And the rename itself is made durable, so a crash cannot leave the new name in a
+        // directory that was never written back.
+        crate::store::state_machine::sqlite::sync_parent_dir(&path)
+            .await
+            .map_err(|err| StorageError::IO {
+                source: StorageIOError::write_state_machine(&err),
+            })?;
+
+        let snapshot = fs::File::open(&path).await.map_err(|err| StorageError::IO {
             source: StorageIOError::read_state_machine(&err),
         })?;
 
@@ -94,7 +117,7 @@ async fn snapshots_cleanup(
         })?;
 
     let keep_id = keep_id.to_string();
-    let mut deletes = Vec::new();
+    let mut candidates = Vec::new();
     loop {
         let entry = match list.next_entry().await {
             Ok(Some(entry)) => entry,
@@ -117,8 +140,51 @@ async fn snapshots_cleanup(
             continue;
         }
 
-        if name != keep_id {
-            deletes.push(name.to_string());
+        candidates.push(name.to_string());
+    }
+
+    // Keep the newest two published snapshots, not one.
+    //
+    // Deleting everything but the newest is what left F-006 with nothing to fall back to: the
+    // moment the newest file turned out to be unreadable, the only other copy had already been
+    // removed by the build that produced it. UUIDv7 is time-ordered, so a lexicographic sort
+    // over the published names is a chronological one.
+    let mut published: Vec<&String> = candidates
+        .iter()
+        .filter(|n| Uuid::parse_str(n).is_ok())
+        .collect();
+    published.sort();
+    published.reverse();
+    let keep: Vec<String> = published
+        .iter()
+        .take(SNAPSHOTS_KEPT)
+        .map(|n| (*n).clone())
+        .collect();
+    debug_assert!(keep.iter().any(|k| k == &keep_id) || keep.is_empty());
+    let oldest_kept = keep.last().cloned();
+
+    let mut deletes = Vec::new();
+    for name in &candidates {
+        if Uuid::parse_str(name).is_ok() {
+            if !keep.contains(name) {
+                deletes.push(name.clone());
+            }
+            continue;
+        }
+
+        // Staging names. `temp` is the install stream's and may be in flight, so it is never
+        // touched here. A `{uuid}.temp` or `{uuid}.incoming` whose id sorts below the oldest
+        // snapshot being kept belongs to a build or an install that is long finished.
+        let Some(oldest_kept) = &oldest_kept else {
+            continue;
+        };
+        for suffix in [".temp", ".incoming"] {
+            if let Some(stem) = name.strip_suffix(suffix)
+                && Uuid::parse_str(stem).is_ok()
+                && stem < oldest_kept.as_str()
+            {
+                deletes.push(name.clone());
+            }
         }
     }
 
