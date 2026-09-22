@@ -376,6 +376,11 @@ impl Client {
                 .expect("The global Hiqlite shutdown handler to always listen");
         }
 
+        // Last, and the ordering is the point: every raft group, the WAL writer and the SQLite
+        // writer have acknowledged their shutdown above, so nothing in this process can still
+        // write to the data directory. Only now may another node have it.
+        state.release_storage_ownership();
+
         info!("Shutdown complete");
         Ok(())
     }

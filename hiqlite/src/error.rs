@@ -84,6 +84,10 @@ pub enum Error {
     S3(String),
     #[error("SnapshotError: {0}")]
     SnapshotError(Box<RaftSnapshotError>),
+    /// The data directory is owned by another live process, or sits on storage whose advisory
+    /// locks hiqlite cannot use. Startup is refused and nothing in the directory was changed.
+    #[error("StorageInUse: {0}")]
+    StorageInUse(Cow<'static, str>),
     /// All kinds of SQLite database errors, mostly just a wrapper for the `rusqlite` error apart
     /// from `QueryReturnedNoRows`.
     #[cfg(feature = "sqlite")]
@@ -171,6 +175,7 @@ impl IntoResponse for Error {
             #[cfg(feature = "s3")]
             Error::S3(_) => StatusCode::BAD_REQUEST,
             Error::SnapshotError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Error::StorageInUse(_) => StatusCode::CONFLICT,
             #[cfg(feature = "sqlite")]
             Error::Sqlite(_) => StatusCode::BAD_REQUEST,
             Error::Timeout(_) => StatusCode::REQUEST_TIMEOUT,
