@@ -2524,3 +2524,23 @@ bounding the lock phase's waits so a stall reports where it stalled, and both
 are changes to `012`'s fixture surface rather than to the handler `023`
 repaired. Recorded so the next occurrence has something to attach to, with the
 run's evidence rather than an impression. `012` KD-1, F-048.
+
+### F-103 `defect`, confidence `high`
+
+**The pull-request style workflow ran with a writable token.**
+`.github/workflows/code_style.yaml` declares no `permissions:` block, so its
+`GITHUB_TOKEN` came from the repository default, which this repository has set
+to `write` (`default_workflow_permissions: "write"`, read from the API on
+2026-09-22). It triggers on `pull_request`, so for a branch in this repository
+the job that builds and lints code under review held a token that could push to
+it. It references no secret, so nothing was readable from it, and the four
+workflows this corpus authored all set `contents: read` explicitly.
+
+Found 2026-09-22 while auditing every workflow trigger and secret reference
+before publication.
+
+**Repaired 2026-09-22 by `028-enforcement-readiness-and-acceptance-control`**,
+B-4: the workflow now declares `permissions: contents: read`, with the reason
+in the file. The repository-wide default is not changed, because that is a
+repository setting rather than a change to this tree, and an explicit block in
+each workflow is the stronger statement anyway.

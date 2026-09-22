@@ -73,6 +73,6 @@
     "summary": "Resolves W-14 against the pinned tool rather than a pin upgrade: the earlier probe read `resolver_exclusions` as path prefixes where the tool matches path components, so the key that was recorded as having no effect does exactly what rung 0 asked. Measures rungs 1 and 2 and refuses to enable either, because both are global refusals and the corpus is not ready for one. Adds W-24's restricted post-merge acceptance job, which runs on trusted commits only and references no secret. Reassesses OD-4 with an accurate account of what the per-document transition does and does not reach.\n",
     "title": "Correct the coverage denominator, measure the enforcement rungs, and run acceptance on trusted commits"
   },
-  "shardHash": "bdb72eb83fbd36ee90e43caecc67c58900e5ecbc079deca0998e02816890de2e",
+  "shardHash": "4d19cdeaec52b88f83cd30de55996c8a8d5c2371f15e039504e6f4f7bc5f0ff2",
   "specVersion": "1.3.0"
 }

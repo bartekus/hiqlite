@@ -8,6 +8,15 @@ on:
       - synchronize
       - ready_for_review
 
+# Least privilege for a pull-request trigger: this workflow reads the tree, runs the
+# style and lint checks, and writes nothing back. Without this block it inherits the
+# repository default, which is `write`, and a pull request from a branch in this
+# repository would run with a token that can push. It references no secret and must
+# not be given one: `031` keeps the publication and review credentials in workflows
+# with their own triggers.
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
   # `clear` in the just recipes fails without TERM on CI runners

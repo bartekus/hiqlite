@@ -165,6 +165,17 @@ It is a **detector, not a gate on merging**: it runs after the merge, so it
 reports rather than prevents. F-096 is exactly the failure it is for, and
 section 5 says what it would and would not have caught.
 
+**The pull-request workflows were checked against the same four restrictions,
+and one of them failed.** `code_style.yaml` predates this corpus, declares no
+`permissions:` block, and therefore inherited the repository default, which is
+`write`. It runs on `pull_request` and it references no secret, so nothing was
+readable from it; what it had was a token that could push to this repository,
+handed to a job whose whole input is a branch under review. It is now
+`contents: read`, like the other four. F-103.
+
+This is the boundary `004` drew being applied to a file `004` did not write,
+rather than a new rule.
+
 ### B-5. OD-4 is reassessed, accurately
 
 Three statements, and the middle one is the correction.
@@ -329,5 +340,11 @@ sh -c '! grep -q "pull_request" .github/workflows/acceptance.yaml || grep -q "# 
 sh -c '! grep -q "secrets\." .github/workflows/acceptance.yaml'
 sh -c 'grep -q "contents: read" .github/workflows/acceptance.yaml'
 sh -c 'grep -q "spec-spine verify" .github/workflows/acceptance.yaml'
+# F-103: every workflow declares its permissions, and no pull-request trigger inherits write
+sh -c 'grep -q "contents: read" .github/workflows/code_style.yaml'
+sh -c 'grep -q "contents: read" .github/workflows/spec-spine.yaml'
+sh -c '! grep -q "secrets\." .github/workflows/code_style.yaml'
+sh -c '! grep -q "secrets\." .github/workflows/spec-spine.yaml'
+sh -c 'for f in .github/workflows/*.yaml; do grep -q "^permissions:" "$f" || { echo "$f declares no permissions block"; exit 1; }; done'
 sh -c '! grep -rl "$(printf "\342\200\224")" specs/028-enforcement-readiness-and-acceptance-control'
 ```
