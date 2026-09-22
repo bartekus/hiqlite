@@ -164,6 +164,17 @@ the source explain a waiter lasting exactly that long.
    ticket, or answers `Released`; every state change goes through `Lock`,
    `Acquire` or `Release`, which every node applies in log order.
 
+**Corrected in review of the candidate, 2026-09-22.** Independent review found
+that replacing a registration dropped the old answer channel, and a remote
+client's server task `expect`ed an answer on it: under `panic = "abort"` that
+ended the node. A replaced registration is now answered `Released`, and the
+server task treats a dropped channel as `Released` rather than panicking. Review
+also found that an await judging the lease on its own node's clock could send a
+waiter round a loop of Raft writes when that clock ran ahead of the leader's; an
+await no longer looks at `exp` at all, and a client whose awaits are answered at
+once repeatedly backs off. A retried `Acquire` for a lock the ticket already holds
+now refreshes the lease instead of returning one that may have run out.
+
 **Consequence for callers.** A queued caller whose holder dies acquires within
 about one lease plus the await bound of the holder's grant, instead of failing
 after 120 seconds. A promoted awaiter now always claims through a replicated
@@ -394,6 +405,9 @@ cargo test -p hiqlite-patched --lib --no-default-features --features dlock store
 cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::a_timed_out_await_does_not_cost_the_live_ticket_its_place -- --exact
 sh -c 'grep -q "time::timeout(AWAIT_BOUND, self.lock_await(" hiqlite/src/client/dlock.rs'
 sh -c 'grep -q "LOCK_VALID_SECONDS as u64 + 2" hiqlite/src/client/dlock.rs'
+cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::a_replaced_await_is_answered_not_dropped -- --exact
+cargo test -p hiqlite-patched --lib --no-default-features --features dlock store::state_machine::memory::dlock_handler::lease_tests::an_await_does_not_judge_the_lease -- --exact
+sh -c '! grep -q "to always get an answer from the kv handler" hiqlite/src/network/api.rs'
 # no acknowledgement in the lock handler may panic its own task
 sh -c '! grep -q "ack.send(LockState::" hiqlite/src/store/state_machine/memory/dlock_handler.rs'
 sh -c 'grep -q "fn answer(" hiqlite/src/store/state_machine/memory/dlock_handler.rs'

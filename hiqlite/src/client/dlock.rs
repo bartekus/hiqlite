@@ -17,6 +17,9 @@ use tracing::error;
 /// a wall clock that ticks over between the grant and the check.
 const AWAIT_BOUND: Duration = Duration::from_secs(LOCK_VALID_SECONDS as u64 + 2);
 
+/// An await answered faster than this was answered from the node's current view, not woken.
+const PROMPT_ANSWER: Duration = Duration::from_millis(50);
+
 /// A distributed lock with the feature `dlock`. Releases on drop automatically.
 #[derive(Clone)]
 pub struct Lock {
@@ -79,6 +82,10 @@ impl Client {
         // a new first-try `Lock` would mint a fresh ticket and leave the old one orphaned in the
         // handler queue, where it could block the lock until its lease expires.
         let mut ticket: Option<u64> = None;
+        // Consecutive awaits answered at once. One is normal: the ticket was promoted before
+        // the await arrived. More in a row means this node's view of the lock lags the
+        // leader's, and re-requesting straight away would be a loop of Raft writes.
+        let mut prompt_answers: u32 = 0;
         loop {
             let state = self
                 .lock_req_retry(CacheRequest::Lock((key.clone(), ticket)), false)
@@ -97,6 +104,7 @@ impl Client {
                     // when a holder's lease runs out instead, so an unbounded wait sat out the
                     // 120-second request timeout and then failed. Re-requesting with the same
                     // ticket is what makes the leader look at the holder's lease.
+                    let awaited = time::Instant::now();
                     match time::timeout(AWAIT_BOUND, self.lock_await(key.clone(), id)).await {
                         Ok(res) => match res? {
                             LockState::Locked(id) => {
@@ -107,7 +115,17 @@ impl Client {
                                 });
                             }
                             // Released: our ticket may claim. Re-request with it.
-                            LockState::Released => ticket = Some(id),
+                            LockState::Released => {
+                                ticket = Some(id);
+                                if awaited.elapsed() < PROMPT_ANSWER {
+                                    prompt_answers += 1;
+                                    if prompt_answers > 1 {
+                                        time::sleep(PROMPT_ANSWER * prompt_answers.min(20)).await;
+                                    }
+                                } else {
+                                    prompt_answers = 0;
+                                }
+                            }
                             s => unreachable!("{:?}", s),
                         },
                         Err(_) => ticket = Some(id),

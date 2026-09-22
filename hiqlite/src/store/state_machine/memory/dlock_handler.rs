@@ -202,7 +202,9 @@ async fn handler(rx: flume::Receiver<LockRequest>, lease_seconds: i64) {
                     }
 
                     if lock.current_ticket == Some(log_id) {
-                        // Already ours: a retry after a lost response. Answer it again.
+                        // Already ours: a retry after a lost response. Answer it again, with a
+                        // lease that has time left in it rather than whatever remained.
+                        lock.exp = now + lease_seconds;
                         answer(&key, log_id, ack, LockState::Locked(log_id));
                     } else if lock.current_ticket.is_some() {
                         // Someone else holds the lock (e.g. our lease expired and the lock was
@@ -334,21 +336,31 @@ async fn handler(rx: flume::Receiver<LockRequest>, lease_seconds: i64) {
                 // Every state change now goes through `Lock`, `Acquire` or `Release`, which
                 // every node applies in log order, and an await that would have been granted
                 // is answered `Released` so its client claims through the leader instead.
-                let now = Utc::now().timestamp();
+                //
+                // The holder's lease is deliberately not judged here. This node's clock may be
+                // ahead of the leader's, and an await that answered `Released` on its own view
+                // of `exp` sent its client round a loop of Raft writes the leader kept answering
+                // `Queued`. Expiry is judged by `Acquire`, which the client's bounded await ends
+                // in.
                 match locks.get(key.as_ref()) {
                     Some(lock)
-                        if lock.current_ticket.is_some() && lock.exp >= now
+                        if lock.current_ticket.is_some()
                             || lock.queue.front().is_some_and(|front| *front != id) =>
                     {
                         let acks = queues.entry(key.to_string()).or_default();
                         // A client that timed out and awaits again replaces its old
-                        // registration, whose receiver is gone. Left in place, the dead entry
-                        // is found first, fails to deliver, and gets the live ticket dropped.
-                        acks.retain(|(i, _)| *i != id);
+                        // registration. Left in place, the dead entry is found first, fails to
+                        // deliver, and gets the live ticket dropped. The replaced one is
+                        // **answered**, not dropped: for a remote client its receiver is a
+                        // server task that treats a dropped channel as a broken invariant.
+                        if let Some(pos) = acks.iter().position(|(i, _)| *i == id) {
+                            let (_, old) = acks.swap_remove(pos);
+                            answer(&key, id, old, LockState::Released);
+                        }
                         acks.push((id, ack));
                     }
-                    // Nothing holds it, or it is ours to claim, or the holder's lease is over,
-                    // or the lock was removed while this await was in flight: re-request.
+                    // Nothing holds it, or it is ours to claim, or the lock was removed while
+                    // this await was in flight: re-request.
                     _ => {
                         answer(&key, id, ack, LockState::Released);
                     }
@@ -1030,6 +1042,48 @@ mod lease_tests {
                 .expect("the live await must be answered within five seconds")
                 .unwrap(),
             LockState::Released
+        );
+        assert_eq!(acquire_bounded(&tx, "k", 2).await, LockState::Locked(2));
+    }
+
+    /// A replaced registration is answered, never dropped. For a remote client the receiver
+    /// is a server task in `network::api` that used to `expect` an answer, so dropping it
+    /// panicked that task, and under `panic = "abort"` ended the node. Found in review.
+    #[tokio::test]
+    async fn a_replaced_await_is_answered_not_dropped() {
+        let tx = spawn_with_lease(SHORT_LEASE);
+
+        assert_eq!(lock_bounded(&tx, "k", 1).await, LockState::Locked(1));
+        assert_eq!(lock_bounded(&tx, "k", 2).await, LockState::Queued(2));
+        let first = await_registered(&tx, "k", 2);
+        let _second = await_registered(&tx, "k", 2);
+
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(5), first)
+                .await
+                .expect("the replaced await must be answered within five seconds")
+                .expect("the replaced await must be answered, not have its channel dropped"),
+            LockState::Released
+        );
+    }
+
+    /// An await does not judge a lease on its own node's clock. A follower whose clock ran
+    /// ahead answered `Released` for the last seconds of every lease while the leader kept
+    /// answering `Queued`, and its client looped on Raft writes. Found in review.
+    #[tokio::test]
+    async fn an_await_does_not_judge_the_lease() {
+        let tx = spawn_with_lease(SHORT_LEASE);
+
+        assert_eq!(lock_bounded(&tx, "k", 1).await, LockState::Locked(1));
+        assert_eq!(lock_bounded(&tx, "k", 2).await, LockState::Queued(2));
+        wait_out_the_lease().await;
+
+        let mut parked = await_registered(&tx, "k", 2);
+        tokio::task::yield_now().await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        assert!(
+            parked.try_recv().is_err(),
+            "an expired holder is noticed by `Acquire`, not answered by an await"
         );
         assert_eq!(acquire_bounded(&tx, "k", 2).await, LockState::Locked(2));
     }

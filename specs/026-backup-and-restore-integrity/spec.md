@@ -222,6 +222,14 @@ destructive half and is idempotent, and every start runs it **before** consultin
 finished; a `.restoring.tmp` means a staging copy that never completed, before
 anything was removed, and is discarded.
 
+Two corrections from independent review of the candidate. The removals of the
+old logs, snapshots and lock marker are entries in other directories, and those
+directories are now synced before the rename publishes the restored database;
+otherwise a power loss could keep the rename and bring the old `logs/` back
+beside a database whose metadata says nothing was applied. And a manual
+`restore_backup` finishes any committed restore before it replaces the staged
+image, instead of deleting it first.
+
 ### B-9. A backup is finished and durable before it has its name
 
 `create_backup` ran `VACUUM INTO` a temp file, renamed it into place, and then
@@ -469,6 +477,7 @@ cargo test -p hiqlite-patched --lib --features sqlite,backup backup::tests::rete
 cargo test -p hiqlite-patched --lib --features sqlite,backup backup::tests::local_cleanup_with_zero_keep_days_keeps_the_backup_it_follows -- --exact
 sh -c 'grep -A6 "fn restore_backup_start" hiqlite/src/backup.rs | grep -q "finish_staged_restore(node_config)"'
 sh -c 'grep -q "expired_backups(&backups, threshold)" hiqlite/src/backup.rs'
+sh -c 'grep -B2 "fs::rename(&path_db_staged, &path_db_full)" hiqlite/src/backup.rs | grep -q "sync_parent_dir(parent)"'
 sh -c 'test "$(grep -c "expired_backups(&backups, threshold)" hiqlite/src/backup.rs)" -eq 2'
 sh -c 'grep -B3 "sync_file_blocking(&path_temp)" hiqlite/src/store/state_machine/sqlite/writer.rs | grep -q "persist_metadata(&conn_bkp, &StateMachineData::default())?;"'
 ```

@@ -67,6 +67,6 @@
     "summary": "Completes what upstream PR #352 started. Every remaining acknowledgement in the lock handler could kill the whole handler when its client had gone away, a promoted ticket inherited the released holder's deadline and could block every later caller, an undelivered grant held the lock for a full lease window, and the awaiter map never shrank. States, with executed evidence, the lease limits none of this removes, and declines a longer or configurable TTL as a repair for them.\n",
     "title": "Repair the distributed-lock handler's liveness and state the lease limits it does not remove"
   },
-  "shardHash": "a4d69410bef279c05ed867d01207d7744dcae92957e2076b13347dee43d5486c",
+  "shardHash": "64a90b7b235df645760bb220f832161add4c66d77e77978043ee5c6929bd2b53",
   "specVersion": "1.3.0"
 }

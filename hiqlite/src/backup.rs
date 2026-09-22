@@ -488,6 +488,12 @@ pub async fn restore_backup(node_config: &NodeConfig, src: BackupSource) -> Resu
     fs::create_dir_all(&path_db).await?;
     set_path_access(&path_db, 0o700).await?;
 
+    // A restore committed earlier and interrupted is finished before this one replaces its
+    // staged image. Deleting that image first would leave the node on a database that may
+    // already have lost its write-ahead log if this restore then failed. Found in review.
+    if finish_staged_restore(node_config).await? {
+        warn!("Completed an interrupted earlier restore before starting this one");
+    }
     let (_, path_db_staged) = restore_paths(node_config, &path_db);
     let path_db_staging = format!("{path_db_staged}.tmp");
     let _ = fs::remove_file(&path_db_staging).await;
@@ -567,6 +573,23 @@ async fn finish_staged_restore(node_config: &NodeConfig) -> Result<bool, Error> 
     ] {
         if fs::try_exists(&sidecar).await.unwrap_or(false) {
             remove_file_reported(&sidecar).await?;
+        }
+    }
+
+    // The removals above are directory entries in other directories. Made durable before the
+    // rename publishes the restored database: otherwise a power loss could keep the rename and
+    // bring the old `logs/` back beside a database whose metadata says nothing was applied, and
+    // the node would replay the discarded cluster's log onto the backup. Found in review.
+    let mut parents = [&path_snapshots, &path_lock_file, &path_logs, &path_db_full]
+        .iter()
+        .filter_map(|p| Path::new(p.as_str()).parent())
+        .map(|p| p.to_string_lossy().into_owned())
+        .collect::<Vec<_>>();
+    parents.sort();
+    parents.dedup();
+    for parent in &parents {
+        if fs::try_exists(parent).await.unwrap_or(false) {
+            sync_parent_dir(parent).await?;
         }
     }
 

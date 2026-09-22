@@ -64,14 +64,20 @@ jobs:
             5. **Consumer behavior.** The feature sets in spec 029 section 4. Is anything
                excluded there actually reachable under them?
             6. **The repairs this candidate made last, which have had the least review.**
-               `hiqlite/src/client/listen_notify.rs`, `hiqlite/src/client/create.rs` and
-               `hiqlite/src/network/api.rs` (spec 032: does an open SSE stream actually imply
-               a registered subscriber, and can the readiness wait deadlock or leak a task?);
-               `hiqlite/src/backup.rs` (F-100: after the staged copy, the removals and the
-               rename, is there a crash point that leaves the final name holding a database
-               with a foreign write-ahead log, or removes something the rollback needed?);
-               `hiqlite/src/lifecycle.rs` and `hiqlite/src/client/mgmt.rs` (F-101: can
-               `begin_shutdown` hide a real failure that a caller needed to see?).
+               `hiqlite/src/membership_gate.rs`, `hiqlite/src/network/management.rs`,
+               `hiqlite/src/network/raft_server.rs` and `hiqlite/src/client/mgmt.rs` (F-107,
+               spec 027 D-8: is there any membership change that bypasses the gate; can the
+               shutdown, which holds the gate while it stops both raft groups, deadlock or be
+               cut short; does a drain timeout ever stop anything?);
+               `hiqlite/src/store/state_machine/memory/dlock_handler.rs` and
+               `hiqlite/src/client/dlock.rs` (F-102, spec 023 B-6: is every waiter answered
+               exactly once, can two tickets hold one lock in the leader's view, can a waiter
+               livelock?); `hiqlite/src/backup.rs` and `create_backup` in
+               `hiqlite/src/store/state_machine/sqlite/writer.rs` (spec 026 B-8 to B-10: is
+               there a crash point that leaves the final name holding a database with a
+               foreign write-ahead log, loses both the old and the new database, or leaves
+               no backup at all?); and the qualification graph (F-108, spec 031 B-8: does
+               anything in CI resolve a graph other than the committed `Cargo.lock`?).
 
             Say what you verified and what you could not. Do not repeat a specification's own
             claims back as findings.

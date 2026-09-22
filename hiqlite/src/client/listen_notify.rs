@@ -128,6 +128,7 @@ impl Client {
     where
         T: for<'de> Deserialize<'de>,
     {
+        self.ensure_node_available()?;
         let (_ts, bytes) = self.listen_rx().recv_async().await?;
         Ok(deserialize(&bytes)?)
     }
@@ -156,6 +157,7 @@ impl Client {
     where
         T: for<'de> Deserialize<'de>,
     {
+        self.ensure_node_available()?;
         let rx = self.listen_rx();
         loop {
             let (ts, bytes) = rx.recv_async().await?;

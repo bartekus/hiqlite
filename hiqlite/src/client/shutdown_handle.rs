@@ -2,7 +2,6 @@ use crate::app_state::AppState;
 use crate::client::stream::ClientStreamReq;
 use crate::{Client, Error};
 use std::sync::Arc;
-use std::time::Duration;
 use tokio::sync::watch;
 use tokio::time;
 use tracing::{debug, info};
@@ -26,8 +25,8 @@ impl ShutdownHandle {
         let _ = self.rx_shutdown.changed().await;
         info!("ShutdownHandle received shutdown signal - shutting down the Raft node now");
 
-        if time::timeout(
-            Duration::from_secs(15),
+        match time::timeout(
+            crate::client::mgmt::SHUTDOWN_WAIT,
             Client::shutdown_execute(
                 &self.state,
                 #[cfg(feature = "cache")]
@@ -42,11 +41,15 @@ impl ShutdownHandle {
             ),
         )
         .await
-        .is_err()
         {
-            debug!("Timeout reached while waiting for Client::shutdown_execute");
+            // The shutdown's result reaches the caller. It used to be `Ok` whatever happened,
+            // including a drain timeout that had stopped nothing.
+            Ok(res) => res,
+            Err(_) => {
+                debug!("Timeout reached while waiting for Client::shutdown_execute");
+                Err(crate::client::mgmt::shutdown_wait_elapsed())
+            }
         }
-        Ok(())
     }
 }
 

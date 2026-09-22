@@ -863,9 +863,12 @@ async fn handle_socket_concurrent(
                         .tx_dlock
                         .send(LockRequest::Await(LockAwaitPayload { key, id, ack }))
                         .expect("kv handler to always be running");
-                    let lock_state = rx
-                        .await
-                        .expect("to always get an answer from the kv handler");
+                    // A dropped answer channel is an error for this one request, never a panic:
+                    // under `panic = "abort"` a panic here ends the whole node.
+                    let lock_state = rx.await.unwrap_or_else(|_| {
+                        error!("the lock handler dropped an await without answering it");
+                        LockState::Released
+                    });
 
                     ApiStreamResponse {
                         request_id,

@@ -96,6 +96,7 @@ impl Client {
         T: for<'a, 'r> From<&'a mut crate::Row<'r>> + Send + 'static,
         S: Into<Cow<'static, str>>,
     {
+        self.ensure_node_available()?;
         if let Some(state) = &self.inner.state {
             query::query_map(state, stmt, params).await
         } else {
@@ -122,6 +123,7 @@ impl Client {
         T: for<'r> From<&'r mut crate::Row<'r>> + Send + 'static,
         S: Into<Cow<'static, str>>,
     {
+        self.ensure_node_available()?;
         if let Some(state) = &self.inner.state {
             query::query_map_one(state, stmt, params).await
         } else {
@@ -149,6 +151,7 @@ impl Client {
         T: for<'r> From<&'r mut crate::Row<'r>> + Send + 'static,
         S: Into<Cow<'static, str>>,
     {
+        self.ensure_node_available()?;
         if let Some(state) = &self.inner.state {
             query::query_map_optional(state, stmt, params).await
         } else {
@@ -179,6 +182,7 @@ impl Client {
         T: DeserializeOwned + Send + 'static,
         S: Into<Cow<'static, str>>,
     {
+        self.ensure_node_available()?;
         if let Some(state) = &self.inner.state {
             query::query_as(state, stmt, params).await
         } else {
@@ -198,6 +202,7 @@ impl Client {
         T: DeserializeOwned + Send + 'static,
         S: Into<Cow<'static, str>>,
     {
+        self.ensure_node_available()?;
         if let Some(state) = &self.inner.state {
             query::query_as_one(state, stmt, params).await
         } else {
@@ -217,6 +222,7 @@ impl Client {
         T: DeserializeOwned + Send + 'static,
         S: Into<Cow<'static, str>>,
     {
+        self.ensure_node_available()?;
         if let Some(state) = &self.inner.state {
             query::query_as_optional(state, stmt, params).await
         } else {
@@ -235,6 +241,7 @@ impl Client {
     where
         S: Into<Cow<'static, str>>,
     {
+        self.ensure_node_available()?;
         if let Some(state) = &self.inner.state {
             let rows = query::query_owned_local(
                 state.raft_db.log_statements,

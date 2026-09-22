@@ -70,6 +70,23 @@ pub async fn get_raft_metrics(
     }
 }
 
+/// F-107: an openraft membership call, bounded, because it runs under the membership gate.
+async fn bounded_membership_op<T, E>(
+    op: impl std::future::Future<Output = Result<T, E>>,
+) -> Result<T, Error>
+where
+    Error: From<E>,
+{
+    use crate::membership_gate::MEMBERSHIP_OP_BOUND;
+    match tokio::time::timeout(MEMBERSHIP_OP_BOUND, op).await {
+        Ok(res) => Ok(res?),
+        Err(_) => Err(Error::Timeout(format!(
+            "a membership change did not complete within {MEMBERSHIP_OP_BOUND:?}; openraft may \
+             still complete it, and refuses another until it has"
+        ))),
+    }
+}
+
 pub async fn add_new_learner(
     state: &Arc<AppState>,
     raft_type: &RaftType,
@@ -80,16 +97,12 @@ pub async fn add_new_learner(
     match raft_type {
         #[cfg(feature = "sqlite")]
         RaftType::Sqlite => {
-            state.raft_db.raft.add_learner(node.id, node, true).await?;
+            bounded_membership_op(state.raft_db.raft.add_learner(node.id, node, true)).await?;
             Ok(())
         }
         #[cfg(feature = "cache")]
         RaftType::Cache => {
-            state
-                .raft_cache
-                .raft
-                .add_learner(node.id, node, true)
-                .await?;
+            bounded_membership_op(state.raft_cache.raft.add_learner(node.id, node, true)).await?;
             Ok(())
         }
         RaftType::Unknown => panic!("neither `sqlite` nor `cache` feature enabled"),
@@ -107,20 +120,12 @@ pub async fn change_membership(
     match raft_type {
         #[cfg(feature = "sqlite")]
         RaftType::Sqlite => {
-            state
-                .raft_db
-                .raft
-                .change_membership(members, retain)
-                .await?;
+            bounded_membership_op(state.raft_db.raft.change_membership(members, retain)).await?;
             Ok(())
         }
         #[cfg(feature = "cache")]
         RaftType::Cache => {
-            state
-                .raft_cache
-                .raft
-                .change_membership(members, retain)
-                .await?;
+            bounded_membership_op(state.raft_cache.raft.change_membership(members, retain)).await?;
             Ok(())
         }
         RaftType::Unknown => panic!("neither `sqlite` nor `cache` feature enabled"),
@@ -140,20 +145,18 @@ pub async fn remove_learner(
     match raft_type {
         #[cfg(feature = "sqlite")]
         RaftType::Sqlite => {
-            state
-                .raft_db
-                .raft
-                .change_membership(ChangeMembers::RemoveNodes(set), false)
-                .await?;
+            bounded_membership_op(
+                state
+                    .raft_db
+                    .raft
+                    .change_membership(ChangeMembers::RemoveNodes(set), false),
+            )
+            .await?;
             Ok(())
         }
         #[cfg(feature = "cache")]
         RaftType::Cache => {
-            state
-                .raft_cache
-                .raft
-                .change_membership(ChangeMembers::RemoveNodes(set), false)
-                .await?;
+            bounded_membership_op(state.raft_cache.raft.change_membership(ChangeMembers::RemoveNodes(set), false)).await?;
             Ok(())
         }
         RaftType::Unknown => panic!("neither `sqlite` nor `cache` feature enabled"),
@@ -218,22 +221,18 @@ pub async fn remove_voter(
     match raft_type {
         #[cfg(feature = "sqlite")]
         RaftType::Sqlite => {
-            state
-                .raft_db
-                .raft
-                .change_membership(ChangeMembers::RemoveVoters(set), retain)
-                // .change_membership(ChangeMembers::SetNodes(new_members), retain)
-                .await?;
+            bounded_membership_op(
+                state
+                    .raft_db
+                    .raft
+                    .change_membership(ChangeMembers::RemoveVoters(set), retain),
+            )
+            .await?;
             Ok(())
         }
         #[cfg(feature = "cache")]
         RaftType::Cache => {
-            state
-                .raft_cache
-                .raft
-                .change_membership(ChangeMembers::RemoveVoters(set), retain)
-                // .change_membership(ChangeMembers::SetNodes(new_members), retain)
-                .await?;
+            bounded_membership_op(state.raft_cache.raft.change_membership(ChangeMembers::RemoveVoters(set), retain)).await?;
             Ok(())
         }
         RaftType::Unknown => panic!("neither `sqlite` nor `cache` feature enabled"),

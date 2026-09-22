@@ -55,6 +55,13 @@ pub(crate) const SHUTDOWN_DRAIN: Duration = Duration::from_secs(5);
 /// How long an admitted change waits for its own result to become visible in local metrics.
 pub(crate) const COMMIT_VISIBLE_WAIT: Duration = Duration::from_secs(10);
 
+/// How long one openraft membership call may run under the gate. `add_learner(.., true)` waits
+/// for the learner to catch up and `change_membership` for a commit, and neither is bounded by
+/// openraft. Cancelling either future is safe: openraft serializes membership changes itself and
+/// refuses a second one while the first is in progress, so releasing the gate early cannot let
+/// two run at once.
+pub(crate) const MEMBERSHIP_OP_BOUND: Duration = Duration::from_secs(30);
+
 const CLOSED: &str = "this node is shutting down and cannot serve a membership change; ask \
                       another node";
 
@@ -63,6 +70,7 @@ pub(crate) struct MembershipGate {
     lock: Arc<Mutex<()>>,
     closed: AtomicBool,
     stopped: AtomicBool,
+    stopped_cleanly: AtomicBool,
 }
 
 /// Exclusive membership authority on this node, for as long as it is held.
@@ -136,11 +144,19 @@ impl MembershipGate {
         Ok(Some(MembershipHeld { _guard: guard }))
     }
 
-    /// Record that the stop sequence has run, so a later shutdown does not repeat it.
+    /// Record that the stop sequence has run, and whether every component stopped, so a later
+    /// shutdown does not repeat it and does not report success for one that failed.
     ///
     /// Takes the held authority to make it impossible to record from outside a drained shutdown.
-    pub(crate) fn mark_stopped(&self, _held: &MembershipHeld) {
+    pub(crate) fn mark_stopped(&self, _held: &MembershipHeld, cleanly: bool) {
+        self.stopped_cleanly.store(cleanly, Ordering::SeqCst);
         self.stopped.store(true, Ordering::SeqCst);
+    }
+
+    /// Whether the stop sequence that ran stopped every component. Meaningful once `drain` has
+    /// returned `Ok(None)`.
+    pub(crate) fn stopped_cleanly(&self) -> bool {
+        self.stopped_cleanly.load(Ordering::SeqCst)
     }
 }
 
@@ -256,11 +272,13 @@ mod tests {
             vec!["in-flight change finished", "shutdown holds the gate"]
         );
 
-        // Stopped: every later request is refused, and a second shutdown does not stop again.
-        gate.mark_stopped(&held);
+        // Stopped: every later request is refused, and a second shutdown does not stop again,
+        // and says whether the first one stopped everything.
+        gate.mark_stopped(&held, false);
         drop(held);
         assert!(gate.admit(ADMISSION_WAIT, || Ok(())).await.is_err());
         assert!(gate.drain(SHUTDOWN_DRAIN).await.unwrap().is_none());
+        assert!(!gate.stopped_cleanly(), "a failed stop is not reported as a clean one");
     }
 
     /// A change that does not finish holds shutdown for the bound and no longer, and on timeout

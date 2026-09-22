@@ -117,6 +117,7 @@ impl Client {
         C: CacheVariants,
         K: Into<String>,
     {
+        self.ensure_node_available()?;
         if let Some(state) = &self.inner.state {
             state.raft_cache.ensure_cache_compatible()?;
 
@@ -157,6 +158,7 @@ impl Client {
         C: CacheVariants,
         V: for<'a> Deserialize<'a>,
     {
+        self.ensure_node_available()?;
         if let Some(state) = &self.inner.state {
             state.raft_cache.ensure_cache_compatible()?;
 
@@ -385,6 +387,7 @@ impl Client {
         C: CacheVariants,
         K: Into<Cow<'static, str>>,
     {
+        self.ensure_node_available()?;
         if let Some(state) = &self.inner.state {
             state.raft_cache.ensure_cache_compatible()?;
 

@@ -89,6 +89,6 @@
     "summary": "Repairs F-056 through F-063. One predicate decides what a backup file is, a restore stages the replacement before destroying anything, a follower moves its state aside instead of deleting it on an environment variable alone, validation checks integrity and returns errors instead of panicking, the post-restore purge is bounded, the S3 configuration names the variable that is wrong and proves its credentials before a restore, and two reporting contradictions are corrected. States N=1 as the supported restore topology and says why N=3 is not.\n",
     "title": "Repair backup retention, restore ordering, validation and configuration failure"
   },
-  "shardHash": "6be3ebfb9ef977c7005b0257d2424240b98911711f82053b339bbbdd108fe567",
+  "shardHash": "dbedccb3a295612c6d503ffe391d3dd1a21105c5fafb012b6681848f3da2b507",
   "specVersion": "1.3.0"
 }

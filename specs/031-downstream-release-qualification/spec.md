@@ -220,6 +220,10 @@ manifest resolves. The committed lock does not constrain it; nothing a library
 ships can. It is qualified after publication, from the registry, in a workspace
 with no `path`, Git or `[patch]` override (R-15), and recorded separately.
 
+**The containerized jobs run bash (F-109).** Their image's default shell is
+`sh`, which rejects `set -o pipefail`; `publish.yaml` and `acceptance.yaml` both
+depended on it in steps that had never run.
+
 **One range is narrowed.** `openraft` is `=0.9.25`, the only version this release
 was qualified on. F-107 showed a patch release of the consensus library changing
 what a membership race does, and an ordering defect in consensus code is the
@@ -285,7 +289,13 @@ corpus, because `-p` takes a package name. A block that named a manifest path
 instead would have survived it. Nothing was changed except the package name, and
 the sweep passes.
 
-**KD-5. The examples' lockfiles are not updated here.** F-083 records that four
+**KD-5. The examples' lockfiles are updated only for `openraft`.** B-8's pin
+made every tracked example lockfile (`bench`, `cache-only`, `sqlite-only`,
+`walkthrough`) resolve a version the pin forbids, so each was updated with
+`cargo update -p openraft --precise 0.9.25`, which also records the renamed
+packages. Nothing else in them was refreshed, and CI builds them without
+`--locked`. What follows is the original entry.
+ F-083 records that four
 tracked example lockfiles are stale and that the documented build rewrites them;
 the rename changes the package names those lockfiles contain. They are left as
 they are, so the first build of an example after this change rewrites them.
@@ -427,6 +437,12 @@ sh -c 'grep -q "git diff --exit-code -- Cargo.lock" .github/workflows/code_style
 sh -c 'grep -q "cargo metadata --locked --format-version 1 > /dev/null" .github/workflows/publish.yaml'
 sh -c 'grep -q "git diff --exit-code -- Cargo.lock" .github/workflows/publish.yaml'
 sh -c 'grep -q "^qualify:" justfile'
+# F-109: the containerized jobs run bash, and git may read the checkout before it is asked about the lock
+sh -c 'test "$(grep -c "shell: bash" .github/workflows/publish.yaml)" -eq 2'
+sh -c 'grep -q "shell: bash" .github/workflows/code_style.yaml'
+sh -c 'grep -q "shell: bash" .github/workflows/acceptance.yaml'
+sh -c 'grep -q "safe.directory" .github/workflows/code_style.yaml'
+sh -c 'grep -q "safe.directory" .github/workflows/publish.yaml'
 # the three packages are renamed and the three libraries are not
 sh -c 'grep -q "^name = \"hiqlite-patched\"" hiqlite/Cargo.toml'
 sh -c 'grep -q "^name = \"hiqlite-wal-patched\"" hiqlite-wal/Cargo.toml'

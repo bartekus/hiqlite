@@ -305,17 +305,39 @@ enforces is the same for both raft groups, which share one gate:
 - **Every stop runs under the gate.** The shutdown holds it until both raft
   groups, the WAL writer and the SQLite writer have been asked to stop. A stopped
   gate stays closed, and a second shutdown is a no-op.
-- **Cancellation cannot split the stop.** The sequence runs in its own task.
-  `Client::shutdown` and `ShutdownHandle::wait` still bound how long they wait,
-  but a caller that stops waiting no longer cancels the sequence between one raft
-  group's stop and the next.
+- **A caller that stops waiting does not cut the stop short, while the runtime
+  lives.** The sequence runs in its own task. `Client::shutdown` and
+  `ShutdownHandle::wait` still wait at most fifteen seconds, and when that passes
+  they now return `Error::Timeout` saying the sequence continues. **A process that
+  exits then ends the task wherever it is**, which is a crash for every component
+  not yet stopped; independent review corrected an earlier claim here that
+  cancellation could not split the stop at all. On a single node the pre-shutdown
+  delay is skipped, so the drain and the stops fit the fifteen seconds; with peers
+  the 9.5-second delay leaves little of it, which is one reason N=3 is not a
+  supported topology for this release.
+- **The result reaches the caller.** `Client::shutdown` and
+  `ShutdownHandle::wait` used to discard the sequence's own result and return
+  `Ok` after a drain timeout that had stopped nothing, or a component that had not
+  stopped. Both now return it, and a later shutdown after an unclean one says so
+  rather than reporting the node already shut down.
 - **A failing stop no longer skips the rest.** Each component's stop is
   attempted; the first failure is returned, and storage ownership is then kept
   rather than released, because a component that did not stop may still hold the
   data directory.
-- **Commit waits are bounded.** The loops that waited, under the lock, for local
-  metrics to show a committed change had no bound. Each now gives up after ten
-  seconds with `Error::Timeout`.
+- **Everything under the gate is bounded.** The loops that waited for local
+  metrics to show a committed change give up after ten seconds; every openraft
+  membership call (`add_learner(.., true)`, which waits for the learner to catch
+  up, and `change_membership`) after thirty; and leaving an in-memory cache
+  cluster through a peer during shutdown after ten, after which the stop goes on.
+  Cancelling an openraft membership call is safe because openraft serializes
+  membership changes itself and refuses a second while one is in progress.
+- **An out-of-service node refuses its embedded client.** `ensure_node_available`
+  said every local operation went through it; only the health checks and the
+  network API did. Found by the Rauthy integration's fault injection (F-110):
+  after a WAL writer failure, writes failed inside openraft with "sending on a
+  closed channel" and reads were still served. Both rate-limit gates, which every
+  write, consistent query and cache operation passes, and every local read and
+  listen now refuse with `Error::NodeFailed` and the lifecycle's account.
 
 The membership helpers in `helpers.rs` take a `&MembershipHeld`, which only the
 gate produces, so a new call site that bypasses the gate does not compile.
@@ -435,11 +457,15 @@ so the wiring of every path through the gate rests on the compile-time token and
 on review, not on execution. The cluster suite exercises shutdown and leave, but
 does not schedule the race.
 
-**KD-8. openraft's `add_learner` is unbounded under the gate.** A learner that
-never catches up keeps `add_learner(.., blocking = true)` waiting while it holds
-the gate, so a shutdown in that window returns its drain timeout and stops
-nothing. That is the designed outcome, not a hang, but the node cannot shut down
-cleanly until the join completes or the process ends.
+**KD-8. A membership call can hold the gate for thirty seconds.** A learner
+catching up, or a change waiting for a quorum, keeps its openraft call running
+under the gate up to `MEMBERSHIP_OP_BOUND`, so a shutdown in that window returns
+its drain timeout and stops nothing. That is the designed outcome, and the caller
+now sees it, but the node cannot shut down cleanly until the call ends.
+
+**KD-10. F-110's refusal is read from source, not injected.** No test fails a
+component and then calls a client operation; the Rauthy injection is the
+evidence the defect existed, and the refusal is wired at the gates named above.
 
 **KD-9. The release-build consequence of F-107 is not established.** In
 openraft 0.9.25 both checks in `append_membership` are `debug_assert!`. Read from
@@ -600,6 +626,15 @@ sh -c 'grep -q "state.membership.drain(SHUTDOWN_DRAIN)" hiqlite/src/client/mgmt.
 sh -c 'grep -q "state.membership.close();" hiqlite/src/client/mgmt.rs'
 sh -c 'grep -q "admit_membership_change(&state, &raft_type)" hiqlite/src/network/management.rs'
 sh -c 'grep -q "admit_membership_change(" hiqlite/src/network/raft_server.rs'
+# review of the candidate: results reach the caller, everything under the gate is bounded
+sh -c 'test "$(grep -c "bounded_membership_op(" hiqlite/src/helpers.rs)" -eq 8'
+sh -c 'grep -q "Ok(res) => res," hiqlite/src/client/shutdown_handle.rs'
+sh -c 'grep -q "Ok(res) => res," hiqlite/src/client/mgmt.rs'
+sh -c 'grep -q "REMOTE_LEAVE_BOUND," hiqlite/src/client/mgmt.rs'
+sh -c 'grep -q "mark_stopped(&held, first_err.is_none())" hiqlite/src/client/mgmt.rs'
+# F-110: an out-of-service node refuses its embedded client
+sh -c 'test "$(grep -c "self.ensure_node_available()?;" hiqlite/src/client/rate_limit.rs)" -eq 2'
+sh -c 'test "$(grep -c "self.ensure_node_available()?;" hiqlite/src/client/query.rs)" -eq 7'
 # the abort-profile half. The build is what puts it under `panic = "abort"`; these two are a
 # pair and running a stale binary would prove nothing.
 cargo build --release -p hiqlite-patched --features __abort-probe,s3 --bin hiqlite-abort-probe

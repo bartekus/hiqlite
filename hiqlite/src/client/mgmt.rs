@@ -104,8 +104,10 @@ impl Client {
 
     /// `Err` once this node is out of service, with an account of why.
     ///
-    /// Every local operation goes through this, so what a caller is refused with is the same
-    /// account the health endpoint gives.
+    /// Every operation of an embedded client goes through this: each rate-limit gate, which
+    /// every write, consistent query and cache operation passes, and each local read. What a
+    /// caller is refused with is therefore the same account the health endpoint gives. A
+    /// remote client is not refused here; the node it talks to refuses it.
     pub fn ensure_node_available(&self) -> Result<(), Error> {
         match &self.inner.state {
             Some(state) => state.lifecycle.ensure_available(),
@@ -273,8 +275,8 @@ impl Client {
     /// upfront, but this has not been stabilized in this version.
     pub async fn shutdown(&self) -> Result<(), Error> {
         if let Some(state) = &self.inner.state {
-            if tokio::time::timeout(
-                Duration::from_secs(15),
+            match tokio::time::timeout(
+                SHUTDOWN_WAIT,
                 Self::shutdown_execute(
                     state,
                     #[cfg(feature = "cache")]
@@ -289,13 +291,11 @@ impl Client {
                 ),
             )
             .await
-            .is_err()
             {
-                Err(Error::Error(
-                    "Timeout reached while shutting down Raft".into(),
-                ))
-            } else {
-                Ok(())
+                // The shutdown's own result: a drain timeout that stopped nothing, or a component
+                // that did not stop, used to be discarded here and reported as success.
+                Ok(res) => res,
+                Err(_) => Err(shutdown_wait_elapsed()),
             }
         } else {
             Err(Error::Error(
@@ -391,9 +391,16 @@ impl Client {
         // `membership_gate` for why that and not a stop under the running change.
         let held = match state.membership.drain(SHUTDOWN_DRAIN).await {
             Ok(Some(held)) => held,
-            Ok(None) => {
+            Ok(None) if state.membership.stopped_cleanly() => {
                 info!("This node has already been shut down");
                 return Ok(());
+            }
+            Ok(None) => {
+                return Err(Error::Error(
+                    "an earlier shutdown of this node did not stop every component; see its \
+                     error. Storage ownership is still held, and ending the process releases it"
+                        .into(),
+                ));
             }
             Err(err) => {
                 error!("{err}");
@@ -452,19 +459,35 @@ impl Client {
                     {
                         tracing::error!("Error leaving the Cache cluster: {:?}", err);
                     }
-                } else if let Err(err) = crate::init::leave_remote_cluster(
-                    &state,
-                    &crate::app_state::RaftType::Cache,
-                    &client,
-                    scheme,
-                    state.id,
-                    &state.nodes,
-                    0,
-                    false,
-                )
-                .await
-                {
-                    tracing::error!("Error leaving the Cache cluster: {:?}", err);
+                } else {
+                    // Bounded, because the gate is held: leaving through another node is an HTTP
+                    // walk over the peers with a thirty-second client timeout each. A leave that
+                    // does not finish is logged and the stop goes on, as it did when the leave
+                    // failed; the peers see this node go away either way.
+                    match time::timeout(
+                        REMOTE_LEAVE_BOUND,
+                        crate::init::leave_remote_cluster(
+                            &state,
+                            &crate::app_state::RaftType::Cache,
+                            &client,
+                            scheme,
+                            state.id,
+                            &state.nodes,
+                            0,
+                            false,
+                        ),
+                    )
+                    .await
+                    {
+                        Ok(Ok(_)) => {}
+                        Ok(Err(err)) => {
+                            tracing::error!("Error leaving the Cache cluster: {:?}", err)
+                        }
+                        Err(_) => tracing::error!(
+                            "Leaving the Cache cluster did not finish within \
+                             {REMOTE_LEAVE_BOUND:?}; stopping anyway"
+                        ),
+                    }
                 }
 
                 info!("Left in-memory-only cache cluster successfully");
@@ -539,8 +562,8 @@ impl Client {
         }
 
         // Recorded under the gate, and after every stop was attempted, so a second shutdown does
-        // not repeat the sequence against stopped components.
-        state.membership.mark_stopped(&held);
+        // not repeat the sequence against stopped components, nor report it as clean.
+        state.membership.mark_stopped(&held, first_err.is_none());
 
         if let Some(tx) = tx_shutdown {
             tx.send(true)
@@ -563,6 +586,24 @@ impl Client {
         drop(held);
         Ok(())
     }
+}
+
+/// How long `Client::shutdown` and `ShutdownHandle::wait` wait for the shutdown sequence.
+pub(crate) const SHUTDOWN_WAIT: Duration = Duration::from_secs(15);
+
+/// How long a shutting-down node spends leaving an in-memory cache cluster through a peer.
+#[cfg(feature = "cache")]
+const REMOTE_LEAVE_BOUND: Duration = Duration::from_secs(10);
+
+/// What a caller that stopped waiting is told. The sequence goes on in its own task for as long
+/// as the runtime does; ending the process before it finishes is a crash for whatever had not
+/// stopped yet, which the Raft log and the WAL are built to recover from.
+pub(crate) fn shutdown_wait_elapsed() -> Error {
+    Error::Timeout(format!(
+        "the shutdown did not finish within {SHUTDOWN_WAIT:?}. It continues in the background \
+         while this runtime lives; ending the process now is a crash for any component it had \
+         not stopped yet"
+    ))
 }
 
 /// Record a component that did not stop cleanly, and keep going.

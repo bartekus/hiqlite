@@ -2737,6 +2737,49 @@ owner's direction of 2026-09-22 separates them:
 Earlier results are kept as evidence about the graph they ran on (`0.9.24`
 locally before 2026-09-22), not as evidence about the committed one.
 
+### F-110 `defect`, confidence `high`
+
+**An out-of-service node kept serving its embedded client.**
+`Client::ensure_node_available` was documented as the gate every local operation
+went through, and only the health checks and the network API called it. After a
+terminal component failure, an embedded client's writes failed inside openraft
+with "sending on a closed channel" instead of `NodeFailed`, and its reads were
+still served.
+
+**Observed by execution** on 2026-09-22 by the Rauthy integration, against
+`c7d0d6a9`: a Rauthy node with a small `HQL_WAL_SIZE` and its logs directory made
+read-only until WAL rotation failed with `EACCES`. The lifecycle recorded the WAL
+writer failure; the embedded client was not refused by it. Reported as evidence;
+nothing in this checkout was edited by that session.
+
+**Repaired 2026-09-22 by `027` B-9's review follow-up**: both rate-limit gates
+and every local read and listen call `ensure_node_available` first. The refusal
+is read from source, not injected here (`027` KD-10).
+
+**Consumer triage.** Reaches Rauthy directly, observed. Reaches Rahi the same way,
+because both embed a node.
+
+### F-109 `defect`, confidence `high`
+
+**Three containerized workflows ran their scripts under `sh`, and two of them had
+never run.** A job with a `container:` runs `run:` steps with the container's
+default shell unless told otherwise, and in `rauthy-builder` that is `sh`, which
+rejects `set -o pipefail`. `publish.yaml`'s "tag must match the manifests" step
+and `acceptance.yaml`'s "run every acceptance block" step both begin with it, so
+publication and the post-merge acceptance would each have failed on their first
+step that mattered. Neither workflow had ever run, which is why nothing had shown
+it.
+
+**Observed by execution** on 2026-09-22, in the pull-request `Check` run for
+`a51cb3f`: the new F-108 step failed with `set: Illegal option -o pipefail`.
+
+**Repaired 2026-09-22 by `031` B-8:** all three jobs declare `shell: bash` as the
+default, and the two that ask git whether the lock changed first mark the
+checkout safe, as `acceptance.yaml` already did for F-106.
+
+**Consumer triage.** Reaches neither named consumer directly. It blocked the
+publication they are waiting for.
+
 ### F-103 `defect`, confidence `high`
 
 **The pull-request style workflow ran with a writable token.**

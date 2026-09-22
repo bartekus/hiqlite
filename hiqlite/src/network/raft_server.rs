@@ -266,8 +266,10 @@ async fn handle_socket(
                 debug!("Node drop membership request for Node: {}\n", node_id);
 
                 // F-107: this path changed membership without asking whether this node may.
-                // A refusal here is checked before any wait, so during shutdown it cannot queue
-                // behind the drain and hold up the appends this stream also carries.
+                // Nothing in this crate sends it, but a peer can. Once shutdown has closed the
+                // gate it is refused before any wait, so it cannot queue behind the drain; before
+                // that it can wait for another change, bounded by `ADMISSION_WAIT`, and the
+                // appends this stream also carries wait with it.
                 let _held = match crate::network::management::admit_membership_change(
                     &state,
                     &RaftType::Cache,

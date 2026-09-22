@@ -365,6 +365,8 @@ pub(crate) async fn post_membership(
         return Err(Error::Config("Raft node has not been initialized".into()));
     }
 
+    // The richer refusal first, so a follower still answers with the leader's address.
+    are_we_leader(&state, &raft_type).await?;
     let payload = get_payload::<BTreeSet<NodeId>>(&headers, body)?;
     // F-107: this path changed membership with neither the decision nor the lock.
     let _held = admit_membership_change(&state, &raft_type).await?;
