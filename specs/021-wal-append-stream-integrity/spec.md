@@ -266,6 +266,20 @@ checks that a connected channel meant a running writer were replaced with a
 later append that succeeds, because a connected channel no longer shows it.
 `008`'s text is left as it was written; this is its amendment.
 
+**Review of `e1e9135`.** A shutdown of a terminated writer was first answered as
+a clean stop, which reported success all the way up through `Client::shutdown`
+and released storage ownership as though every component had stopped. It is now
+not acknowledged, and the caller sees an error. What is already queued behind a
+shutdown is refused before the thread ends; a send that races that drain can
+still land after it, as it can after a healthy writer's shutdown, so this narrows
+the window rather than closing it. A WAL rollover failing inside the append loop
+used to `?` out of the writer with the acknowledgement and the completion
+callback both dropped, so openraft never heard about that append; it is now a
+failed append, answered once on both channels, and terminal. The rollover path
+has no test: nothing in the suite can make `roll_over` fail on demand. In
+`IntervalMillis` mode the interval syncer keeps a terminated writer's thread
+alive until a shutdown arrives, sending a `Sync` it ignores once per interval.
+
 `work_queued_behind_a_terminating_append_is_answered_not_stranded` reproduces
 the stall deterministically: it queues a second append behind one the writer is
 still reading, truncates the first, and requires the second to be refused
@@ -457,6 +471,9 @@ sh -c '! grep -q "tx_read.send_async(reader::Action::Shutdown)" hiqlite-wal/src/
 cargo test -p hiqlite-wal-patched --lib writer::tests::work_queued_behind_a_terminating_append_is_answered_not_stranded -- --exact
 sh -c 'grep -q "fn refuse_after_termination" hiqlite-wal/src/writer.rs'
 sh -c 'grep -q "while let Ok(action) = rx_after.recv()" hiqlite-wal/src/writer.rs'
+sh -c 'grep -q "while let Ok(action) = rx_after.try_recv()" hiqlite-wal/src/writer.rs'
+sh -c '! grep -q "wal.roll_over(wal_size, &mut buf)?;\n                            {" hiqlite-wal/src/writer.rs'
+sh -c 'grep -q "rolling over to a new WAL file failed" hiqlite-wal/src/writer.rs'
 sh -c 'grep -q "stalled at: {step}" hiqlite-wal/src/log_store_impl.rs'
 sh -c 'grep -q "timeout-minutes: 60" .github/workflows/code_style.yaml'
 # the three endings, pinned at the expressions. The `while let Ok(Some(..))` that collapsed

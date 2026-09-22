@@ -287,6 +287,20 @@ where
     )
     .await?;
 
+    // Again, now that the reset has run: `HQL_DANGER_RAFT_STATE_RESET` deletes `logs_cache`,
+    // marker and all, and the cache raft below would write new WAL files into a directory the
+    // next start refuses as legacy (found in review). Idempotent: a marked directory passes, and
+    // an empty one is marked.
+    #[cfg(feature = "cache")]
+    if node_config.cache_storage_disk
+        && let Err(err) = store::logs::ensure_cache_log_format(&node_config.data_dir).await
+    {
+        lifecycle.begin_shutdown();
+        #[cfg(feature = "sqlite")]
+        teardown_raft_db(raft_db).await;
+        return Err(err);
+    }
+
     #[cfg(feature = "cache")]
     let raft_cache = match store::start_raft_cache::<C>(
         &node_config,

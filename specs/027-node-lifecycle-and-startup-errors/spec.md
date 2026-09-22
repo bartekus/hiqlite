@@ -413,6 +413,15 @@ statistics: application data was identical, but "Nothing was changed" was not
 literally true. Observed by the Rauthy integration on 34641b0. Only the owner
 lock file is created before a refusal now.
 
+It runs a **second** time after the reset path and before the cache raft is
+built. Moving it first broke `HQL_DANGER_RAFT_STATE_RESET`: the reset deletes
+`logs_cache`, marker and all, the cache raft then wrote WAL files into an
+unmarked directory, and the next ordinary start was refused as legacy (found in
+review of `e1e9135`; the reset, restart sequence now starts and restarts). The
+check is idempotent. A legacy cache and a reset requested together are refused at
+the first check, before the reset would have wiped the cache; the opt-in covers
+that case.
+
 **The failure that was not one (F-113).** The failed start's log store, dropped
 on the error path, ended its writer, and the watch recorded that as "the Raft log
 WAL writer failed". A raft that fails to construct, and every teardown after a
@@ -721,6 +730,7 @@ sh -c '! grep -q "ack.send(.*).unwrap()" hiqlite-wal/src/reader.rs'
 # the guard runs before the restore and before either raft group, so a refusal opens nothing
 sh -c 'a=$(grep -n "store::logs::ensure_cache_log_format" hiqlite/src/start.rs | head -1 | cut -d: -f1); b=$(grep -n "backup::restore_backup_start(&node_config)" hiqlite/src/start.rs | head -1 | cut -d: -f1); c=$(grep -n "store::start_raft_db(" hiqlite/src/start.rs | head -1 | cut -d: -f1); test -n "$a" && test -n "$b" && test -n "$c" && test "$a" -lt "$b" && test "$a" -lt "$c"'
 sh -c '! grep -q "ensure_cache_log_format" hiqlite/src/store/mod.rs'
+sh -c 'test "$(grep -c "store::logs::ensure_cache_log_format(&node_config.data_dir)" hiqlite/src/start.rs)" -eq 2'
 sh -c 'test "$(grep -c "lifecycle.begin_shutdown();" hiqlite/src/store/mod.rs)" -ge 4'
 sh -c '! grep -q "holds_files(&dir_snapshots" hiqlite/src/store/logs/mod.rs'
 sh -c 'grep -q "if let Err(err) = init::init_pristine_node_1_db(" hiqlite/src/store/mod.rs'

@@ -200,6 +200,13 @@ pub fn spawn(
                     break;
                 }
             }
+            // A shutdown ends the loop, and the receiver drops with this thread, but a queued
+            // message outlives that for as long as a sender exists. Refuse whatever is already
+            // queued behind the shutdown. This narrows the window; a send racing this line can
+            // still land after it, as it can after a healthy writer's shutdown.
+            while let Ok(action) = rx_after.try_recv() {
+                refuse_after_termination(action, &reason);
+            }
         }
     });
 
@@ -226,7 +233,10 @@ fn refuse_after_termination(action: Action, reason: &str) -> bool {
         }
         Action::Sync => {}
         Action::Shutdown(ack) => {
-            let _ = ack.send(());
+            // Not acknowledged: the writer did not stop cleanly, it had already failed, and a
+            // shutdown answered `()` here was reported as a clean stop all the way up (found in
+            // review). The caller sees the closed channel as an error.
+            drop(ack);
             return false;
         }
     }
@@ -516,7 +526,18 @@ fn run(
 
                         if !active.has_space(bytes.len() as u32) {
                             buf.clear();
-                            wal.roll_over(wal_size, &mut buf)?;
+                            // A failed rollover used to `?` out of `run` from here, dropping the
+                            // acknowledgement and the completion callback unfired, so openraft
+                            // never heard about this append at all (found in review). It is a
+                            // failed append now, answered once on both channels, and terminal,
+                            // because the WAL's file set may be half rolled.
+                            if let Err(err) = wal.roll_over(wal_size, &mut buf) {
+                                let msg: Cow<'static, str> =
+                                    format!("rolling over to a new WAL file failed: {err}").into();
+                                res = Err(Error::Internal(msg));
+                                terminal = Some(err);
+                                break;
+                            }
                             {
                                 let mut lock = wal_locked.write().unwrap();
                                 lock.active = wal.active;
@@ -1064,19 +1085,6 @@ mod tests {
     }
 
 
-    /// F-028: a truncated entry stream was acknowledged and notified as a **successful**
-    /// append, because `while let Ok(Some(..)) = rx.recv()` ends the same way for the `None`
-    /// that marks a healthy end of stream and for the `Err` that a dropped sender produces.
-    ///
-    /// Both disconnection points are covered, before the first entry and after a prefix, and
-    /// every supported `LogSync` mode is swept, because the defect is in the collection loop
-    /// that runs before any mode-specific persistence step and W-07's bar names all three.
-    ///
-    /// What is asserted, per case: the acknowledgement carries `Error::IncompleteAppend` rather
-    /// than success, exactly one completion notification arrives and it is an error naming the
-    /// truncation, and the writer has ended. The last one is the adopted policy: the writer
-    /// holds a prefix of a batch whose extent it cannot know, so it must not serve a later
-    /// append that could be a continuation of a batch that never fully arrived.
     /// F-114, deterministically. An append queued behind one the writer is still reading, which
     /// then turns out truncated, used to be stranded: the writer terminated without reading it,
     /// the adapter's senders kept it alive in the queue, and whoever was sending its entries
@@ -1144,15 +1152,29 @@ mod tests {
             "the completion is a failure too"
         );
 
-        // And a shutdown sent to the terminated writer is answered rather than awaited forever.
+        // And a shutdown sent to the terminated writer is answered rather than awaited forever,
+        // and not as a clean stop: the writer had already failed.
         let (sd_tx, sd_rx) = oneshot::channel();
         tx.send_async(Action::Shutdown(sd_tx)).await.unwrap();
-        tokio::time::timeout(bound, sd_rx)
+        let sd = tokio::time::timeout(bound, sd_rx)
             .await
-            .expect("a shutdown of a terminated writer must be answered")
-            .unwrap();
+            .expect("a shutdown of a terminated writer must be answered, not awaited forever");
+        assert!(sd.is_err(), "a terminated writer must not acknowledge a clean shutdown");
     }
 
+    /// F-028: a truncated entry stream was acknowledged and notified as a **successful**
+    /// append, because `while let Ok(Some(..)) = rx.recv()` ends the same way for the `None`
+    /// that marks a healthy end of stream and for the `Err` that a dropped sender produces.
+    ///
+    /// Both disconnection points are covered, before the first entry and after a prefix, and
+    /// every supported `LogSync` mode is swept, because the defect is in the collection loop
+    /// that runs before any mode-specific persistence step and W-07's bar names all three.
+    ///
+    /// What is asserted, per case: the acknowledgement carries `Error::IncompleteAppend` rather
+    /// than success, exactly one completion notification arrives and it is an error naming the
+    /// truncation, and the writer has ended. The last one is the adopted policy: the writer
+    /// holds a prefix of a batch whose extent it cannot know, so it must not serve a later
+    /// append that could be a continuation of a batch that never fully arrived.
     #[tokio::test(flavor = "multi_thread")]
     async fn a_truncated_entry_stream_never_reports_success_in_any_log_sync_mode() {
         for (mode, label) in [

@@ -72,6 +72,6 @@
     "summary": "Repairs F-028: the WAL writer could not tell a dropped entry sender from the marker that ends a healthy stream, so a truncated append was acknowledged and notified as a success. The writer now names the truncation on both channels and ends, and every adapter call path that panicked or waited on a terminal writer returns a named storage error instead. Amends 001 and 008 and carries their acceptance.\n",
     "title": "Repair the truncated WAL append stream and the terminal-writer call paths"
   },
-  "shardHash": "10c85ad3f46e3e4e7070ee0ddae698522c2c60110efbd9313041528246eef4b5",
+  "shardHash": "793d2460e489f66fff8ee8f5a253c4697dc83451497b04e479e0a549f0df0e12",
   "specVersion": "1.3.0"
 }
