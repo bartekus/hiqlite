@@ -353,11 +353,19 @@ pub async fn listen(
     validate_secret(&state, &headers)?;
 
     let (tx, rx) = flume::bounded(1);
+    let (ack, ack_rx) = tokio::sync::oneshot::channel();
     state
         .raft_cache
         .tx_notify
-        .send_async(NotifyRequest::Listen(tx))
+        .send_async(NotifyRequest::Listen((tx, ack)))
         .await?;
+
+    // F-051: the response is not sent until the subscription exists. A client that sees the
+    // stream open can therefore rely on being subscribed, which is what makes the readiness
+    // signal on the client side mean anything.
+    ack_rx
+        .await
+        .map_err(|_| Error::Error("the notification handler is not running".into()))?;
 
     Ok(sse::Sse::new(rx.into_stream()).keep_alive(sse::KeepAlive::default()))
 }

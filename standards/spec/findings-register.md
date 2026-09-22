@@ -1352,6 +1352,15 @@ connection completes inside the ~120 ms between `Client::remote` returning and
 the publish. The unit is `003`'s; recorded here because `012` is where it was
 diagnosed. `012` KD-4 and section 5.
 
+**Repaired 2026-09-21 by `032-listen-notify-subscription-readiness`.** Both
+halves of the window are closed. The server acknowledges the registration from
+the handler and `api::listen` waits for that acknowledgement before it answers,
+so an open stream means a registered subscriber; and `RemoteListener::spawn`
+returns a readiness signal that `Client::remote` waits on, bounded at ten
+seconds. A timeout warns rather than failing construction, for the reason
+`032` B-3 gives. `032` KD-1 records what is not closed: a re-subscription after
+a disconnect has the same window and nothing blocks on it.
+
 ### F-052 `evidence`, confidence `high`
 
 **Two of the three bad-migration fixtures are on disk with their assertions
