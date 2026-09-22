@@ -29,6 +29,18 @@ use crate::store::state_machine::sqlite::{
 #[cfg(any(feature = "backup", feature = "dashboard"))]
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+/// Which raft group a request is about.
+///
+/// `Unknown` is a **valid value of this type** and it is reachable from outside: the routes are
+/// `/{raft_type}` and this enum derives `Deserialize`, so `unknown` in a path deserializes to
+/// it. Six helpers used to answer it with `panic!("neither `sqlite` nor `cache` feature
+/// enabled")`, a message about a build configuration, for a value that arrives over the
+/// network. F-069.
+///
+/// It is rejected at the boundary instead: [`Self::selected`] turns it into a `BadRequest`, and
+/// every handler that takes one calls that before doing anything else. The `Unknown` variant
+/// stays, because the type also represents "this build has neither feature", which is a real
+/// state and is what the remaining arms describe.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum RaftType {
@@ -47,6 +59,36 @@ impl RaftType {
             #[cfg(feature = "cache")]
             RaftType::Cache => "cache",
             RaftType::Unknown => "unknown",
+        }
+    }
+
+    /// `Err` unless this names a raft group this build actually has.
+    ///
+    /// The message names the values that exist in this build rather than the features that
+    /// were not enabled, because the caller is a client and not the person who compiled it.
+    pub fn selected(&self) -> Result<&Self, crate::Error> {
+        match self {
+            RaftType::Unknown => {
+                let mut available: Vec<&str> = Vec::new();
+                #[cfg(feature = "sqlite")]
+                available.push("sqlite");
+                #[cfg(feature = "cache")]
+                available.push("cache");
+                Err(crate::Error::BadRequest(
+                    if available.is_empty() {
+                        "this node serves no raft group: it was built without both the `sqlite` \
+                         and the `cache` feature"
+                            .to_string()
+                    } else {
+                        format!(
+                            "unknown raft type; this node serves: {}",
+                            available.join(", ")
+                        )
+                    }
+                    .into(),
+                ))
+            }
+            other => Ok(other),
         }
     }
 }

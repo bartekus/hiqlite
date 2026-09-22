@@ -164,7 +164,11 @@ impl Client {
         }
     }
 
-    /// Wait until the database Raft is healthy.
+    /// Wait until the database Raft is healthy, for as long as it takes.
+    ///
+    /// **This never returns if the node never becomes healthy**, which includes the case where
+    /// it has failed terminally. Prefer [`Self::wait_until_healthy_db_timeout`] in anything
+    /// that has to make progress; this signature is kept because it is the published one.
     #[cfg(feature = "sqlite")]
     pub async fn wait_until_healthy_db(&self) {
         loop {
@@ -174,7 +178,6 @@ impl Client {
                 }
                 Err(err) => {
                     debug!("Waiting for healthy Raft DB: {:?}", err);
-                    // tracing::warn!("Waiting for healthy Raft DB");
                     info!("Waiting for healthy Raft DB");
                     time::sleep(Duration::from_millis(500)).await;
                 }
@@ -182,7 +185,21 @@ impl Client {
         }
     }
 
-    /// Wait until the cache Raft is healthy.
+    /// Wait until the database Raft is healthy, or give up.
+    ///
+    /// Returns the last health error when `timeout` elapses, so a caller that cannot make
+    /// progress finds out rather than hanging. It also stops early with `Error::NodeFailed` if
+    /// the node has failed terminally, because no amount of further waiting changes that.
+    #[cfg(feature = "sqlite")]
+    pub async fn wait_until_healthy_db_timeout(&self, timeout: Duration) -> Result<(), Error> {
+        self.wait_until_healthy_timeout(timeout, "DB", || self.is_healthy_db())
+            .await
+    }
+
+    /// Wait until the cache Raft is healthy, for as long as it takes.
+    ///
+    /// The same caveat as [`Self::wait_until_healthy_db`]: it never returns if the node never
+    /// becomes healthy.
     #[cfg(feature = "cache")]
     pub async fn wait_until_healthy_cache(&self) {
         loop {
@@ -196,6 +213,52 @@ impl Client {
                     time::sleep(Duration::from_millis(500)).await;
                 }
             }
+        }
+    }
+
+    /// Wait until the cache Raft is healthy, or give up.
+    #[cfg(feature = "cache")]
+    pub async fn wait_until_healthy_cache_timeout(&self, timeout: Duration) -> Result<(), Error> {
+        self.wait_until_healthy_timeout(timeout, "cache", || self.is_healthy_cache())
+            .await
+    }
+
+    /// The shared body of the two bounded waits.
+    #[cfg(any(feature = "sqlite", feature = "cache"))]
+    async fn wait_until_healthy_timeout<F, Fut>(
+        &self,
+        timeout: Duration,
+        what: &str,
+        mut check: F,
+    ) -> Result<(), Error>
+    where
+        F: FnMut() -> Fut,
+        Fut: std::future::Future<Output = Result<(), Error>>,
+    {
+        let deadline = tokio::time::Instant::now() + timeout;
+        let mut last: Option<Error>;
+        loop {
+            // A terminal failure is not something waiting resolves.
+            self.ensure_node_available()?;
+
+            match check().await {
+                Ok(()) => return Ok(()),
+                Err(err) => {
+                    debug!("Waiting for healthy Raft {what}: {err:?}");
+                    last = Some(err);
+                }
+            }
+
+            if tokio::time::Instant::now() >= deadline {
+                return Err(last.unwrap_or_else(|| {
+                    Error::Timeout(
+                        format!("the {what} raft did not become healthy in time"),
+                    )
+                }));
+            }
+            let _ = &last;
+            time::sleep(Duration::from_millis(500).min(deadline - tokio::time::Instant::now()))
+                .await;
         }
     }
 

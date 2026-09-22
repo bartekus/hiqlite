@@ -86,7 +86,11 @@ fn validate_secret(state: &AppStateExt, headers: &HeaderMap) -> Result<(), Error
     match headers.get(HEADER_NAME_SECRET) {
         None => Err(Error::Token("API Secret missing".into())),
         Some(secret) => {
-            if state.secret_api.as_bytes() != secret.as_bytes() {
+            // F-068: this was a plain `!=` over the bytes, which returns as soon as they
+            // differ. The node's own `validate_secret` already uses a constant-time compare
+            // (`network/mod.rs`); the proxy validates the same secret and did not.
+            if !constant_time_eq::constant_time_eq(state.secret_api.as_bytes(), secret.as_bytes())
+            {
                 Err(Error::Token("Invalid API Secret".into()))
             } else {
                 Ok(())

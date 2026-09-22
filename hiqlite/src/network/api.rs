@@ -376,6 +376,7 @@ pub async fn stream(
     Path(raft_type): Path<RaftType>,
     ws: upgrade::IncomingUpgrade,
 ) -> Result<impl IntoResponse, Error> {
+    raft_type.selected()?;
     let (response, socket) = ws.upgrade()?;
     debug!("New Raft Stream for {:?}", raft_type);
 

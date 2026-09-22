@@ -148,7 +148,10 @@ impl NodeConfig {
         let log_statements =
             t_bool(&mut map, t_name, "log_statements", "HQL_LOG_STATEMENTS")?.unwrap_or(false);
         let prepared_statement_cache_capacity =
-            t_u16(&mut map, t_name, "prepared_statement_cache_capacity", "")?.unwrap_or(1000)
+            // F-034: this defaulted to 1000 while `config.rs` defaults to 1024 on both the
+            // `Default` and the environment routes. One value, and it is the one the other
+            // two already agree on.
+            t_u16(&mut map, t_name, "prepared_statement_cache_capacity", "")?.unwrap_or(1024)
                 as usize;
         let read_pool_size =
             t_u16(&mut map, t_name, "read_pool_size", "HQL_READ_POOL_SIZE")?.unwrap_or(4) as usize;
@@ -208,8 +211,11 @@ impl NodeConfig {
 
         let tls_api_key = t_str(&mut map, t_name, "tls_api_key", "HQL_TLS_API_KEY")?;
         let tls_api_cert = t_str(&mut map, t_name, "tls_api_cert", "HQL_TLS_API_CERT")?;
+        // F-031: this read `"tls_raft_danger_tls_no_verify"` a second time, so the documented
+        // `tls_api_danger_tls_no_verify` was never consumed and then failed the unknown-key
+        // check, which refuses the whole configuration file. Fail-closed, and unusable.
         let tls_api_danger_tls_no_verify =
-            t_bool(&mut map, t_name, "tls_raft_danger_tls_no_verify", "")?.unwrap_or(false);
+            t_bool(&mut map, t_name, "tls_api_danger_tls_no_verify", "")?.unwrap_or(false);
         #[allow(clippy::unnecessary_unwrap)]
         let tls_api = if tls_api_key.is_some() && tls_api_cert.is_some() {
             Some(ServerTlsConfig::Specific(ServerTlsConfigCerts {
@@ -239,7 +245,15 @@ impl NodeConfig {
         };
 
         let health_check_delay_secs =
-            t_u32(&mut map, t_name, "health_check_delay_secs", "")?.unwrap_or(30);
+            // F-032: the empty `env_var` meant `HQL_HEALTH_CHECK_DELAY_SECS` was documented in
+            // `hiqlite.env` and read by nothing.
+            t_u32(
+                &mut map,
+                t_name,
+                "health_check_delay_secs",
+                HEALTH_CHECK_DELAY_ENV,
+            )?
+            .unwrap_or(30);
         let learner_only =
             t_bool(&mut map, t_name, "learner_only", "HQL_LEARNER_ONLY")?.unwrap_or(false);
 
@@ -491,6 +505,12 @@ fn t_bool(
         Ok(None)
     }
 }
+
+/// The documented environment variable for `health_check_delay_secs`.
+///
+/// Named rather than inlined so a test can assert the parser is given it: F-032 was an empty
+/// string in this position, which made the variable a documentation-only fiction.
+pub(crate) const HEALTH_CHECK_DELAY_ENV: &str = "HQL_HEALTH_CHECK_DELAY_SECS";
 
 fn t_i64(
     map: &mut toml::Table,
@@ -901,23 +921,31 @@ mod tests {
         .await
     }
 
-    /// `hiqlite.toml` documents `tls_api_danger_tls_no_verify`, and the parser never consumes
-    /// it, so it survives to the unknown-key check and the whole config is rejected. Spec 009
-    /// KD-1.
+    /// Replaces `documented_tls_api_no_verify_key_is_rejected_as_unknown`, which pinned F-031:
+    /// the API TLS block read `tls_raft_danger_tls_no_verify` a second time, so the documented
+    /// `tls_api_danger_tls_no_verify` was consumed by nothing, survived to the unknown-key
+    /// check, and **the whole configuration file was rejected**.
     #[tokio::test]
-    async fn documented_tls_api_no_verify_key_is_rejected_as_unknown() {
-        let err = parse_cfg("tls_api_danger_tls_no_verify = true\n")
-            .await
-            .unwrap_err();
+    async fn the_documented_tls_api_no_verify_key_is_consumed_and_honoured() {
+        let cfg = parse_cfg(
+            "tls_api_key = \"api.key\"\n\
+             tls_api_cert = \"api.pem\"\n\
+             tls_api_danger_tls_no_verify = true\n",
+        )
+        .await
+        .expect("the documented key must not make the whole config unknown");
+
         assert!(
-            err.to_string().contains("Unknown Config data"),
-            "unexpected error: {err}"
+            cfg.tls_api
+                .as_ref()
+                .expect("tls_api configured")
+                .danger_tls_no_verify(),
+            "and it must actually reach the API side"
         );
     }
 
-    /// The API TLS block reads `tls_raft_danger_tls_no_verify` a second time. `t_bool` removes
-    /// the key on the first read, so the second always sees `None` and the API side is always
-    /// `false`. Fail-closed: verification stays on. Spec 009 KD-1.
+    /// The two keys are now independent: setting the raft one does not reach the API side, and
+    /// the API side stays fail-closed unless its own key says otherwise.
     #[tokio::test]
     async fn tls_api_no_verify_stays_false_when_the_raft_key_is_set() {
         let cfg = parse_cfg(
@@ -942,34 +970,49 @@ mod tests {
                 .as_ref()
                 .expect("tls_api configured")
                 .danger_tls_no_verify(),
-            "the api side cannot be enabled from TOML at all"
+            "the api side is not enabled by the raft side's key"
         );
     }
 
-    /// The two constructors disagree on this default: 1000 here, 1024 in `NodeConfig::default`
-    /// and in `from_env`. `hiqlite.toml` documents 1000 and the `config.rs` doc comment says
-    /// 1024. Spec 009 KD-4.
+    /// Replaces `prepared_statement_cache_capacity_default_differs_from_the_env_path`, which
+    /// pinned F-034: the TOML route defaulted to 1000 while `NodeConfig::default` and
+    /// `from_env` both used 1024, so the same unset key meant two different things depending
+    /// on how the node was configured.
     #[tokio::test]
-    async fn prepared_statement_cache_capacity_default_differs_from_the_env_path() {
+    async fn the_prepared_statement_cache_default_is_the_same_on_every_route() {
         let cfg = parse_cfg("").await.unwrap();
-        assert_eq!(cfg.prepared_statement_cache_capacity, 1000);
+        assert_eq!(cfg.prepared_statement_cache_capacity, 1024);
         assert_eq!(
             NodeConfig::default().prepared_statement_cache_capacity,
-            1024,
-            "the env and Default paths use a different number"
+            1024
         );
     }
 
-    /// `health_check_delay_secs` is settable from TOML and has no environment variable: the
-    /// parser passes an empty `env_var`, so the documented `HQL_HEALTH_CHECK_DELAY_SECS` in
-    /// `hiqlite.env` reaches nothing. Spec 009 KD-2 records the documentation half; this pins
-    /// the half that works.
+    /// Replaces `health_check_delay_secs_is_settable_from_toml_only`, which pinned F-032: the
+    /// parser passed an empty `env_var`, so the `HQL_HEALTH_CHECK_DELAY_SECS` documented in
+    /// `hiqlite.env` was read by nothing on either route.
+    ///
+    /// It now has both. The environment half cannot be asserted here, for the reason the
+    /// module comment above gives and which this repair made sharper: `from_toml_table` calls
+    /// `dotenvy::dotenv()` and `t_u32` prefers the variable, and `config::tests`'s
+    /// `from_env_file("hiqlite.env")` loads that whole file into the **process** environment,
+    /// so any variable set uncommented there leaks into every later test in this binary. That
+    /// is F-055's shape inside the library's own test binary. The line for this variable in
+    /// `hiqlite.env` is commented out for exactly that reason, which is also what keeps this
+    /// assertion about the TOML key meaningful.
     #[tokio::test]
-    async fn health_check_delay_secs_is_settable_from_toml_only() {
+    async fn health_check_delay_secs_is_settable_from_toml_and_from_the_environment() {
         let cfg = parse_cfg("health_check_delay_secs = 7\n").await.unwrap();
         assert_eq!(cfg.health_check_delay_secs, 7);
 
         let default_cfg = parse_cfg("").await.unwrap();
         assert_eq!(default_cfg.health_check_delay_secs, 30);
+
+        // The environment route is a source change, asserted at the parser's own boundary
+        // rather than by mutating the process environment.
+        assert!(
+            HEALTH_CHECK_DELAY_ENV == "HQL_HEALTH_CHECK_DELAY_SECS",
+            "the parser must be given the documented variable name"
+        );
     }
 }

@@ -176,7 +176,14 @@ impl Default for NodeConfig {
             prepared_statement_cache_capacity: 1024,
             read_pool_size: 4,
             wal_sync: hiqlite_wal::LogSync::ImmediateAsync,
-            wal_size: 2 * 1024 * 1024,
+            // F-035 / the oversized-entry ceiling: a single raft entry cannot span WAL files,
+            // so this is also the largest write this node can accept, and it had no
+            // environment route at all.
+            wal_size: env::var("HQL_WAL_SIZE")
+                .as_deref()
+                .unwrap_or("2097152")
+                .parse()
+                .expect("Cannot parse HQL_WAL_SIZE as u32"),
             #[cfg(feature = "cache")]
             cache_storage_disk: true,
             raft_config: Self::default_raft_config(10_000),
@@ -336,7 +343,7 @@ impl NodeConfig {
                 .as_deref()
                 .unwrap_or("false")
                 .parse()
-                .expect("Cannot parse HQL_LOG_STATEMENTS as u64"),
+                .expect("Cannot parse HQL_LOG_STATEMENTS as bool"),
             prepared_statement_cache_capacity: 1024,
             read_pool_size: env::var("HQL_READ_POOL_SIZE")
                 .as_deref()
@@ -362,7 +369,11 @@ impl NodeConfig {
             password_dashboard: DashboardState::from_env().password_dashboard,
             #[cfg(feature = "dashboard")]
             insecure_cookie,
-            health_check_delay_secs: 30,
+            health_check_delay_secs: env::var("HQL_HEALTH_CHECK_DELAY_SECS")
+                .as_deref()
+                .unwrap_or("30")
+                .parse()
+                .expect("Cannot parse HQL_HEALTH_CHECK_DELAY_SECS as u32"),
             learner_only: env::var("HQL_LEARNER_ONLY")
                 .as_deref()
                 .unwrap_or("false")
