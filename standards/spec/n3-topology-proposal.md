@@ -668,7 +668,7 @@ same person may hold several roles; each role decides only its own repository.
 | D-6 | "The pre-shutdown delay becomes a node option with today's 9.5 s default; consumer graces come from M-N1 and M-S3." | adopt; keep fixed | **adopt** | no current caller changes; only confirmed completions count toward a budget | H | nothing in B (the default is unchanged); consumer grace values in F and G |
 | D-7 | "A backup image records: cluster id, source node, applied log id, content digest, barrier nonce if any, hiqlite version, key ids." | these fields; fewer | **these fields**, image fields in `034`, archive fields in Rahi | provenance only; no cross-cluster compatibility inferred | H, R | C1 |
 | D-8a | "Functional cache-only state (in-flight flows, assertions, performance caches) is accepted as lost at every cache replacement." | accept; drain first | **accept** | in-flight flows fail closed | R, A | release notes of F |
-| D-8b | "Rahi refuses every bearer token issued at or before a floor instant, for V = L + 120 s with L read back from Rauthy, at every cache replacement and every restore." | every event; upgrade and migration only (restore per Rahi P-7); accept replay | **every event** | every pre-event access token presented to Rahi is refused for V; native clients refresh | R | F (Rahi), G |
+| D-8b | "Rahi refuses every bearer token issued at or before a permanent, only-rising floor instant, raised at every cache replacement and every restore; admission separately refuses a token without `iat` or whose `exp - iat` exceeds the manifest's L; revocation rows are pruned only after `V(L*)`." | every event; upgrade and migration only (restore per Rahi P-7); accept replay | **every event** | every access token issued before the event is refused from then on, whatever its lifetime; native clients refresh. The floor needs no lifetime, historical or read back (Rahi 043 revision 2, B-6, B-6b, P-9) | R | F (Rahi), G |
 | D-8c | "After a restore from anything but the final offline export, every Rauthy session and refresh token is invalidated before activation; signing-key rotation for other relying parties is decided per incident." | invalidate; invalidate and replay; invalidate and rotate keys; accept | **invalidate; rotation per incident**, never described as immediate (14.3) | users log in again; other relying parties stay exposed until their JWKS refresh or token expiry | R, A | DR restore acceptance in G; not N1 |
 | D-8d | "Active manual IP bans are exported after quiescence and re-applied before activation, at migration, restore and the Track N1 upgrade." | export and re-apply; accept loss | **export and re-apply** | needs a Rauthy capability (section 8); until it exists the default is loss, stated | H, R, A | F (N1) only if chosen for the upgrade; G |
 | D-8e | "Automatic abuse state (bans, escalation counters, stuffing windows) is accepted as lost, with the exposure stated." | accept; ask Rauthy to persist | **accept**, revisit if restores become routine | about 25 extra guesses per IP until the 24 h tier returns | R, A | release notes of F and G |
@@ -680,8 +680,9 @@ same person may hold several roles; each role decides only its own repository.
 | D-14 | Decided 2026-09-23: two StatefulSets at N=3, one hiqlite node per pod; supervised single container at N=1. | | | | H | |
 | D-15 | "Migration safety rests on five separate controls (quiescence, workload exclusion, storage locking, replication isolation, application authority), and the target becomes authoritative at its first authoritative mutation, not at the routing switch." | adopt; the earlier single-fence model | **adopt** | the tombstone becomes a downstream feature on every startup path (7.2) | H, R, A, S | F (tombstone, background writers), G |
 | D-16 | "Two tracks: N1 adopts published patched builds at N=1 now; S7 adopts only a release that passed stages 4 to 6." | adopt; one track | **adopt** | Track N1 never counts as N=3 evidence and never waits for it | H, R | nothing technical; it confirms that A and F-N1 do not wait for B to E |
-| D-17 | "hiqlite adds a public storage-exclusion handle that a consumer acquires, moves the legacy cache through, and hands to start (`035` B-6)." | add it with the repair; later; never | **add it with the repair** | adds one public module to `027` B-7's frozen surface; without it Rahi 043's T0 to T3 cannot hold exclusion continuously | H | A2 only; A1 proceeds without it |
-| D-18 | "The `035` repair ships as `0.15.0-patched.2` of `hiqlite-patched` and `hiqlite-wal-patched`, alone, under `031`'s qualification." | this label and alone; bundled with N=3 repairs; a minor bump | **this label, alone** | consumers keep `=0.15.0-patched.1` until each decides to move | H | A's publication, not its implementation |
+| D-17 | "hiqlite adds a public storage-exclusion handle that a consumer acquires, moves the legacy cache through, and hands to start (`035` B-6)." | add it now; add it when a consumer asks; never | **when a consumer asks** (changed 2026-09-23, third pass) | adds one public module to `027` B-7's frozen surface. Rahi 043 revision 2 no longer needs it: it holds no hiqlite lock and fences its app store's old path (the H-7 answer in the Rahi handoff); no other consumer has asked | H | A2 only; A1 is implemented without it |
+| D-18 | "The `035` repair ships alone, as `0.15.0-patched.2` of `hiqlite-patched`, `hiqlite-wal-patched` and `hiqlite-derive-patched`, under `031`'s qualification." | this label and alone; bundled with N=3 repairs; a minor bump | **alone**, the label once its availability on crates.io is confirmed at publication time (the release preparation in the handoff checks it) | consumers keep `=0.15.0-patched.1` until each decides to move; Rauthy's image needs its own rebuild | H | A's publication, not its implementation |
+| D-19 | "hiqlite builds a producer-side layout fence so that an unmodified hiqlite 0.14 refuses a 0.15 directory before it writes (section 17)." | build it, qualified against the real 0.14 binary; state the unsupported downgrade only | **state the unsupported downgrade only**, for now | a layout change every consumer's paths and backups must follow, and 0.14's pre-lock phase (restore, reset) stays destructive under any layout; the supported way back stays the pre-upgrade archive in a fresh volume | H | nothing in A; a later lane if adopted |
 
 ## 12. D-14: the N=3 cell is two StatefulSets
 
@@ -956,16 +957,16 @@ interval. Under `LogSync::Immediate`, (ii) and (iii) reduce to the storage
 honouring its flushes, and (i) remains.
 
 *Independent evidence a stronger RPO claim would need*, recorded outside the
-cell's failure domain while the cell runs, not reconstructed at export:
+cell's failure domain while the cell runs, not reconstructed at export
+(corrected 2026-09-23, third pass: (b) as first written required only the last
+recorded barrier, which by F-132's argument detects nothing before it):
 (a) **per-write receipts**: before a consumer reports success to its own caller,
 it records off-cell the log id of the write (term and index) or an application
 sequence with a hash-chain head, and the export requires the image to contain
 the last receipt's entry at the same term; hiqlite's write path returns a row
 count, not a log id (`client/execute.rs:22`), so (a) needs a producer change or a
-consumer-side sequence; (b) **periodic recorded barriers**: nonces committed and
-recorded off-cell through the cell's life; requiring the last recorded one
-detects any rollback past it and bounds undetected loss to the interval after
-it; (c) `LogSync::Immediate` on storage attested not to roll back, which
+consumer-side sequence; (b) **recurring recorded barriers**, whose exact claim is
+13.13; (c) `LogSync::Immediate` on storage attested not to roll back, which
 replaces (ii) by an infrastructure assumption, not by evidence.
 
 *Cost:* a hiqlite entry point that records the nonce in the replicated state
@@ -1047,6 +1048,33 @@ coherent archive needs, in this order:
 
 hiqlite claims nothing about the pair; its evidence is per cluster.
 
+**13.13 What recurring external barriers prove between checkpoints** (third
+pass). Barriers `b_1 .. b_k` committed through the ordinary write path during
+the cell's life, each nonce and commit acknowledgment recorded off-cell before
+the next is issued, the barrier rows never deleted from the replicated state,
+and the export requiring **every** recorded nonce to be present in the image (or
+a hash chain over them whose head is recorded off-cell).
+
+- *Proved.* No rollback, truncation or substitution of the log **crossed a
+  recorded barrier**: a loss that removed `b_i` from the log leaves every later
+  barrier appended to a log without it, and the image then lacks `b_i`. So a
+  whole-directory restore of an older copy, a reverted follower elected over a
+  barrier, or asynchronous-sync loss reaching back past a barrier is detected,
+  and the image is faithful to the cluster as it stood at each `b_i`.
+- *Not proved.* That every write acknowledged **between** two consecutive
+  barriers survived. A loss confined to the interval between `b_(i-1)` and the
+  loss event, with no barrier inside the lost range, leaves every recorded nonce
+  present (F-132's shape, repeated per interval). Undetected loss is therefore
+  bounded by one inter-barrier interval **per loss event**, not by the time
+  since the last barrier before the export, and only if every nonce is checked.
+- *Not proved either.* Anything about the other cluster (13.11), or about a
+  barrier whose off-cell record was lost (then that interval is merged with the
+  next).
+- *What the interval buys.* The owner can state migration or DR RPO as "no loss
+  crossing a recorded barrier; at most one barrier interval of acknowledged
+  writes under 13.7's assumptions (i) to (iii)". A per-write claim still needs
+  per-write evidence, 13.7 (a); periodic barriers never become it.
+
 **13.12 What an export proves, by combination.**
 
 | evidence | faithful to the cluster at export | faithful at barrier time | every acknowledged write present |
@@ -1055,6 +1083,7 @@ hiqlite claims nothing about the pair; its evidence is per cluster.
 | rule A with the 13.10 marker | yes, for the directory as the marked stop left it; not against a whole-directory rollback | no | only under (i) and (ii) |
 | plus the barrier (B) | yes | yes | only under 13.7's historical assumptions |
 | plus durable commit metadata (C) | strengthens R-d | as B | unchanged |
+| plus recurring recorded barriers (13.13), every nonce checked | yes | yes, at every recorded barrier | no loss crossing a barrier is undetected; within one interval only under (i) to (iii) |
 | plus receipts (13.7 (a)) | yes | yes | yes, up to the last receipt, independently of (i) to (iii) |
 
 ## 14. Security state across migration, restore and upgrade
@@ -1217,6 +1246,28 @@ Track N1's findings reached this proposal: the shutdown budget (section 4), the
 cache transition's revocation loss (section 14), and the upgrade exclusion
 hazard (`035`).
 
+**Third pass (2026-09-23)**, against Rahi 043 revision 3 (`c2c7c72`, review
+`abd66fd`, owner packet `fc3f339`), Rahi's producer requests version 2 (H-1 to
+H-8), and Rauthy `d7d087aa` (unpublished). What changed, and what this pass did:
+
+- **Rahi holds no hiqlite lock.** 043's T0 takes `cell.lock` and
+  `transition.lock` only; the app store moves to `<data>/app-store` behind a
+  permanent fence at `<data>/hiqlite`. The T0 to T3 conflict of the second pass
+  is gone, and D-17's handle is no longer on Rahi's path (section 11). The fence
+  route was reviewed adversarially (H-7; the Rahi handoff section 3): sound for
+  its population under configuration exclusions 043 does not yet state.
+- **The floor is permanent** and only rises; admission enforces the manifest's
+  lifetime ceiling; pruning uses its own horizon. The second pass's "V = L + 120
+  with L read back from Rauthy" is superseded (D-8b restated).
+- **Rauthy's release assets exist**: eight, listed by authenticated and anonymous
+  reads, binary digests equal to Rahi 043 D-P1. A verification task, not a gap.
+- **Lane A1 is implemented as an unreleased candidate** (`035`, section 16), and
+  F-130 is on Rahi's release gate (043 B-4b), so A1's release is Rahi's critical
+  path, not D-17.
+- Recurring barriers are specified (13.13), with 13.7 (b) corrected.
+- Rauthy's handoff: the notice in `standards/spec/n3-rauthy-request.md`, third
+  pass, names what its corrections still get wrong.
+
 ## 16. Dependency graph, critical path and lane authorizations
 
 Proposed 2026-09-23. Seven nodes. An arrow is a prerequisite, not a schedule; a
@@ -1251,13 +1302,14 @@ F-N1 Rahi 043 on 0.15.0-patched.1 (independent of every node above)
 | **7c / F-S7** candidate integration, then adoption | 7c: a candidate; F-S7: E passed on the exact release, published | Rahi, Rauthy | section 9 rows 7c and 7 | D-8b to D-8e, D-15 | each consumer's owner |
 | **G** Kubernetes acceptance, rehearsal, support | F-S7, E, D-5, Rahi 044 approved (which needs Rahi's own resolution of its spec 000 anchor) | the deploying repository; `026` B-7, the handoff and the ledger for the support record | section 9 stages 8 to 10 | D-1, D-9, D-10, D-11, D-12, D-15, D-8c | Kubernetes lane, rehearsal lane, and the owner's support decision, each separate |
 
-**Immediate critical path.** For producer safety: **A1 → A-rel → F-N1'**. It
-needs one runtime authorization (lane A) and, later, a publication
-authorization; it waits for no decision (D-17 and D-18 shape it without blocking
-A1's implementation). In parallel and independent: F-N1 (Rahi 043 on the
-published build, whose T0 to T3 must be restructured or wait for A2, handoff
-section 3), and D and B, which have no blocking decision. The N=3 path's first
-decision-gated step is C2/C3 on D-12.
+**Immediate critical path** (third pass). **A1 → A-rel → F-N1'**. A1 is
+implemented as a candidate (`035` section 5 records its tests); A-rel needs D-18
+and a publication authorization; F-N1' is Rahi's re-pin and Rauthy's rebuild,
+each its owner's act, and Rahi's B-4b waits on it. D-17 (A2) is off this path.
+In parallel: F-N1 (Rahi 043 on the published build, now fenced, no longer
+waiting on A2), D (the harness is built; smoke only), and B, which has no
+blocking decision but no authorization. The N=3 path's first decision-gated step
+is C2/C3 on D-12.
 
 **Lane authorizations, ready to sign.** Each is complete as written; none is
 granted by this document.
@@ -1292,7 +1344,8 @@ granted by this document.
   bounded at 10 minutes, the tranche at 4 hours of wall time; one host with at least 8 cores, 16 GB memory and 20 GB free disk,
   no other hiqlite processes on the harness ports; **stop the tranche at the
   first failed run**, keep its logs and directories, report, and do not retry or
-  resume without a new authorization."
+  resume without a new authorization." No restore scenario is in tranche 1:
+  `034`'s entry points do not exist until lane C.
 - **Lane E, tranche 2 (qualification).** "After tranche 1 passes on the same
   candidate: tranche 1's 11 scenarios plus A-11 (A-1 to A-8 in a debug build,
   8 scenarios), **20** consecutive runs each (380 runs), 10 minutes per run, at
@@ -1301,5 +1354,115 @@ granted by this document.
   and is reported incomplete, which is not a pass. `034` R-1 to R-8 in the harness: 20 runs
   each, the same rules." The existing 20-run figure of section 9 is this
   tranche's count; writing it here does not authorize it.
+- **Run accounting, corrected (third pass).** A "run" starts and stops many node
+  processes; the tranche budgets above count runs, and the table below counts the
+  launches inside them, so an authorization names both. Upper bounds per run, two
+  clusters of three nodes (the harness default), split layout:
+
+  | scenario | node launches per run | runs, tranche 1 | runs, tranche 2 |
+  |---|---|---|---|
+  | A-1 bootstrap (six start orders plus simultaneous, and the negative case) | 7 × 6 + 3 = 45 | 3 | 20 |
+  | A-2 immediate restart | 6 + 6 = 12 | 3 | 20 |
+  | A-3 leader loss (both groups) | 6 + 2 = 8 | 3 | 20 |
+  | A-4 partition and rejoin | 6 | 3 | 20 |
+  | A-5 lagging rejoin | 6 + 1 = 7 | 3 | 20 |
+  | A-6 replacement, same id (a follower, node 1 twice) | 6 + 3 = 9 | 3 | 20 |
+  | A-7 membership and shutdown interleavings (four cases) | 4 × (6 + 1) = 28 | 3 | 20 |
+  | A-8 rolling restart | 6 + 6 = 12 | 3 (+3 co-located) | 20 (+20) |
+  | A-10 full stop and start | 12 | 3 (+3 co-located) | 20 (+20) |
+  | A-11 debug pass of A-1 to A-8 | as A-1 to A-8 | 0 | 20 each (160) |
+  | `034` R-1, R-2, R-3, R-4, R-5, R-8 (harness) | R-1 to R-3: 6; R-4: 6 per interrupted state × 5 states = 30; R-5: 7; R-8: 3 | 0 | 20 each (120) |
+  | `034` R-6, R-6a, R-6b, R-6c, R-7 | unit tests, no node process | 0 | in `cargo test`, not counted |
+
+  Totals: tranche 1, 33 runs and at most 3 × (45 + 12 + 8 + 6 + 7 + 9 + 28 +
+  12 + 12) + 3 × (12 + 12) = 417 + 72 = **489 launches**; tranche 2, 380 A-runs
+  plus 120 restore runs = **500 runs**, at most 2,780 + 480 + 2,540 + 1,160 =
+  **6,960 launches** (split A-1 to A-10, co-located A-8 and A-10, A-11, restore). The restore runs need
+  lane C first. Wall-time caps stay as written; a tranche that reaches its cap is
+  incomplete, not passed.
 - **Kubernetes, rehearsal and support** are each authorized only after the node
   before them has recorded evidence, and are not drafted here.
+
+**Lane B, prepared (third pass), not implemented.** Each item: the change, the
+ownership its implementing change adds in the same range, and the test that
+must be observed failing on the unrepaired tree first.
+
+| item | change | ownership added by the implementing change | failing-first test |
+|---|---|---|---|
+| F-118 (`033` B-3) | `should_node_1_skip_init` seeds no vote for node 1 and initializes only after at least `⌊N/2⌋` distinct peers **answered** "not initialized" (authenticated `200` with an empty membership); a connection error, timeout or `401` counts for nothing; bounded wait, not-ready meanwhile, then a startup error naming the silent peers; the cache group takes the same decision | `033` extends `010`'s `hiqlite/src/init.rs` | unit: a stubbed peer answering with a connection error makes today's code initialize (fails today), and the repair wait and then refuse; plus N=1 unchanged |
+| F-119 (`034` B-4) | a restore instruction is applied at most once: node 1 records the applied instruction's identity (the backup name and digest) durably before it restores, and a later start with the same instruction logs and skips; followers do not quarantine again for an instruction already honoured | `034` extends `013`'s `hiqlite/src/backup.rs` and `010`'s `start.rs`; `amends` `026` for the quarantine | unit: two starts with the same instruction restore twice today, once after |
+| F-120 (`034` B-4) | `restore_backup_finish` runs after the listeners are bound and after `become_cluster_member`, and its two waits are bounded; on expiry it returns a startup error; the `debug_assert!` on the leader becomes a returned error | as F-119 | unit with a stand-in raft that never initializes: today the start never returns (bounded by the test), after the repair it errors within the bound |
+| pre-shutdown delay (`033` B-4) | `NodeConfig` option, code, TOML and environment, default 9.5 s; `009`'s configuration contract records it | `033` extends `010`'s `client/mgmt.rs` and `009`'s config units | unit: the default equals today's constant; a configured value is used |
+
+Authorization to sign, when wanted: "Implement lane B as prepared in proposal
+section 16 (F-118, F-119, F-120 and the pre-shutdown option), each with its
+failing-first test observed and recorded, `033` and `034` edges in the same
+range, `cargo test` and the governance gates only; no harness runs, no
+publication, no consumer edits." F-121 (D-13) stays after lane E's stage 4.
+
+**Lane C contracts, ready to decide (third pass).**
+
+- **C1, identity and a callable restore** (`034` B-1, B-3, B-4, B-5; D-7 fields).
+  *Contract:* every image carries the manifest D-7 names; restore is a function
+  that checks the manifest against the target (cluster id, node id, version,
+  key ids) before anything moves, applies at most once (F-119), and forms a
+  single-voter cluster or fails (F-120); an upload's outcome is observable.
+  *Decision wording:* D-7 as in section 11. *Does not claim:* anything about
+  currency; that is C2 and C3.
+- **C2, the export rule and the clean-stop marker** (`034` B-2, B-7; 13.3 to
+  13.5, 13.10). *Contract:* an offline export refuses unless 13.3's cases pass
+  and, at N=1, the 13.10 marker verifies against the directory; at N=3, 13.5's
+  majority rule. *Decision wording (D-12, part 1):* "The migration export's
+  evidence is rule A with the clean-stop marker." *Does not claim:* absence of
+  a whole-directory rollback, or of loss before the stop (13.10's limit).
+- **C3, the barrier** (`034` B-6). *Contract:* an entry point that commits a
+  caller nonce through the replicated state machine and returns its log id once
+  committed and applied; the export refuses an image without the recorded
+  nonce; with recurring barriers, every recorded nonce (13.13). *Decision
+  wording (D-12, part 2):* "Add a committed barrier per cluster after
+  quiescence and drain, recorded off-cell." *Does not claim:* that writes
+  acknowledged before the barrier survived (F-132); two barriers are not a
+  cross-store transaction (13.11).
+- **Recommendation**, unchanged: A + B, C optional, `LogSync::Immediate` for the
+  committed-write objective subject to stage 4's measurement, and 13.7's
+  historical assumptions stated wherever an RPO of 0 is.
+
+## 17. A producer-side downgrade fence (proposal, D-19)
+
+Rahi's H-5 asks for either an explicit unsupported-downgrade boundary or a
+layout the unmodified 0.14 binary refuses before it writes. `035` B-4 states the
+first. This section evaluates the second, as a proposal only; nothing is built.
+
+**What does not work.** A check in 0.15 code never runs in a 0.14 binary, and a
+format marker 0.14 does not read is not a fence. A permanent `state_machine/lock`
+alone is not one either: 0.14 checks it only after its SQLite `LogStore` has
+opened `logs/`, created or truncated `lock.hql`, written `meta.hql`, checked (and
+under `auto-heal` repaired) the WAL, and created the state-machine directories
+(Rahi handoff, H-7 Q4); and under `auto-heal`, hiqlite's default and so an
+upstream Rauthy's, the marker is not a refusal at all: 0.14 deletes the database
+and serves an empty store.
+
+**A relocation that could work.** 0.15 keeps its raft logs, state machines and
+caches under a new subdirectory 0.14 never opens, and leaves at the old paths
+only a permanent `state_machine/lock` (tagged) and nothing else. Then, per 0.14
+startup path at `8f3b9bd`:
+
+| 0.14 path | what it does against the fenced layout | 0.15 data |
+|---|---|---|
+| default features | creates an empty `logs/` (lock, `meta.hql`, one WAL file) and state-machine directories at the old paths, then panics on the marker | untouched |
+| `auto-heal` | as above, then deletes an empty old-path database, **serves an empty store**, and at a clean stop removes the marker | untouched, but a live empty node answers at the cell's addresses |
+| `HQL_DANGER_RAFT_STATE_RESET` | deletes the old-path `logs/`, `logs_cache/` and snapshot directories, then as default | untouched |
+| `HQL_BACKUP_RESTORE`, node 1 | writes a restored database at the old paths, then as default | untouched |
+| `HQL_BACKUP_RESTORE`, other node | `remove_dir_all(data_dir)`: **deletes everything**, the new layout included | destroyed |
+
+**Assessment.** It protects 0.15 data from an unmodified 0.14 in every path but
+one, and it cannot close that one: a restore on a non-first node deletes the
+whole data directory before anything is read. The `auto-heal` row turns a
+destructive downgrade into a silent empty service, which for an identity
+provider is its own hazard. It is a layout change for every consumer (paths,
+backups, restore tooling, Rahi's relocation), needs a migration of its own for
+0.15 directories already written, and must be demonstrated against the real
+0.14 binary on both Linux architectures with `035`'s method. **Recommendation
+(D-19): do not build it now**; state the unsupported downgrade (`035` B-4) in
+every consumer handoff, and keep the verified pre-upgrade archive restored into a
+fresh volume as the only supported way back.
