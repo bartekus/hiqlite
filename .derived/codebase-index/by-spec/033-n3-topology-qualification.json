@@ -9,6 +9,10 @@
     ],
     "implementingPaths": [
       {
+        "path": "qualification/n3/",
+        "source": "spec-edge"
+      },
+      {
         "path": "standards/spec/findings-register.md",
         "source": "spec-edge"
       },
@@ -27,7 +31,11 @@
     ],
     "resolvedUnits": [
       {
-        "locations": [],
+        "locations": [
+          {
+            "file": "qualification/n3/"
+          }
+        ],
         "ownership": true,
         "sourceField": "establishes",
         "unit": {
@@ -157,5 +165,5 @@
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "af1c97601c0b8ffbed8dd4b013ba106e92bbc825ac01cf3accd456b9c650bbfb"
+  "shardHash": "339d7d2b276f2dc6ce72348bcf1cafe8e3794911bddb74fb00a96f133dea1938"
 }

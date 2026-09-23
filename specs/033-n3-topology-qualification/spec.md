@@ -22,9 +22,9 @@ establishes:
   # D-6: the request to Rauthy's maintainer, with what each item blocks. It sends nothing
   # and asserts nothing about Rauthy's repository beyond what it cites.
   - "standards/spec/n3-rauthy-request.md"
-  # D-2: the real-node harness does not exist yet. It is a workspace-excluded crate so its
-  # release builds and consumer feature sets never enter the library's own graph.
-  - { kind: directory, path: "qualification/n3/", planned: true }
+  # D-2: the real-node harness, built by lane D (2026-09-23). A workspace of its own, so its
+  # release builds and consumer feature sets never enter the library's graph.
+  - { kind: directory, path: "qualification/n3/" }
 extends:
   - spec: "005-adoption-assessment-and-plan"
     unit: { kind: file, path: "standards/spec/findings-register.md" }
@@ -82,7 +82,7 @@ own test and adds its own edges (D-1).
 - **Establishes** `standards/spec/n3-topology-proposal.md`,
   `standards/spec/n3-rahi-reconciliation-handoff.md` and
   `standards/spec/n3-rauthy-request.md`, new documents, and
-  `qualification/n3/`, a planned directory for the real-node harness (B-2).
+  `qualification/n3/`, the real-node harness (B-2), built by lane D.
 - **Extends** `005`'s findings register, additively, with F-118 to F-125 and
   F-132. The N=1 upgrade-exclusion findings (F-126 to F-131, F-133) are `035`'s.
 - **References**, without claiming, the files the planned repairs would touch.
@@ -227,6 +227,21 @@ names.
 **Nothing in this spec has been executed.** The proposal and the six findings
 were read from source at `72e09a6`, with the pinned `spec-spine` revision
 confirmed before any gate was trusted.
+
+**The harness exists; nothing it ran is qualification** (lane D, 2026-09-23).
+`qualification/n3/` implements B-2's mechanisms (own process per node, release
+build with `panic = "abort"`, both feature sets, split and co-located layouts, a
+harness-owned proxy, its own `SIGTERM`/`SIGKILL` with recorded outcomes, bounded
+waits on observed state, stop at the first failure). Its one scenario is
+`smoke`; A-1 to A-10 are registered and refuse to run. Three smoke runs were
+allowed and used, on macOS arm64 with the Rahi feature set and
+`LogSync::Immediate`: split and co-located each passed (four groups formed with
+voters `{1,2,3}`, writes acknowledged and read back, full stops confirmed `Ok`
+on six nodes, restart with the membership log id unchanged), and a run with an
+injected `SIGKILL` failed as it must and kept its directory. What this does not
+show: any A-scenario, any Linux run, the Rauthy node build under load, a
+partition applied through the proxy (unit-tested only), or anything about N=3
+support.
 
 What already exists, and what it is worth for N=3 (F-122): the in-process
 cluster suite starts three nodes in one debug process, TLS off, in-memory
