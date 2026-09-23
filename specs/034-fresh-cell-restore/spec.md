@@ -131,7 +131,11 @@ id` (13.4). For a directory of a multi-voter cluster, a single directory cannot
 prove currency: the entry point MUST either accept the log state of a majority
 of the configuration's voters and apply 13.5's selection rule, or refuse and
 leave selection to a documented operator procedure; which of the two is the
-implementing change's decision.
+implementing change's decision. *Corrected 2026-09-23 (D-5):* log ids compare in
+openraft's `LogId` order, term before index; the read set counts voters of the
+uniform configuration only, each with a B-7 marker; and a purged prefix counts
+as present. No step compares against a committed id, because none is persisted
+(F-124).
 
 If the owner adopts the barrier (B-6), the export MUST also refuse an image
 whose state does not contain the barrier nonce it is given.
@@ -187,21 +191,48 @@ still verifies the remote object independently.
 
 ### B-6. A committed barrier, if the owner adopts it
 
-*Proposed 2026-09-23 (D-4); alternative B of the proposal's 13.7; pending D-12.*
-A client entry point MUST commit a replicated barrier carrying a caller-supplied
-nonce through the ordinary write path, return only once it is committed and
-applied, and record the nonce in the state machine so that an image proves it
-(B-1's manifest carries it). It lets a consumer establish, end to end, that an
-image contains every write acknowledged before the barrier, including in a
-cluster whose schema that consumer does not own.
+*Proposed 2026-09-23 (D-4); alternative B of the proposal's 13.7; pending D-12.
+Narrowed 2026-09-23 (D-5, F-132).* A client entry point MUST commit a replicated
+barrier carrying a caller-supplied nonce through the ordinary write path, return
+only once it is committed and applied, and record the nonce in the state machine
+so that an image proves it (B-1's manifest carries it). It works in a cluster
+whose schema the consumer does not own.
+
+What an image containing the nonce establishes: it is faithful to the cluster as
+the cluster stood when the barrier committed, with nothing lost, rolled back or
+truncated after that, and it is neither another cluster's image nor an older copy
+of this one. What it does **not** establish: that the cluster still held, at that
+moment, every write acknowledged before it. A loss before the barrier committed
+(storage rollback, asynchronous-sync loss, a reverted follower elected at N=3)
+leaves a shorter log beneath the barrier, and the check passes (F-132). Every
+statement built on this entry point states those historical assumptions or
+cites independent evidence (the proposal's 13.7).
 
 ### B-7. A clean stop is recorded where an export can read it
 
-*Proposed 2026-09-23 (D-4).* A shutdown that reaches confirmed graceful
-completion (the topology proposal's section 4) MUST leave a durable marker in
-the data directory, written after the WAL writer's flush and the SQLite writer's
-metadata persist and removed at the next start; an export reads it for refusal
-case R-b. Until it exists, the evidence is the consumer's recorded `Ok(())`.
+*Proposed 2026-09-23 (D-4); defined 2026-09-23 (D-5), per the proposal's 13.10.*
+A shutdown that reaches confirmed graceful completion (the topology proposal's
+section 4) MUST leave a durable marker in the data directory:
+
+- **identity:** a random run id generated at start after `035` B-1's exclusion,
+  the node id, raft group and hiqlite version, and the end state the stop left
+  (vote, last purged, last log id, applied log id, last membership log id, a
+  digest of the WAL metadata, the active WAL file's id and length, and a digest
+  of the SQLite `_metadata` row), covered by the marker's own digest;
+- **durability:** written as the stop's last act, after the WAL writer's flush and
+  metadata, the SQLite writer's metadata persist and the database's close, by
+  temporary name, fsync, rename and directory fsync; the stop reports `Ok(())`
+  only after it is durable;
+- **invalidation:** removed, durably, by the next start after exclusion and
+  before that start's first write to the WAL or the database, so a marker never
+  survives into a run that has written;
+- **verification:** an export refuses R-b unless the marker is present, its
+  digest holds, and every recorded field equals what the export reads.
+
+It proves the directory is as the named run's confirmed stop left it. It does
+not prove absence of rollback: a restored copy of the whole directory carries a
+marker that describes the copy. Until it exists, the evidence is the consumer's
+recorded `Ok(())`, which is bound to nothing in the directory.
 
 ## 4. Acceptance, to be implemented
 
@@ -232,7 +263,15 @@ consumer feature sets) unless it is a unit test, which says so.
   the export either selects per 13.5 or refuses, never exports an unapplied or
   uncommitted state.
 - **R-6b. Barrier.** An image without the given nonce is refused; with it,
-  accepted (if B-6 is adopted).
+  accepted (if B-6 is adopted). Also recorded, as the limit and not as a pass:
+  a directory rolled back to before an acknowledged write and then given the
+  barrier is **accepted** (F-132); the acceptance report states it.
+- **R-6c. Marker lifecycle.** A clean stop leaves a verifiable marker; a start
+  removes it durably before its first write; a kill after that start leaves none
+  and the export refuses; a marker whose recorded end state differs from the
+  directory (one field at a time) is refused; a whole-directory copy, marker
+  included, is **accepted**, and the report states that the marker cannot detect
+  it.
 - **R-7. Export does not modify.** The directory's bytes before and after an
   export are identical, and a running node's directory is refused by the lock.
 - **R-8. Upload outcome.** Against a local S3 double: success, a failed upload
@@ -269,8 +308,11 @@ digest, which the operator must carry from the export to the restore.
 **KD-4. Currency is proven only under stated conditions.** F-124 and F-125 limit
 what a stopped directory can prove. Rule A (B-2) preserves acknowledged writes
 only without storage rollback and, under asynchronous sync modes, without a host
-crash during the source's last run; only the barrier (B-6) detects a violation.
-The migration's zero-loss objective depends on which the owner adopts.
+crash during the source's last run. The barrier (B-6) detects such a violation
+only when it happens after the barrier commits (F-132); the marker (B-7) detects
+none that copies the whole directory. The migration's zero-loss objective needs
+the owner to accept the proposal's 13.7 assumptions, or independent evidence
+(13.7 (a) or (b)), under D-9 and D-12.
 
 ## 7. Resolved decisions
 
@@ -300,6 +342,16 @@ B-6 (barrier) and B-7 (clean-stop marker) added as proposals; KD-2 split into
 cache replacement and stale backup; KD-4 added; D-2 corrected. No decision was
 taken: D-12 and the D-8 subdivisions stay pending.
 
+**D-5 (2026-09-23, second reconciliation pass).** B-6 narrowed: the first
+version said the barrier lets a consumer establish that an image contains every
+write acknowledged before it, which holds only if nothing was lost before the
+barrier committed; a bounded probe with a SQL row standing in for the barrier
+showed the check passing over a rolled-back directory (F-132). B-7 defined:
+identity, durability, invalidation, verification and limit. B-2's multi-voter
+rule restated against the fields a stopped directory holds. R-6b extended and
+R-6c added. KD-4 corrected. No decision taken: D-12, D-7 and the D-8
+subdivisions stay pending in the proposal's section 11.
+
 ## Verification
 
 ```verify:cli
@@ -308,4 +360,6 @@ grep -q 'fresh-cell restore' standards/spec/n3-topology-proposal.md
 grep -q '^### F-120 ' standards/spec/findings-register.md
 grep -q '^### F-124 ' standards/spec/findings-register.md
 grep -q '^## 13. Export currency' standards/spec/n3-topology-proposal.md
+grep -q '^### F-132 ' standards/spec/findings-register.md
+grep -q '13.10 The clean-stop marker' standards/spec/n3-topology-proposal.md
 ```

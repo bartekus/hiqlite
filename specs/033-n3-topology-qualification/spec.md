@@ -19,6 +19,9 @@ establishes:
   # D-5: the reconciliation handoff to Rahi, a repository-backed record of decision status and
   # consumer obligations. It asserts nothing about Rahi's repository.
   - "standards/spec/n3-rahi-reconciliation-handoff.md"
+  # D-6: the request to Rauthy's maintainer, with what each item blocks. It sends nothing
+  # and asserts nothing about Rauthy's repository beyond what it cites.
+  - "standards/spec/n3-rauthy-request.md"
   # D-2: the real-node harness does not exist yet. It is a workspace-excluded crate so its
   # release builds and consumer feature sets never enter the library's own graph.
   - { kind: directory, path: "qualification/n3/", planned: true }
@@ -41,8 +44,9 @@ summary: >
   Proposes, for owner decision, how this fork would qualify a three-voter
   topology for the Statecraft cell on Kubernetes while N=1 stays supported and
   stays the Aicortex local profile. Owns the architecture and migration
-  proposal and the reconciliation handoff to Rahi, records eight findings
-  established from source (F-118 to F-125), and specifies the hiqlite-side repairs, the real-node
+  proposal, the reconciliation handoff to Rahi and the request to Rauthy's
+  maintainer, records nine findings (F-118 to F-125 from source, and F-132, a
+  barrier's limit, by a bounded probe), and specifies the hiqlite-side repairs, the real-node
   harness and the deterministic acceptance that stand between today and any
   claim of N=3 support. Records the owner's decision D-14: at N=3 the cell is
   two StatefulSets, one hiqlite node per pod, and the single-container
@@ -75,10 +79,12 @@ own test and adds its own edges (D-1).
 
 ## 2. Territory
 
-- **Establishes** `standards/spec/n3-topology-proposal.md` and
-  `standards/spec/n3-rahi-reconciliation-handoff.md`, new documents, and
+- **Establishes** `standards/spec/n3-topology-proposal.md`,
+  `standards/spec/n3-rahi-reconciliation-handoff.md` and
+  `standards/spec/n3-rauthy-request.md`, new documents, and
   `qualification/n3/`, a planned directory for the real-node harness (B-2).
-- **Extends** `005`'s findings register, additively, with F-118 to F-125.
+- **Extends** `005`'s findings register, additively, with F-118 to F-125 and
+  F-132. The N=1 upgrade-exclusion findings (F-126 to F-131, F-133) are `035`'s.
 - **References**, without claiming, the files the planned repairs would touch.
   Those are owned by `010`/`027` (`init.rs`, `client/mgmt.rs`,
   `membership_gate.rs`) and `031` (`hiqlite/Cargo.toml`). A change that
@@ -318,7 +324,23 @@ this spec now establishes. It took **no** decision: D-8a to D-8e, D-15 and D-16
 were added as pending proposals, and D-4 above (the proposal's D-14) is
 unchanged.
 
-**Owner decisions pending.** D-1 to D-13, D-8a to D-8e, D-15 and D-16 of the
+**D-6 (2026-09-23, second reconciliation pass, against Rahi 043 at
+`5707f60`).** Governance, bounded probes and handoffs only; no runtime change and
+no decision. The proposal's 13.7 barrier claim was overstated and is narrowed: a
+barrier proves an export faithful to the cluster at barrier time, not that
+nothing acknowledged was lost before it, which a probe on real 0.15 builds
+showed with a SQL row standing in for the barrier (F-132); 13.5 is restated
+against the fields a stopped directory holds, 13.10 defines the clean-stop
+marker and 13.11 separates two barriers from a cross-store transaction. Section
+14.3's controls became five separate decisions, and signing-key rotation is no
+longer offered as immediate invalidation. Section 11 is now the one decision
+packet (adding D-17 and D-18 for `035`); section 16 is the dependency graph and
+the lane authorizations; section 9 separates candidate integration from
+adoption and support. The handoff to Rahi was rewritten against 043, and the
+request to Rauthy's maintainer added. The N=1 upgrade hazard Rahi reported is
+`035`'s, a separate producer item that waits for none of this.
+
+**Owner decisions pending.** D-1 to D-13, D-8a to D-8e and D-15 to D-18 of the
 proposal's section 11 are not decided by this spec. Each will be dated here
 when the owner records it.
 
@@ -346,4 +368,8 @@ grep -q '^## 14. Security state across migration, restore and upgrade' standards
 grep -q '^\*\*7.2 Five controls, one authority' standards/spec/n3-topology-proposal.md
 test -f standards/spec/n3-rahi-reconciliation-handoff.md
 grep -q 'Decision status' standards/spec/n3-rahi-reconciliation-handoff.md
+test -f standards/spec/n3-rauthy-request.md
+grep -q '^## 11. Owner decisions: the one packet' standards/spec/n3-topology-proposal.md
+grep -q '^## 16. Dependency graph, critical path and lane authorizations' standards/spec/n3-topology-proposal.md
+grep -q '^### F-132 ' standards/spec/findings-register.md
 ```

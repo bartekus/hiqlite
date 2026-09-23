@@ -75,6 +75,6 @@
     "summary": "Proposes the hiqlite half of the migration and disaster-recovery procedure in 033's proposal: a backup image that carries its own identity and digest, an offline export from a stopped data directory, a callable restore that is applied at most once and refuses the wrong image before it destroys anything, and a node-1 restore into an empty cell that either initializes or fails with an error, never waits forever. Addresses F-119, F-120, 026 KD-5 and KD-8 for that procedure. The export's currency rule is a proposal whose safety argument and alternatives are in the topology proposal's section 13; the committed index it first relied on is not persisted (F-124). In-place multi-node restore (F-058) stays unsupported. Changes no code until an implementing change lands.\n",
     "title": "Restore a backup into a fresh three-voter cell, once, from an image that proves whose it is"
   },
-  "shardHash": "cbb61d690ee38cb3f6e4ef6efaa938cc72713dae4276f365e39ec55a8b90591c",
+  "shardHash": "811f07bc6d45712d21996c37e744ebb6baaa4b28630cc6c3a61b4400de516836",
   "specVersion": "1.3.0"
 }

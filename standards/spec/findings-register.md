@@ -3211,3 +3211,134 @@ path reconciles the lag is `025`'s territory and is **not assessed here**; this
 entry claims nothing about restart correctness.
 
 Source-established, not executed. Recorded by `033`.
+
+---
+
+## Found by the N=1 upgrade-exclusion probes and the export review (2026-09-23)
+
+Recorded by `035-n1-upgrade-exclusion` (F-126 to F-131, F-133) and
+`033-n3-topology-qualification` (F-132), against `spec-spine` revision
+`aa559f5dcaa59bd9f27b0622b51ae5b57dc2185f` and tree `ec8fc6d`, whose `hiqlite/`
+and `hiqlite-wal/` equal the published source `3392c12`. Unlike the section
+before it, several entries here were **observed by execution**: bounded probes on
+disposable directories, on one macOS arm64 host (APFS), debug builds of hiqlite
+0.14 at upstream `8f3b9bd` and of the published `hiqlite-patched
+0.15.0-patched.1`, Rahi's feature set, `cache_storage_disk = true`. Each entry
+names which of its facts were executed, reported by Rahi, or read at source.
+None is repaired here; `035` is the repair contract and waits for its own
+implementing change. The class and state tables above are not recomputed.
+
+### F-126 `defect`, confidence `high`
+
+**The consent move runs before a live hiqlite 0.14 node is excluded.** With
+`HQL_CACHE_LEGACY_MOVE_ASIDE=true`, `start_node_inner` takes `024`'s owner lock
+and then runs `027` B-10's move (`start.rs:251,266`;
+`store/logs/mod.rs:36-74`). A live 0.14 node never takes the owner lock; it
+holds advisory locks on `logs/lock.hql` and `logs_cache/lock.hql`, which the
+0.15 start first meets in the SQLite `LogStore::start`, after the move
+(`hiqlite-wal/src/log_store.rs:45-50`).
+
+**Observed by execution** (probe P-2 of `035`), reproducing Rahi's report: the
+live node's `logs_cache` (same inode) and `state_machine_cache` were moved into
+`pre-upgrade-<secs>/`, a new format-2 `logs_cache/` and the owner lock were
+created, and the start then failed on `logs/lock.hql` through a task panic. The
+0.14 node kept serving and wrote into the **moved** WAL after the move, so the
+moved-aside copy was not a stable record of the old cache. At stop its cache
+writer panicked on the missing lock file while `shutdown` returned `Ok` and the
+process exited `0`, and it wrote its metadata into the new directory. Its restart
+failed with `InitializeError` and left `state_machine/lock`, after which neither
+version started the directory without manual repair.
+
+**Consumer triage.** Reaches any consumer whose first 0.15 start with consent
+meets a 0.14 process still running on the same volume: Rahi 043 excludes it with
+its own locks for the app store and states it as an operator precondition for
+Rauthy's store (043 B-5); a Rauthy started with consent on its own has no such
+guard.
+
+### F-127 `defect`, confidence `high`
+
+**Over a 0.14 unclean-stop marker, a consent start moves the cache and rewrites
+the SQLite raft log, then panics.** `state_machine/lock` is checked in the SQLite
+state machine's constructor (`state_machine.rs:287-316`), after the move and after
+the SQLite `LogStore` has opened `logs/`, and a present marker is a panic, not an
+error. **Observed by execution** (P-3): after a `SIGKILL` of 0.14, a 0.15 start
+with consent moved the cache aside, rewrote the SQLite raft's WAL file (same
+size, different content) and created `logs/meta.hql~`, then panicked, exit 101.
+Rahi reported the move-then-panic part.
+
+### F-128 `contradiction`, confidence `high`
+
+**Two refusals say nothing changed after creating a file.** The legacy-cache
+refusal ends "Nothing was changed." (`store/logs/mod.rs:163`) and the
+`StorageInUse` refusal says the node "has changed nothing" (`storage_lock.rs:85`),
+but both run after `StorageOwnership::acquire` has created `hiqlite-owner.lock`
+if it was absent, and the first after it has also written the refused process's
+owner note into it. **Observed by execution** (P-1): the only change was a new
+188-byte owner lock naming the refused process. Separately (P-4), a
+`StorageInUse` refusal named a previous, stopped process as the "last recorded
+owner" while a different process held the lock; the text calls it recorded, but
+not possibly stale. Rahi reported the first part.
+
+### F-129 `limit`, confidence `high`
+
+**Starting hiqlite 0.14 over a cache that 0.15 wrote is destructive, and 0.15
+cannot prevent it.** 0.14 reads no format marker and decodes 0.15's
+`CacheRequest` layout. **Observed by execution** (P-6), three runs: a panic in
+all three (`DecodeError: invalid value: integer 14, expected variant index 0 <= i
+< 14`); in two, `logs/meta.hql` (the SQLite raft) and `logs_cache/meta.hql` were
+left torn (7 and 8 bytes; 0 and 7 bytes, from 32) with `state_machine/lock`
+behind, and 0.15 then refused the directory with `WAL: FileCorrupted: invalid
+metadata file length`. Rahi reported two runs, both panics, one destructive. Five
+runs, five panics, three destructive: a rate, not a bound. The consequence belongs
+beside the consumer handoff's downgrade warning; whether a manual move-aside of
+the 0.15 cache before a 0.14 start is safe was **not** probed.
+
+### F-130 `defect`, confidence `medium`
+
+**An interrupted consent move can leave a 0.14 cache snapshot that the next start
+restores without refusal or consent.** `move_legacy_cache_aside` renames
+`logs_cache` first and `state_machine_cache` second (`store/logs/mod.rs:52`); the
+legacy check looks only for `.wal` files in `logs_cache` (`:151`); a disk-backed
+cache restores its latest snapshot at start (`memory/state_machine.rs:405-411`).
+A crash between the two renames leaves no `.wal` evidence and the old snapshots in
+place, so the next start, with or without consent, writes the marker and opens
+them. Read at source; the crash was **not** executed, and what a 0.14 snapshot
+does in a 0.15 cache raft (decodes, fails, or conflicts with the empty log) is
+inferred, which is why the confidence is `medium`.
+
+### F-131 `gap`, confidence `high`
+
+**No supported mechanism hands a consumer's exclusion to hiqlite's start.**
+`StorageOwnership` is crate-private and every start acquires its own locks. An
+advisory `flock` belongs to an open file description, so a process that holds the
+owner lock or a WAL lock file on one descriptor cannot take it again on another.
+**Observed by execution** (P-4, P-5): with Rahi 043's T0 locks held in the same
+process, the in-process start of its T3 was refused with `StorageInUse` in
+0.27 ms. Releasing the locks first leaves a window in which a 0.14 process can
+start. Closing that window needs a producer API and a new release (`035` B-6,
+pending the owner's D-17).
+
+### F-132 `limit`, confidence `high`
+
+**A barrier write proves nothing about acknowledged writes lost before it was
+committed.** The proposal's section 13.7 (at `ec8fc6d`) said a barrier "detects
+storage rollback, asynchronous-sync loss and a wrong source". It detects them
+only when they happen **after** the barrier commits: a barrier is appended to
+whatever log the cluster holds at that moment, so an earlier loss produces a
+shorter log with the barrier on top. **Observed by execution**, with a SQL row
+through the ordinary client standing in for the barrier (no barrier entry point
+exists): an N=1 0.15 node acknowledged `w1` and `w2`; its directory was rolled
+back to a copy taken before `w2`; a barrier was then written; the offline image
+held `w1` and the barrier and not `w2`, so a barrier check **passed** with an
+acknowledged write missing. With the rollback after the barrier, the same check
+refused. Recorded by `033`; the proposal's 13.7 and `034` B-6 are corrected.
+
+### F-133 `limit`, confidence `high`
+
+**A clean WAL stop releases its lock before it unlinks the lock file.**
+`hiqlite-wal/src/writer.rs:725-727` drops the lock and then removes `lock.hql`.
+A contender that opens the file between the two holds a lock on an inode that is
+then unlinked, and a later process can create and lock a new file at the same
+path (P-5, observed on macOS). Between two 0.15 nodes the owner lock covers the
+window; against a 0.14 contender it does not. `035` B-2 reverses the order.
+Read at source; the race itself was not executed.
