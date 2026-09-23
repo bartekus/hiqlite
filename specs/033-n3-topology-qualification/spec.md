@@ -41,8 +41,10 @@ summary: >
   proposal, records six findings the assessment established from source
   (F-118 to F-123), and specifies the hiqlite-side repairs, the real-node
   harness and the deterministic acceptance that stand between today and any
-  claim of N=3 support. It changes no code, supports nothing, and claims no
-  consumer territory.
+  claim of N=3 support. Records the owner's decision D-14: at N=3 the cell is
+  two StatefulSets, one hiqlite node per pod, and the single-container
+  composition stays the N=1 profile. It changes no code, supports nothing, and
+  claims no consumer territory.
 ---
 
 # 033: Qualify a three-voter topology on Kubernetes before anyone calls it supported
@@ -113,8 +115,11 @@ removes a hazard at N=1 as well (F-119 via `034`) and says so.
   Rauthy: defaults plus `cache, cast_ints, counters, dashboard,
   listen_notify_local, macros`), with `cache_storage_disk = true` and the
   `LogSync` mode the owner chose (proposal D-4);
-- can co-locate **two** clusters per simulated pod, as the cell does, so a kill
-  applies to a voter of each;
+- runs two layouts: **split**, one node per simulated pod, which is the N=3
+  layout D-14 decided and the one every A-scenario must pass; and
+  **co-located**, two clusters per simulated pod with one kill applying to a
+  voter of each, which is the N=1 profile's shape and is run so a difference
+  between the layouts is seen rather than assumed;
 - routes every raft and API link through a harness-owned TCP proxy, so a
   partition is a deterministic proxy state, not a firewall rule or a timing
   accident;
@@ -191,8 +196,9 @@ names.
   time, while writes continue: no acknowledged write lost, membership unchanged
   throughout.
 - **A-9. Shutdown budget.** Every `SIGTERM` in A-1 to A-8 records the
-  end-to-end duration of both clusters' shutdowns in a simulated pod; the
-  maximum and the distribution are reported. This is the measurement the
+  end-to-end duration of the shutdown of each simulated pod (one hiqlite node
+  in the split layout, two in the co-located one); the maximum and the
+  distribution are reported. This is the measurement the
   consumers' graces are set from, not a threshold chosen here.
 - **A-10. Full stop and start.** All nodes stopped, then all started, which is
   the supported upgrade shape (proposal D-11): the cluster reforms with its
@@ -238,8 +244,9 @@ listener. `034` owns the repair.
 for the durable group too. B-5 records the decision it needs.
 
 **KD-4. The shutdown budget does not fit the cell's graces at N>1.** Section 4
-of the proposal; B-4 and the consumers' graces are the proposed remedy, and A-9
-is the measurement.
+of the proposal. D-4 removes the double shutdown at N=3; B-4 and the consumers'
+graces remain the remedy for the single shutdown that is left, and A-9 is the
+measurement.
 
 **KD-5. Every N=3 cluster is formed by membership change.** There is no path to
 initialize three voters at once. Not proposed for change: the join path is the
@@ -271,6 +278,20 @@ document because they are one argument. The restore coordination is a separate
 spec, `034`, because it changes `026`'s territory and carries its own
 acceptance; the rest of the N=3 work does not.
 
+**D-4 (2026-09-23, owner decision: the N=3 cell is two StatefulSets).** The
+owner decided the proposal's D-14. At N=3 the cell is one namespace with a
+`rahi` and a `rauthy` StatefulSet, each pod running one hiqlite node of one
+cluster; the single-container, supervised composition stays the N=1 local
+profile. The proposal's section 12 codifies what replaces the single-container
+guarantees: routing to Rauthy through an internal Service over an encrypted,
+NetworkPolicy-restricted path; liveness independent of Rauthy and readiness
+that fails without it, with peer discovery kept independent of readiness; and
+coherent exports by stopping both StatefulSets before exporting both volumes.
+Those are obligations for new Rahi and Statecraft specs, which amend Rahi 031
+and 032 and Statecraft 002 for N=3; nothing in this repository enforces them.
+For this spec the decision changes B-2 (both layouts, split as the one that
+must pass) and A-9 (one shutdown per pod), and removes KD-4's cause at N=3.
+
 **Owner decisions pending.** D-1 to D-13 of the proposal's section 11 are not
 decided by this spec. Each will be dated here when the owner records it.
 
@@ -291,4 +312,5 @@ grep -q 'N=3 is not a' standards/spec/n3-topology-proposal.md
 grep -q '033-n3-topology-qualification' standards/spec/n3-topology-proposal.md
 grep -q '^### F-118 ' standards/spec/findings-register.md
 grep -q '^### F-123 ' standards/spec/findings-register.md
+grep -q '^## 12. D-14: the N=3 cell is two StatefulSets' standards/spec/n3-topology-proposal.md
 ```

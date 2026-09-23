@@ -6,6 +6,13 @@ supported topology of this fork**, and nothing here makes it one: that follows
 only from the evidence section 9 plans, recorded by a later change. N=1 stays
 supported unchanged, and stays the local profile Aicortex runs.
 
+**Decided by the owner on 2026-09-23: D-14.** At N=3 the cell is two
+StatefulSets, one per application, each with one hiqlite node per pod; the
+single-container composition stays the N=1 local profile. Section 12 states the
+replacements for what the split removes. Sections 1 to 5 describe the
+composition as it is deployed today, and say where D-14 changes the
+consequence. D-1 to D-13 remain pending.
+
 Established against: this repository at `72e09a6` (`spec-spine`, clean);
 `openraft =0.9.25` from the committed `Cargo.lock`; `spec-spine` built from the
 pinned revision `aa559f5dcaa59bd9f27b0622b51ae5b57dc2185f`, reporting `0.20.0`,
@@ -166,10 +173,14 @@ transfer (`mgmt.rs:489-490`), so a terminating leader still costs its groups an
 election: 1.5 to 3 s with the default `election_timeout_min/max`.
 
 **Recommendations:** a hiqlite option for the pre-shutdown delay, defaulting to
-today's 9.5 s so nothing changes for current callers (`033` B-4, planned); a
-consumer-side overlap of the two hiqlite shutdowns once HTTP has drained, and
-graces derived from a **measured** end-to-end budget with margin (D-6; Rahi
+today's 9.5 s so nothing changes for current callers (`033` B-4, planned), and
+graces derived from a **measured** end-to-end budget with margin (D-6; consumer
 obligation). The budget is a measurement in section 9, not a number chosen here.
+
+**Under D-14** a pod holds one hiqlite node, so its termination is one hiqlite
+shutdown behind one HTTP drain, with no supervisor grace in between. The
+sequential double shutdown above remains a property of the N=1 local profile
+only, where the pre-delay is skipped because membership has one node.
 
 ## 5. The four raft groups and their shared lifecycle
 
@@ -203,7 +214,17 @@ The shared pod lifecycle couples them:
   in hiqlite the cache is a replicated raft group, and Rahi's `dlock` fencing
   relies on exactly that. A documentation obligation for Rahi.
 
-Changes to the composition are proposed to Rahi (section 8), not made here.
+**Under D-14** the four groups stay, but a pod carries the voters of two of them
+(one application's SQLite and cache groups), not four. Pod loss, a rollout, an
+OOM kill or a crash costs one application's groups a voter and leaves the other
+application's untouched; die-together no longer applies at N=3; each pod has one
+shutdown; and `node_id` is each StatefulSet's own ordinal plus one. Node-level
+failure is unchanged: losing one worker still removes at most one voter from each
+cluster, and losing two still halts both, because splitting separates process
+faults, not hosts.
+
+Changes to the composition are proposed to Rahi and Statecraft (sections 8 and
+12), not made here.
 
 ## 6. Architecture comparison
 
@@ -281,10 +302,10 @@ state. The **source** is the N=1 cell; the **target** is the new cell.
 | **B-1 export** | produce the cell archive **offline** from the stopped volume: both clusters' backup images, `/data/keys`, and a manifest (D-7) | archive written, manifest complete | retry; the source is stopped and unchanged |
 | **B-2 verify provenance** | check every part's hash against the manifest; check the manifest names the source cell, both clusters, each image's applied log id, the hiqlite version and the key ids | all match | stop; do not upload a mismatched archive |
 | **B-3 upload and prove remote** | upload; then **independently** list and fetch it back and re-hash, because `Client::backup` reports only the local copy (`026` KD-8) | remote hash equals local | retry the upload |
-| **R-1 provision** | create the target at N=3 with empty PVCs and no restore instruction; do not start pods yet | objects exist | delete and recreate |
+| **R-1 provision** | create the target at N=3 as D-14's two StatefulSets (Rahi, Rauthy) in one namespace, with empty PVCs, the internal Rauthy Service, the NetworkPolicies of section 12, and no restore instruction; do not start pods yet | objects exist | delete and recreate |
 | **R-2 keys** | install the source's keys in the target (Rahi keys Secret, Rauthy `ENC_KEYS`); refuse if key ids differ from the manifest | ids match | fix the Secret |
-| **R-3 restore node 1** | on ordinal 0 only, apply each cluster's image through a restore that checks the manifest's identity and digest and records a restore id, so a repeat is a no-op (`034`) | node 1 of each cluster is a single-voter leader on the restored state | destroy the target's PVCs; back to R-1 |
-| **R-4 join** | start ordinals 1 and 2; each joins both clusters by `add_learner`, snapshot installation, and promotion | four groups report voters `{1,2,3}` | stop joins; inspect; if not resolvable, back to R-1 |
+| **R-3 restore node 1** | on ordinal 0 of **each** StatefulSet, apply that cluster's image (split out of the source archive) through a restore that checks the manifest's identity and digest and records a restore id, so a repeat is a no-op (`034`) | node 1 of each cluster is a single-voter leader on the restored state | destroy the target's PVCs; back to R-1 |
+| **R-4 join** | start ordinals 1 and 2 of each StatefulSet; each joins its own cluster by `add_learner`, snapshot installation, and promotion | four groups report voters `{1,2,3}` | stop joins; inspect; if not resolvable, back to R-1 |
 | **V-1 validate** | section 7.1 | every check passes | back to R-1; the source is still stopped and intact |
 | **C-1 fence the source** | delete the source StatefulSet with its PVC retained (`Retain`), remove its Service endpoints and ingress, and record the source as decommissioned | nothing can schedule a source pod without re-creating the object | stop; the target has taken no traffic |
 | **C-2 cut over** | point ingress and DNS at the target; lift maintenance on the target | first authoritative write accepted | **this is the point of no return** |
@@ -303,6 +324,11 @@ external traffic:
 - consumer checks: Rahi `preflight` and `ledger verify` at the manifest's ledger
   head; Rauthy's discovery document with the unchanged issuer and a token signed
   by the expected key id; Statecraft's own acceptance (section 8);
+- Rahi reaches Rauthy only through the internal Service over the encrypted
+  path, and a pod outside Rahi's labels is refused by Rauthy's NetworkPolicy
+  (section 12);
+- with Rauthy scaled to 0, every Rahi pod goes not-ready and **none restarts**,
+  and readiness returns when Rauthy does (section 12);
 - no pod of the target has restarted since R-4, or each restart is explained.
 
 **7.2 Old and new never both accept authoritative writes.** Four independent
@@ -327,6 +353,11 @@ Within R-3, `026` B-8's roll-forward finishes a committed restore on restart, an
 `034`'s restore id makes a repeated instruction a no-op rather than a second
 restore. A failure in Q-1 to B-3 leaves the source stopped, snapshotted and
 restartable.
+
+The source of this protocol is always an N=1 cell, one volume, so Q-2 to B-1
+stop and export one StatefulSet. A later export **from** a split N=3 cell (a
+reverse migration, or a DR archive taken offline) follows section 12's rule:
+both StatefulSets to 0, both fully terminated, then both exported.
 
 **7.4 Rollback and the point of no return.** Before C-2: stop the target,
 re-create the source StatefulSet on its retained PVC, restore its ingress, lift
@@ -358,25 +389,33 @@ this change.
 - R-b. Replace the file-level restore of Rahi 030 D-2 with hiqlite's repaired
   restore once `034` makes it callable. D-2 re-implements the 0.14 sequence that
   F-057 and F-100 record, without staging, sync or roll-forward.
-- R-c. Shutdown: graces from the measured budget; overlap the two hiqlite
-  shutdowns after HTTP drain; set the hiqlite pre-delay option once it exists;
-  a `preStop` only if the measurement shows it is needed.
-- R-d. N=3 manifests: PodDisruptionBudget `maxUnavailable: 1`; NetworkPolicy
-  admitting 8100/8200/8300/8400 only from pods of the same cell and nothing from
-  outside the namespace; keep required anti-affinity; add zone spread where the
-  cluster has zones; restore the `--adopt-manifest` flag the n3 overlay drops.
-- R-e. Readiness that includes the Rauthy node's hiqlite health, or a recorded
-  reason why not.
+- R-c. Shutdown: graces from the measured budget; set the hiqlite pre-delay
+  option once it exists; a `preStop` only if the measurement shows it is
+  needed. Under D-14 this is one shutdown per pod.
+- R-d. N=3 manifests, per StatefulSet: PodDisruptionBudget
+  `maxUnavailable: 1`; required anti-affinity within the application; zone
+  spread where the cluster has zones; the section 12 NetworkPolicies; restore
+  the `--adopt-manifest` flag the n3 overlay drops.
+- R-e. The D-14 composition: a new Rahi spec that amends 031 (die-together,
+  supervision) and 032 (topology) for N=3 only, stating section 12's routing,
+  trust, readiness and liveness rules, and keeping the single-container
+  supervisor as the N=1 profile.
 - R-f. Correct `deploy/README.md:265` (the cache group is replicated, and holds
   the leases behind Rahi's fencing tokens).
 - R-g. The archive manifest gains what D-7 lists, so B-2 and V-1 can check it.
 - R-h. Maintenance mode for Q-1 that also covers requests proxied to Rauthy.
+- R-i. A two-StatefulSet archive: the backup verb addresses Rauthy through the
+  internal Service instead of loopback, and its offline form exports both
+  volumes after both StatefulSets are at 0 (section 12).
 
 **Rauthy.** Enumerate what lives only in its cache group and is lost by a
 restore (D-8); confirm its background writers are stopped by Q-2 rather than
 Q-1; confirm `ENC_KEYS` and key-id handling across a restore into a new cell.
 
-**Statecraft.** Its per-scope serialization is in-process only. At N=3, with
+**Statecraft.** Its manifest's rule that Rauthy is never a second container
+or a separate workload (Statecraft 002, `deploy/k8s/statefulset.yaml`) holds
+for N=1 and must be amended for N=3 by a Statecraft spec that adopts D-14.
+Its per-scope serialization is in-process only. At N=3, with
 more than one replica serving, it is not a guarantee: a cross-replica mechanism
 (for example Rahi's `dlock` with its fencing tokens) or single-writer routing is
 required before Statecraft acceptance can pass. Its manifest carries
@@ -413,19 +452,21 @@ declared done.
 
 ## 10. Kubernetes prerequisites
 
-- **Stable ids and discovery.** A StatefulSet; `node_id` = ordinal + 1 for both
-  clusters; peers by headless-Service pod DNS; peer lists fixed before first
-  start. Replacement keeps the ordinal (D-2).
+- **Stable ids and discovery.** One StatefulSet per application (D-14);
+  `node_id` = that StatefulSet's ordinal + 1; peers by the application's own
+  headless-Service pod DNS, with `publishNotReadyAddresses: true` so a not-ready
+  pod stays addressable to its peers; peer lists fixed before first start.
+  Replacement keeps the ordinal (D-2).
 - **Bootstrap and readiness ordering.** `Parallel` pod management is acceptable
   only after F-118 is repaired; until then, `OrderedReady` for first bootstrap.
-  Readiness reflects both hiqlite nodes of the pod (R-e).
+  Readiness and liveness follow section 12.
 - **Independent failure domains and storage.** Required anti-affinity across
   nodes; zone spread when zones exist; one `ReadWriteOnce` PVC per replica on
   storage that is not shared between replicas; no network filesystem (the
   handoff's supported-platform statement). Two replicas on one node or one
   volume are one failure domain and void every N=3 claim.
-- **Disruption.** PDB `maxUnavailable: 1`; node drains serialized; a drain that
-  would take a second voter waits.
+- **Disruption.** A PDB `maxUnavailable: 1` per StatefulSet; node drains
+  serialized; a drain that would take a second voter of either cluster waits.
 - **Shutdown budget.** `terminationGracePeriodSeconds` set from stage 8's
   measurement plus margin, never below the measured maximum.
 - **Upgrades.** Mixed-version clusters are not supported (handoff section 5).
@@ -434,8 +475,8 @@ declared done.
   for a pair of versions qualified together (D-11).
 - **Management endpoints.** The hiqlite API ports carry `/cluster/*` membership
   endpoints guarded by `secret_api`, and Rauthy enables `dashboard` (F-087,
-  F-091). NetworkPolicy admits them only from the same cell's pods; they are
-  never exposed through ingress.
+  F-091). NetworkPolicy admits each application's hiqlite ports only from that
+  application's own pods; they are never exposed through ingress.
 - **Transport encryption.** NetworkPolicy is access control, not encryption.
   hiqlite's secrets authenticate a peer; they do not encrypt raft or API
   traffic, which is plaintext in the cell today. D-5 chooses the boundary.
@@ -458,5 +499,94 @@ decisions.
 | D-9 | RPO/RTO targets (section 7.5) | sets archive frequency and rehearsal bounds | adopt as **targets**, revisit after stage 9 |
 | D-10 | No hiqlite version change inside a migration window | two variables in one outage | **adopt** |
 | D-11 | Supported upgrade is full stop unless a pair is qualified | every upgrade is a planned outage by default | **adopt** |
-| D-12 | Offline export (B-1) versus hot backup plus a write watermark | offline export is coherent across both clusters by construction, needs a stopped volume and a new hiqlite entry point; hot backup needs quiescence of both applications, including Rauthy's background writers | **offline export** for migration; hot backup stays the scheduled DR archive |
+| D-12 | Offline export (B-1) versus hot backup plus a write watermark | offline export is coherent across both clusters by construction, needs a stopped volume and a new hiqlite entry point; hot backup needs quiescence of both applications, including Rauthy's background writers. Under D-14 a hot archive of a split cell is two images taken at two instants, with no single-volume cut behind it | **offline export** for migration; hot backup stays the scheduled DR archive, with its cross-cluster skew stated in the DR RPO (D-9) |
 | D-13 | Keep or remove `openraft/loosen-follower-log-revert` from `cache` (F-121) | removing it restores openraft's panic on a reverted follower for both groups and needs the in-memory cache's rejoin shown correct without it; keeping it silently accepts a reverted durable follower | **measure without it in stage 4**; remove it if A-1 to A-8 pass, otherwise keep it and require `LogSync::Immediate` for durable groups at N=3 (D-4) |
+| D-14 | **Decided 2026-09-23 by the owner.** N=3 is two StatefulSets, one per application, one hiqlite node per pod; the single-container composition is the N=1 local profile | section 12's replacements become obligations of new Rahi and Statecraft specs; the shutdown budget, blast radius and rollout coupling of sections 4 and 5 no longer apply at N=3; the harness qualifies both layouts | recorded as decided |
+
+## 12. D-14: the N=3 cell is two StatefulSets
+
+**Decision.** Recorded 2026-09-23, owner. At N=3 the cell is one namespace
+holding two StatefulSets, `rahi` and `rauthy`, each of three replicas, each pod
+running exactly one hiqlite node of one cluster. N=1 keeps the single-container,
+supervised composition of Rahi 031 unchanged, as the local profile Aicortex and
+`docker compose` run.
+
+**Why.** It removes the two sequential hiqlite shutdowns inside one grace
+(section 4), a Rauthy fault costing Rahi a voter (section 5), coupled rollouts
+and upgrades, and one memory limit shared by two processes. Rauthy's own HA
+shape is a separate StatefulSet (`rauthy-helm-worktree`). What it does **not**
+change is the node-failure arithmetic; section 5 says why.
+
+**What it replaces.** The single-container design gave four things for free.
+Each needs an explicit replacement, codified here so the downstream specs carry
+all of it. They are obligations of the owning repositories (Rahi, Statecraft,
+and whichever repository deploys the cell), proposed from here, not made here.
+
+**12.1 Routing and trust boundary** (replaces loopback).
+
+- Rahi MUST address Rauthy through an internal ClusterIP Service,
+  `rauthy-internal.<namespace>.svc.cluster.local`, never a pod address and
+  never the public ingress. The Service is internal only: no ingress, no
+  `LoadBalancer`, no `NodePort`.
+- That traffic MUST be encrypted, by Rauthy's native TLS or by a service mesh's
+  mTLS where one is present. A mesh qualifies only with a shutdown order that
+  keeps its proxy up until the application's hiqlite shutdown has finished
+  (section 4). The mechanism is recorded in the downstream spec, and a capture
+  showing no plaintext on the path is part of stage 8.
+- A NetworkPolicy MUST admit ingress to Rauthy's HTTP port **only** from pods
+  carrying Rahi's workload labels, plus the public path if Rauthy serves users
+  directly. Rauthy's hiqlite ports (8100, 8200) admit only Rauthy's own pods;
+  Rahi's (8300, 8400) only Rahi's own pods.
+- Rahi's administrative calls to Rauthy (the backup verb's `POST /backup` with
+  the admin token, Rahi 030 B-5) cross the same encrypted, policy-restricted
+  path. The admin token is not sent to any other address.
+- NetworkPolicy is access control, not encryption. hiqlite's own raft and API
+  traffic inside each StatefulSet still needs D-5, which stays pending.
+
+**12.2 Readiness and liveness** (replaces die-together).
+
+- **Liveness** MUST NOT depend on Rauthy. An unreachable Rauthy never restarts a
+  Rahi pod, so a Rauthy outage never becomes a restart storm and a round of
+  elections in Rahi's groups.
+- **Readiness** MUST fail while Rahi cannot reach Rauthy through the internal
+  Service, which takes Rahi out of the client-facing Service instead of serving
+  errors, and returns when Rauthy is reachable again.
+- **Startup** MUST NOT wait on Rauthy either: today's supervisor waits up to
+  60 s for Rauthy's health before serving (Rahi 031); at N=3 a startup probe
+  gated on Rauthy would turn the same outage into restarts.
+- Peer discovery MUST NOT depend on readiness. Each application's headless
+  Service sets `publishNotReadyAddresses: true`, as Rahi's `deploy/k8s/service.yaml`
+  already does, so a Rahi pod that is not ready because Rauthy is away stays
+  addressable to its Raft peers, and a bootstrapping pod is addressable before
+  it is ready. The client-facing Service is a separate object that honors
+  readiness.
+- Rauthy's own readiness stays its hiqlite `/ready`.
+
+**12.3 Backup consistency** (replaces the single-volume cut).
+
+- An export that must be coherent across both clusters (a migration **from** a
+  split cell, a reverse migration, an offline DR archive) MUST scale **both**
+  StatefulSets to 0, wait until every pod of both has terminated and released
+  its storage lock, and only then export both volumes offline (`034` B-2).
+- `034` B-2 takes `024`'s exclusive lock on each data directory and refuses a
+  state machine that has not applied what its log committed. Together with both
+  workloads stopped, that shows no write reached either raft log during the
+  export window, which is the guarantee the single volume gave. The Statecraft
+  and Rahi specs cite it as such.
+- The cell archive (Rahi 030 B-5) becomes an archive of two exported volumes
+  plus the keys, with one manifest naming both images, both applied log ids and
+  both digests (D-7).
+- A **hot** archive of a split cell, taken while serving, is two images at two
+  instants. It stays the scheduled DR archive (D-12), and its skew between the
+  two clusters is stated in the DR objective (D-9) rather than hidden.
+
+**12.4 What stays.** The N=1 profile: one container, `rahi supervise`, loopback,
+die-together, one volume, one archive. The migration protocol of section 7,
+whose source is always an N=1 cell: only its target side changes (R-1, R-3, R-4,
+V-1). The hiqlite plan: stages 2 to 6 are layout-independent, and the harness
+runs both layouts (`033` B-2).
+
+**12.5 Fallback, not chosen.** Rauthy as a native sidecar container in the Rahi
+pod keeps loopback and one volume, gains per-container limits and an ordered
+shutdown, and keeps coupled rollouts. Recorded so a later reader sees it was
+weighed.
