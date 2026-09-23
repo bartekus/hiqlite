@@ -1,0 +1,127 @@
+{
+  "mapping": {
+    "dependsOn": [
+      "000-hiqlite-ownership-bootstrap",
+      "012-cluster-integration-evidence",
+      "026-backup-and-restore-integrity",
+      "027-node-lifecycle-and-startup-errors",
+      "031-downstream-release-qualification"
+    ],
+    "implementingPaths": [
+      {
+        "path": "standards/spec/findings-register.md",
+        "source": "spec-edge"
+      },
+      {
+        "path": "standards/spec/n3-topology-proposal.md",
+        "source": "spec-edge"
+      }
+    ],
+    "resolvedUnits": [
+      {
+        "locations": [],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "directory",
+          "path": "qualification/n3/"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "standards/spec/n3-topology-proposal.md"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/n3-topology-proposal.md"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "standards/spec/findings-register.md"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/findings-register.md"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/Cargo.toml"
+          }
+        ],
+        "ownership": false,
+        "sourceField": "references",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/Cargo.toml"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/client/mgmt.rs"
+          }
+        ],
+        "ownership": false,
+        "sourceField": "references",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/client/mgmt.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/init.rs"
+          }
+        ],
+        "ownership": false,
+        "sourceField": "references",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/init.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/membership_gate.rs"
+          }
+        ],
+        "ownership": false,
+        "sourceField": "references",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/membership_gate.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "standards/spec/consumer-handoff.md"
+          }
+        ],
+        "ownership": false,
+        "sourceField": "references",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/consumer-handoff.md"
+        }
+      }
+    ],
+    "specId": "033-n3-topology-qualification",
+    "specStatus": "draft"
+  },
+  "schemaVersion": "1.1.0",
+  "shardHash": "12f137c32f37a9d71ae50e5600a0578f9d39f63aa1683e9ec026d2a1f5bb4b1b"
+}

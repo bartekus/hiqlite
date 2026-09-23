@@ -3021,3 +3021,150 @@ rejection; this is the one that hid its reason.
 **Tested directly, not by re-running the race.** The three verdict paths are
 driven through the function itself, because whether a given machine loses the
 race is not something a test should depend on.
+
+---
+
+## Found by the N=3 topology assessment (2026-09-23)
+
+Recorded by `033-n3-topology-qualification`, against `spec-spine` revision
+`aa559f5dcaa59bd9f27b0622b51ae5b57dc2185f` and tree `72e09a6`, with
+`openraft 0.9.25` from the committed lock. Every entry below was read at source;
+**none was executed**, and the confidence of each says so. None is repaired
+here, and none authorizes a repair: each proposed change is `033` or `034`
+territory and waits for its own implementation. The class and state tables
+above are not recomputed by this section, as they were not by the section
+before it.
+
+### F-118 `defect`, confidence `medium`
+
+**A pristine node 1 treats an unreachable peer as evidence that the cluster is
+fresh.** `hiqlite/src/init.rs:150-222` (`should_node_1_skip_init`) seeds
+`skip_nodes` with `vec![1]` and computes `quorum = nodes.len() / 2`, which is
+`1` at N=3. The seed therefore already satisfies the quorum before any peer is
+asked. The first peer that is not node 1 is queried once: a success with a
+non-empty membership returns "skip init"; a non-success is pushed; and a
+**connection error pushes nothing but still falls through to the quorum check**,
+which passes on the seed alone and returns "initialize". Node 3 is consulted
+only if node 2 answered with a membership.
+
+The wait before it does not help. `is_initialized_timeout_sqlite`
+(`init.rs:785-821`) sleeps five heartbeats so that an existing leader can reach
+the node, but the node's raft streams are refused until `set_raft_running`
+(`raft_server.rs:89-96`, `119-126`), which runs after this decision, so no
+leader can.
+
+Consequence, inferred from control flow and not executed: at N=3, node 1 whose
+data directory is empty (volume loss, a wrong or new PVC, or a restore that
+removed its logs) and whose first peer is momentarily unreachable, for example
+because that pod is itself restarting, calls `Raft::initialize` with itself as
+the only voter. It becomes leader of a new single-node cluster and accepts
+writes, while nodes 2 and 3 still hold a majority of the old membership and
+accept writes too. That is two authoritative clusters. The split-brain watchdog
+was removed by `027` B-8 and never detected this shape. The cache group has the
+same function and, when `cache_storage_disk = false`, reaches it on every start
+of node 1. The in-process suite's "full volume loss on node 1" phase passes
+because node 2 is always reachable there.
+
+**Consumer triage.** Reaches both consumers at N>1 only, and only on node 1.
+Rahi 032 starts pods with `podManagementPolicy: Parallel`, which makes a
+simultaneous restart of node 1 and node 2 an ordinary event. Not reachable at
+N=1, where `nodes.len() < 2` returns before the loop.
+
+### F-119 `limit`, confidence `high`
+
+**`HQL_BACKUP_RESTORE` restores again on every start for as long as it is set.**
+`hiqlite/src/backup.rs:393-433` (`restore_backup_start`) runs
+`restore_backup` on node 1 whenever the variable parses, with no record that
+this restore was already applied; on every other node it quarantines the data
+directory again (`026` KD-3). `README.md:237` states the caller obligation:
+"remove the `HQL_BACKUP_RESTORE` env value" after the restart. Classed as a
+limit because the obligation is documented; what no document states is its
+consequence under an orchestrator, which restarts pods without asking.
+
+Consequence: at N=1, any restart of a pod whose template still carries the
+variable replaces the live database with the backup and discards every write
+since it. At N>1 the follower quarantine makes each restart a full re-join by
+snapshot, and node 1 reaches F-118 or F-120 depending on whether its first peer
+answers. Rahi already refuses to start its own node while the variable is set
+and hands it to Rauthy once behind a marker (Rahi 030 D-2, 031); that is a
+consumer mitigation, not a hiqlite property.
+
+### F-120 `defect`, confidence `medium`
+
+**A node-1 restore that skipped its own initialization waits forever before it
+binds a listener.** `hiqlite/src/start.rs:416-419` calls
+`backup::restore_backup_finish` after both raft groups start and **before** the
+listeners are served and before `become_cluster_member` runs (`start.rs:505-560`).
+`restore_backup_finish` (`backup.rs:728-746`) loops without a bound until the
+SQLite raft reports itself initialized, then loops without a bound until a
+leader is known, and then `debug_assert!`s that the leader is node 1.
+
+If node 1 finds an initialized cluster on a peer (F-118's "skip init" branch),
+it does not initialize, and the only thing that would make it initialized, the
+join, is sequenced after the wait. Consequence, inferred and not executed: the
+start never returns, no listener is bound, `/ready` is never served, and an
+orchestrator's liveness probe restarts the pod into the same wait, restoring
+again each time because of F-119. In a release build the `debug_assert!` is
+absent; in a debug build a restored node 1 that is not leader panics.
+
+### F-121 `decision`, confidence `high`
+
+**The `cache` feature relaxes a consensus safety check for both raft groups.**
+`hiqlite/Cargo.toml:41` defines `cache = ["__cluster",
+"openraft/loosen-follower-log-revert"]`. A Cargo feature is crate-wide, so every
+build with `cache`, which is both consumers, runs the durable SQLite group with
+the relaxation too, not only the cache group it was presumably added for.
+
+What the flag does is openraft's to define, and it defines it narrowly
+(`openraft-0.9.25/src/progress/entry/mod.rs:150-170`,
+`docs/feature_flags/feature-flags.md`): a follower whose log reverts to an
+earlier state no longer panics the leader, which instead accepts the revert.
+openraft's own FAQ says the flag does not make an erased node safe in an odd
+cluster, and gives the N=3-shaped sequence in which a committed entry is lost:
+the entry is committed on the leader and one follower, that follower loses it,
+and the leader fails before anyone else has it.
+
+hiqlite's side of the boundary: its full-volume-loss path removes a pristine
+node from the membership before that node accepts raft traffic (`init.rs`
+"leave before proceed", and the stream gate above), so the erased-node case is
+mitigated by hiqlite, not by openraft. What is **not** covered is a partial
+revert on a node that is still initialized. Under `LogSync::ImmediateAsync`, the
+default and the only mode the environment route can select (F-035), an append is
+acknowledged when writeback has been **requested** (`001` section 3), so a
+kernel crash or power loss can remove an acknowledged tail from a follower that
+counted toward a commit. With the flag, the leader accepts that follower's
+shorter log silently; without it, the leader would panic, which is loud and
+also not a repair. Recorded as a decision because no document says which
+behavior the durable group should have at N=3; under `LogSync::Immediate` the
+revert this flag tolerates should not arise from a crash at all.
+
+### F-122 `evidence`, confidence `high`
+
+**No multi-node evidence matches the configuration either consumer runs.**
+Every N=3 result in this repository comes from `hiqlite/tests/cluster/`, which
+starts three nodes in **one process**, in a **debug** build with unwinding,
+with `tls_raft` and `tls_api` set to `None` (F-053) and
+`cache_storage_disk = false` for every node (`start.rs:79-86`), under the
+feature union of `just test-no-s3`, with sleeps between phases (F-054, F-116)
+and two tests sharing the process (F-049, F-055, F-102).
+
+Both consumers run `cache_storage_disk = true` (the default), release builds
+under `panic = "abort"`, `LogSync::ImmediateAsync`, their own feature sets, and
+two hiqlite nodes per pod in **two processes** (Rahi 031). So: the disk-backed
+cache group has never been restarted at N=3 by any test; the shutdown path that
+self-leaves the cache (`client/mgmt.rs:428`) is the one the suite exercises and
+the one neither consumer takes; no N=3 run crosses a process or host boundary,
+so no partition, `SIGKILL` or packet loss has been applied to a real peer; and
+F-107's release-build consequence (`027` KD-9) stays unexecuted. The external
+consumer checks of `031` ran at N=1 only.
+
+### F-123 `contradiction`, confidence `high`
+
+**The release ledger says the cluster suite's blocker is unrepaired, and also
+that it was repaired.** `standards/spec/release-ledger.md:97-98` says the
+release "does not claim the cluster suite passes" because "the remote-client
+stall (F-051) is unrepaired". Row R-18 of the same file (`:69`) records `032` as
+published, repairing that stall, with "the cluster integration suite runs to
+completion for the first time in this repository". Both sentences are in the
+committed ledger. Recorded, not edited: the ledger is `031`'s unit, and which
+sentence is stale is a statement about published evidence that its owner makes.
