@@ -240,7 +240,7 @@ correction; and replacing 030 D-2's file-level restore once `034` is callable.
 
 ## 8. What hiqlite provides now, and what it does not
 
-- **A1, the `035` repair: implemented, candidate only.** Commit `3b11e4a` on
+- **A1, the `035` repair: implemented, candidate only.** Commit `048fcec` (`3b11e4a` plus the independent review's fixes, `035` D-11) on
   branch `fix/035-n1-upgrade-exclusion` of `bartekus/hiqlite`. Public API unchanged;
   behavior: refusals are errors (`StorageInUse` for a held lock, `Startup` for
   the marker, the legacy cache and an incomplete move), messages name what the

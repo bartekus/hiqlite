@@ -138,7 +138,7 @@ forward; this file sends nothing.
 
 ### N1. The `035` candidate: interface, clearly unpublished
 
-- **What.** hiqlite commit `3b11e4a`, branch `fix/035-n1-upgrade-exclusion` on
+- **What.** hiqlite commit `048fcec` (`3b11e4a` plus review fixes), branch `fix/035-n1-upgrade-exclusion` on
   `bartekus/hiqlite`, `035` B-1 to B-5. **Unpublished; not a release; do not pin it in anything
   released.** The public API is unchanged. Observable changes a Rauthy start
   meets: a live 0.14 node (or any holder of `logs/lock.hql` or
