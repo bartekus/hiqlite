@@ -96,8 +96,8 @@ impl TryFrom<&str> for LogSync {
 #[allow(clippy::type_complexity)]
 pub fn spawn(
     base_path: String,
-    // `None` when the caller holds the directory's lock itself and releases it after its own
-    // last write (`LogStore::start_with_lock`).
+    // A share of the caller's lock (`LogStore::start_with_lock`) is only dropped, never unlinked,
+    // so the lock stays held until both the writer and the caller are done. `None` only in tests.
     lockfile: Option<LockFile>,
     sync: LogSync,
     wal_size: u32,
@@ -785,6 +785,32 @@ mod tests {
             Some(true),
             "the lock file must be unlinked while the lock is held, observed {observed:?}"
         );
+    }
+
+    /// `035` B-2, found in review: when the caller drops its lock first (a start that failed after
+    /// its log store opened), the writer's share keeps the lock held until the writer's own last
+    /// write, and the writer never unlinks the caller's file.
+    #[test]
+    fn a_shared_lock_is_held_until_the_writer_stops() {
+        let base = "test_data/shared_lock".to_string();
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).unwrap();
+
+        let caller = acquire(&base);
+        let share = caller.share().unwrap();
+        let meta = Arc::new(RwLock::new(Metadata::read_or_create(&base).unwrap()));
+        let (tx, _wal, _fail) =
+            spawn(base.clone(), Some(share), LogSync::Immediate, 64 * 1024, false, meta).unwrap();
+
+        drop(caller);
+        assert!(LockFile::is_locked(&base).unwrap(), "the writer still holds it");
+
+        let (ack_tx, ack_rx) = oneshot::channel();
+        tx.send(Action::Shutdown(ack_tx)).unwrap();
+        ack_rx.blocking_recv().unwrap();
+        drop(tx);
+        assert!(LockFile::exists(&base).unwrap(), "a share never unlinks");
+        assert!(!LockFile::is_locked(&base).unwrap(), "released once both are done");
     }
 
     /// A writer started without the lock (the caller holds it) neither releases nor unlinks it.

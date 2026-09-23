@@ -285,11 +285,16 @@ while every live hiqlite node of either version is excluded.
   - *Old-version contenders.* A 0.14 start after the release meets a directory in
     0.15's format; that is the downgrade of B-4 and KD-1, not a race this lock
     can close.
-- **A start that fails after its log stores opened** leaves its WAL lock files
-  in place (the writers stopped, the locks were dropped, not released clean), so
-  the next start takes the deep-integrity path (KD-5). A refusal inside B-1 does
-  not: it undoes its creations (B-3).
-- **The owner lock** keeps `024`'s lifecycle: never unlinked, released last.
+- **A start that fails after its log stores opened** drops its storage
+  ownership, and with it the adopted locks, possibly before a log store's writer
+  has made its last write. Each writer therefore holds a second descriptor on the
+  same open file description (`LockFile::share`); an advisory `flock` is released
+  only when every descriptor is closed, so the lock stays held until the writer
+  too is done, and a share never unlinks (D-11). The lock files stay, so the next
+  start takes the deep-integrity path (KD-5). A refusal inside B-1 does not: it
+  undoes its creations (B-3).
+- **The owner lock** keeps `024`'s lifecycle: never unlinked, released last, on a
+  clean release and on any other drop.
 
 ### B-3. Refusals are errors, and say exactly what they left
 
@@ -557,6 +562,11 @@ one after the other and "both proceed" (observed on macOS). The node's `race`
 mode now holds for one second, and the Linux binaries were rebuilt with it
 before the run above. No candidate behavior changed.
 
+**Candidate identity.** The run above tested `3b11e4a`. D-11's follow-up commit
+changes the lock lifecycle on failed starts and three messages; it was not
+re-run in the harness (section 5's bounds allow no unchanged retry, and a new
+sequence needs a new allowance).
+
 **Not executed.** A native Linux amd64 leg: none was available; an emulated
 amd64 run on this arm64 kernel, if it completes, is recorded below as what it
 is. Real consumer images (Rauthy, a Rahi cell). A kernel crash or power loss at
@@ -585,7 +595,8 @@ Recorded, left unfixed here.
   its log stores opened drops its WAL locks without the clean release, so the
   files stay and the next start runs the deep integrity check. Previously the
   failed start's WAL writer removed them. Conservative, and recorded because it
-  is a change.
+  is a change. On non-Unix targets the share relies on the platform keeping a
+  lock held across duplicated handles, which was not examined.
 - **KD-6. The published interrupted-move detection can refuse a legitimate
   configuration change.** B-5's detection of 0.15.0-patched.1's interrupted move
   cannot tell a 0.14 snapshot from a memory-only snapshot of this build; the
@@ -673,6 +684,22 @@ destinations that exist, sources that are missing, a staging directory left
 behind, and repeated consent. B-5's `.partial` directory, its table and its
 refusals are that protocol; the published build's interrupted state, which has
 no `.partial`, is detected separately (KD-6 is its cost).
+
+**D-11 (2026-09-23, lane A: the independent review of `3b11e4a`).** Acted on
+all four findings, in a follow-up commit: (1) a defect: a start failing after
+its log store opened released the adopted WAL lock when its ownership dropped,
+while the writer could still write `meta.hql` and the WAL header; the writer now
+holds a share of the lock (B-2), tested by
+`a_failed_start_keeps_the_wal_lock_until_the_writer_stops` and
+`a_shared_lock_is_held_until_the_writer_stops`, the first observed failing with
+the share removed; (2) two refusals said "No data was changed" after a finished
+interrupted move or a created `.partial`: now incomplete-move errors; (3) an
+incomplete swap claimed every created lock file was removed: it now claims
+nothing it did not do; (4) the owner lock could be released before the WAL locks
+on an unclean drop: `StorageOwnership` now drops them first. The real-version
+run of section 5.1 was on `3b11e4a`, before these; they were verified by the unit
+and regression tests only, and restarting the bounded acceptance on the new
+commit needs a new execution allowance.
 
 **Owner decisions pending.** D-17 (whether to add B-6's public handle) and D-18
 (the release label and whether this repair ships alone) are in the proposal's

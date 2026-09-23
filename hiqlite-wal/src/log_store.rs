@@ -60,8 +60,9 @@ where
     ///
     /// A second descriptor in the same process cannot take a lock the process holds, so a
     /// caller that excluded contenders before starting hands its lock over here instead of
-    /// releasing and re-acquiring it (`035` B-2). The log store does not release or unlink
-    /// that lock; the caller does, after its last write. `lock.existed_before()` carries the
+    /// releasing and re-acquiring it (`035` B-2). The writer keeps a second descriptor on the
+    /// same lock until its own last write and never unlinks it; the caller unlinks and releases
+    /// after its last write. So the lock is held until both are done, whichever ends first. `lock.existed_before()` carries the
     /// unclean-start signal, so a directory prepared by the caller is still told apart from
     /// one a previous run left locked.
     ///
@@ -79,12 +80,17 @@ where
             ));
         }
         let lock_existed = lock.existed_before();
+        // The writer holds a share of the caller's lock, so that a caller which drops its lock
+        // early (a start that fails after this returns) cannot release the directory before the
+        // writer's last write. On a clean stop the writer drops the share without unlinking,
+        // and the caller releases after its own last write.
+        let share = lock.share()?;
         task::spawn_blocking(move || {
             prepare_dir(&base_path)?;
             if lock_existed {
                 warn!("LockFile {base_path} exists already - this is not a clean start!");
             }
-            Self::spawn_parts(base_path, None, lock_existed, sync, wal_size)
+            Self::spawn_parts(base_path, Some(share), lock_existed, sync, wal_size)
         })
         .await?
     }

@@ -227,6 +227,15 @@ impl StorageOwnership {
     }
 }
 
+impl Drop for StorageOwnership {
+    /// The WAL locks go before the owner lock on every drop, clean or not, so the owner lock is
+    /// always the last one released (fields drop in declaration order, which is the reverse;
+    /// found in review).
+    fn drop(&mut self) {
+        drop(self.wal_exclusion.take());
+    }
+}
+
 fn hostname_or_unknown() -> String {
     hostname::get()
         .map(|h| h.to_string_lossy().to_string())

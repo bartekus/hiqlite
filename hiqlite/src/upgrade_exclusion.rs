@@ -294,7 +294,17 @@ impl UpgradeExclusion {
         } else {
             msg.push_str(&format!("; {data_dir}/hiqlite-owner.lock already existed"));
         }
-        if left.is_empty() {
+        if incomplete {
+            // What an interrupted move leaves (its operation directory, possibly a staging
+            // directory and a lock file inside the moved log) is the resumable state, not
+            // something to undo; claim nothing more (found in review).
+            if !left.is_empty() {
+                msg.push_str(&format!(
+                    ", and these WAL lock files or directories this start created remain: {}",
+                    left.join(", ")
+                ));
+            }
+        } else if left.is_empty() {
             msg.push_str(", and every WAL lock file or directory this start created was removed");
         } else {
             msg.push_str(&format!(
@@ -473,7 +483,18 @@ impl UpgradeExclusion {
                 warn!("Finished the interrupted consent move: moved {from} to {to}");
                 self.moved_to = Some(format!("{data_dir}/{dest}"));
             }
-            return self.write_marker_in_place(&dir_logs).map_err(|e| io("writing the marker", e));
+            // After a finished move a failure here is not "no data was changed" (found in review).
+            let moved = self.moved_to.is_some();
+            return self.write_marker_in_place(&dir_logs).map_err(|e| {
+                if moved {
+                    Stop::Incomplete(format!(
+                        "the interrupted consent move was finished, but the format marker in \
+                         {dir_logs} could not be written: {e}. The next start writes it"
+                    ))
+                } else {
+                    io("writing the marker", e)
+                }
+            });
         }
 
         if !consent {
@@ -512,9 +533,15 @@ impl UpgradeExclusion {
                 ),
             ));
         }
-        fs::create_dir(&partial_dir)
-            .and_then(|()| sync_dir(&data_dir))
-            .map_err(|e| io(&format!("creating {partial_dir}"), e))?;
+        fs::create_dir(&partial_dir).map_err(|e| io(&format!("creating {partial_dir}"), e))?;
+        // Once the operation directory exists, a failure is an incomplete move the next start
+        // with consent resumes, not a refusal that changed nothing (found in review).
+        sync_dir(&data_dir).map_err(|e| {
+            Stop::Incomplete(format!(
+                "{partial_dir} was created but {data_dir} could not be synced: {e}; the next \
+                 start with {CONSENT_ENV}=true resumes into it"
+            ))
+        })?;
         fault("after-partial-created")?;
         self.resume(true, &partial)
     }
@@ -1119,6 +1146,36 @@ mod tests {
         assert!(!Path::new(&format!("{dir}/logs/lock.hql")).exists());
         assert!(!Path::new(&format!("{dir}/logs_cache/lock.hql")).exists());
         assert!(Path::new(&format!("{dir}/hiqlite-owner.lock")).exists(), "never unlinked");
+    }
+
+    /// Found in review: a start that fails after its log store opened drops its storage
+    /// ownership, and with it the adopted WAL lock, while the log store's writer may still be
+    /// finishing its last write. The writer's share keeps the lock held until it stops.
+    #[tokio::test]
+    async fn a_failed_start_keeps_the_wal_lock_until_the_writer_stops() {
+        let dir = fresh("failed-start");
+        let ownership = acquire(&dir, false).unwrap();
+        let store = hiqlite_wal::LogStore::<crate::store::state_machine::sqlite::TypeConfigSqlite>::start_with_lock(
+            format!("{dir}/logs"),
+            ownership.wal_exclusion().unwrap().db_lock().unwrap(),
+            hiqlite_wal::LogSync::Immediate,
+            64 * 1024,
+        )
+        .await
+        .unwrap();
+
+        // The failed start's error path: ownership dropped without the clean release.
+        drop(ownership);
+        assert!(is_held(&format!("{dir}/logs")), "the writer has not stopped yet");
+
+        store.stop().await.unwrap();
+        // The writer's thread drops its share after acknowledging; allow it to finish.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while is_held(&format!("{dir}/logs")) {
+            assert!(std::time::Instant::now() < deadline, "never released");
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert!(Path::new(&format!("{dir}/logs/lock.hql")).exists(), "kept: the stop was not clean");
     }
 
     /// `035` U-7: a crash after each step; the next start without consent refuses, and with

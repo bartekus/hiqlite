@@ -18,6 +18,9 @@ pub struct LockFile {
     /// `lock.hql` existed before this value opened it: the previous user of the directory did
     /// not stop cleanly, or a start that refused left it. Today's unclean-start signal.
     existed: bool,
+    /// A second descriptor on the caller's lock ([`Self::share`]): dropping it never unlinks
+    /// the file, and never releases the lock while the caller's descriptor is open.
+    shared: bool,
 }
 
 /// For each unlink, whether another descriptor saw the lock held at that instant (`035` U-6).
@@ -68,12 +71,29 @@ impl LockFile {
         };
 
         match FileExt::try_lock(&file) {
-            Ok(()) => Ok(TryAcquire::Acquired(Self { file, existed })),
+            Ok(()) => Ok(TryAcquire::Acquired(Self {
+                file,
+                existed,
+                shared: false,
+            })),
             Err(fs4::TryLockError::WouldBlock) => Ok(TryAcquire::Held { created: !existed }),
             Err(fs4::TryLockError::Error(err)) => Err(Error::Internal(
                 format!("Error locking WAL lock file {path}: {err}").into(),
             )),
         }
+    }
+
+    /// A duplicate descriptor of the same open file description, for a writer that must keep
+    /// the lock held until its own last write even if the caller's value is dropped first
+    /// (`035` B-2: a start that fails after its log store opened). An advisory `flock` belongs
+    /// to the open file description, so it stays held until every duplicate is closed.
+    /// Dropping the share, or passing it to [`Self::unlink_while_held`], never unlinks.
+    pub fn share(&self) -> io::Result<Self> {
+        Ok(Self {
+            file: self.file.try_clone()?,
+            existed: self.existed,
+            shared: true,
+        })
     }
 
     /// Whether `lock.hql` existed before this value opened it.
@@ -112,7 +132,7 @@ impl LockFile {
     /// by then the caller has finished writing. A file that is no longer the one held (a
     /// contender's, after a rename) is left alone.
     pub fn unlink_while_held(self, base_path: &str) -> io::Result<()> {
-        if self.is_linked_at(base_path)? {
+        if !self.shared && self.is_linked_at(base_path)? {
             #[cfg(test)]
             UNLINK_OBSERVED
                 .lock()
