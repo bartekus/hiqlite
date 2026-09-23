@@ -1,5 +1,8 @@
 {
   "mapping": {
+    "amends": [
+      "027-node-lifecycle-and-startup-errors"
+    ],
     "dependsOn": [
       "000-hiqlite-ownership-bootstrap",
       "001-wal-durability-and-completion",
@@ -9,13 +12,53 @@
     ],
     "implementingPaths": [
       {
+        "path": "hiqlite-wal/src/",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/app_state.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/start.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/storage_lock.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/store/logs/",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/upgrade_exclusion.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/tests/upgrade_exclusion.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "qualification/n1-upgrade/",
+        "source": "spec-edge"
+      },
+      {
+        "path": "spec-spine.toml",
+        "source": "spec-edge"
+      },
+      {
         "path": "standards/spec/findings-register.md",
         "source": "spec-edge"
       }
     ],
     "resolvedUnits": [
       {
-        "locations": [],
+        "locations": [
+          {
+            "file": "qualification/n1-upgrade/"
+          }
+        ],
         "ownership": true,
         "sourceField": "establishes",
         "unit": {
@@ -24,12 +67,107 @@
         }
       },
       {
-        "locations": [],
+        "locations": [
+          {
+            "file": "hiqlite/src/upgrade_exclusion.rs"
+          }
+        ],
         "ownership": true,
         "sourceField": "establishes",
         "unit": {
           "kind": "file",
           "path": "hiqlite/src/upgrade_exclusion.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/tests/upgrade_exclusion.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/tests/upgrade_exclusion.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite-wal/src/"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite-wal/src/"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/store/logs/"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/store/logs/"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/app_state.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/app_state.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/start.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/start.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/storage_lock.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/storage_lock.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "spec-spine.toml"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "spec-spine.toml"
         }
       },
       {
@@ -48,79 +186,40 @@
       {
         "locations": [
           {
-            "file": "hiqlite-wal/src/lockfile.rs"
+            "file": "hiqlite/Cargo.toml"
           }
         ],
         "ownership": false,
         "sourceField": "references",
         "unit": {
           "kind": "file",
-          "path": "hiqlite-wal/src/lockfile.rs"
+          "path": "hiqlite/Cargo.toml"
         }
       },
       {
         "locations": [
           {
-            "file": "hiqlite-wal/src/log_store.rs"
+            "file": "hiqlite/src/lib.rs"
           }
         ],
         "ownership": false,
         "sourceField": "references",
         "unit": {
           "kind": "file",
-          "path": "hiqlite-wal/src/log_store.rs"
+          "path": "hiqlite/src/lib.rs"
         }
       },
       {
         "locations": [
           {
-            "file": "hiqlite-wal/src/writer.rs"
+            "file": "hiqlite/src/store/mod.rs"
           }
         ],
         "ownership": false,
         "sourceField": "references",
         "unit": {
           "kind": "file",
-          "path": "hiqlite-wal/src/writer.rs"
-        }
-      },
-      {
-        "locations": [
-          {
-            "file": "hiqlite/src/start.rs"
-          }
-        ],
-        "ownership": false,
-        "sourceField": "references",
-        "unit": {
-          "kind": "file",
-          "path": "hiqlite/src/start.rs"
-        }
-      },
-      {
-        "locations": [
-          {
-            "file": "hiqlite/src/storage_lock.rs"
-          }
-        ],
-        "ownership": false,
-        "sourceField": "references",
-        "unit": {
-          "kind": "file",
-          "path": "hiqlite/src/storage_lock.rs"
-        }
-      },
-      {
-        "locations": [
-          {
-            "file": "hiqlite/src/store/logs/mod.rs"
-          }
-        ],
-        "ownership": false,
-        "sourceField": "references",
-        "unit": {
-          "kind": "file",
-          "path": "hiqlite/src/store/logs/mod.rs"
+          "path": "hiqlite/src/store/mod.rs"
         }
       },
       {
@@ -154,5 +253,5 @@
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "256cceb3eb375293bb2829988a2de4e35b2624e2107ce3a55ed7a573222efe28"
+  "shardHash": "08ce4565445ca309cac5acae63d7395160e23d9e5895e1203e0a98afaca8383b"
 }

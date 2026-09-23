@@ -150,6 +150,9 @@ __cluster = [
 
 # Internal use only
 __profiling = ["dep:console-subscriber"]
+# Internal use only: `035`'s real-version harness kills a candidate at a named step of the
+# upgrade exclusion (`HQL_TEST_UPGRADE_FAULT`). Never enable it in a build anyone runs.
+__upgrade-fault-points = []
 
 # Internal use only: builds `hiqlite-abort-probe`. See the `[[bin]]` section above.
 __abort-probe = ["sqlite", "cache", "tokio/rt", "tokio/macros"]
@@ -233,6 +236,8 @@ rustls-webpki = { workspace = true, optional = true }
 tikv-jemallocator = { workspace = true, optional = true }
 
 [dev-dependencies]
+# `tests/upgrade_exclusion.rs`: a second process holding a WAL lock, as hiqlite 0.14 does.
+fs4.workspace = true
 tokio = { workspace = true, features = ["full", "test-util", "tracing"] }
 tokio-test = "0.4.4"
 tracing-subscriber.workspace = true

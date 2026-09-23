@@ -119,6 +119,8 @@ pub mod probe {
 #[cfg(any(feature = "sqlite", feature = "cache"))]
 mod storage_lock;
 #[cfg(any(feature = "sqlite", feature = "cache"))]
+mod upgrade_exclusion;
+#[cfg(any(feature = "sqlite", feature = "cache"))]
 mod store;
 /// The environment variable that moves a hiqlite 0.14.x cache raft log aside on the one start
 /// that upgrades a data directory. See the consumer handoff.

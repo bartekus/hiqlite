@@ -3225,8 +3225,10 @@ disposable directories, on one macOS arm64 host (APFS), debug builds of hiqlite
 0.14 at upstream `8f3b9bd` and of the published `hiqlite-patched
 0.15.0-patched.1`, Rahi's feature set, `cache_storage_disk = true`. Each entry
 names which of its facts were executed, reported by Rahi, or read at source.
-None is repaired here; `035` is the repair contract and waits for its own
-implementing change. The class and state tables above are not recomputed.
+`035` is the repair contract. Its implementing change (lane A, 2026-09-23)
+repairs F-126, F-127, F-128, F-130 and F-133 **in the candidate source only**;
+no release carries it, and each entry's **Repair** line says what was tested and
+where. The class and state tables above are not recomputed.
 
 ### F-126 `defect`, confidence `high`
 
@@ -3250,10 +3252,17 @@ failed with `InitializeError` and left `state_machine/lock`, after which neither
 version started the directory without manual repair.
 
 **Consumer triage.** Reaches any consumer whose first 0.15 start with consent
-meets a 0.14 process still running on the same volume: Rahi 043 excludes it with
-its own locks for the app store and states it as an operator precondition for
-Rauthy's store (043 B-5); a Rauthy started with consent on its own has no such
-guard.
+meets a 0.14 process still running on the same volume. Rahi 043 revision 2 never
+starts 0.15 with consent on its app store (it relocates it behind a permanent
+fence) and states the case as an operator precondition for Rauthy's store (043
+B-5); a Rauthy started with consent on its own has no such guard until it runs a
+repaired build.
+
+**Repair** (`035` B-1, candidate, unreleased): the WAL locks are taken right
+after the owner lock and before the move; a held one is `StorageInUse` before any
+rename. Tested by `tests/upgrade_exclusion.rs` (fails on the published source,
+where the start with consent even *succeeded* beside a second process holding
+`logs_cache/lock.hql`) and by `035` X-1, X-2 and X-4 (section 5.1).
 
 ### F-127 `defect`, confidence `high`
 
@@ -3265,6 +3274,13 @@ error. **Observed by execution** (P-3): after a `SIGKILL` of 0.14, a 0.15 start
 with consent moved the cache aside, rewrote the SQLite raft's WAL file (same
 size, different content) and created `logs/meta.hql~`, then panicked, exit 101.
 Rahi reported the move-then-panic part.
+
+**Repair** (`035` B-1 step 3, candidate, unreleased): without `auto-heal` the
+marker is an `Error::Startup` before any rename and before `logs/` is opened.
+With `auto-heal` (hiqlite's default features, so Rauthy's build) the marker stays
+the state machine's rebuild policy, now reached only under the WAL locks. The
+panic inside the SQLite state machine's constructor remains for a start that
+reaches it by another route; B-1 keeps the consent path from reaching it.
 
 ### F-128 `contradiction`, confidence `high`
 
@@ -3278,6 +3294,12 @@ owner note into it. **Observed by execution** (P-1): the only change was a new
 `StorageInUse` refusal named a previous, stopped process as the "last recorded
 owner" while a different process held the lock; the text calls it recorded, but
 not possibly stale. Rahi reported the first part.
+
+**Repair** (`035` B-3, candidate, unreleased): the owner note is written only
+after every check passed, refusals say whether this start created
+`hiqlite-owner.lock` or found it, WAL lock files and directories a refused start
+created are removed again, and the owner shown by `StorageInUse` is called
+diagnostic and possibly stale.
 
 ### F-129 `limit`, confidence `high`
 
@@ -3306,6 +3328,14 @@ them. Read at source; the crash was **not** executed, and what a 0.14 snapshot
 does in a 0.15 cache raft (decodes, fails, or conflicts with the empty log) is
 inferred, which is why the confidence is `medium`.
 
+**Repair** (`035` B-5, candidate, unreleased): the consent move is one resumable
+operation that moves the snapshots before the log; and the state the published
+build leaves after a crash between its renames is detected and refused without
+consent, finished with it. Tested by U-7, `tests/upgrade_exclusion.rs` (which
+started over the snapshot on the published source) and X-5. The published
+build's own behavior is unchanged: a Rauthy running 0.15.0-patched.1 still has
+this exposure until it runs a repaired build.
+
 ### F-131 `gap`, confidence `high`
 
 **No supported mechanism hands a consumer's exclusion to hiqlite's start.**
@@ -3317,6 +3347,12 @@ process, the in-process start of its T3 was refused with `StorageInUse` in
 0.27 ms. Releasing the locks first leaves a window in which a 0.14 process can
 start. Closing that window needs a producer API and a new release (`035` B-6,
 pending the owner's D-17).
+
+**State (2026-09-23).** Unrepaired and, for Rahi, no longer on the critical path:
+Rahi 043 revision 2 holds no hiqlite lock of its own and excludes pre-043
+binaries with a permanent fence at its app store's old path (`035` B-6, proposal
+section 15). The gap stands for any consumer that wants lock-based exclusion
+continuous into an in-process start.
 
 ### F-132 `limit`, confidence `high`
 
@@ -3342,3 +3378,10 @@ then unlinked, and a later process can create and lock a new file at the same
 path (P-5, observed on macOS). Between two 0.15 nodes the owner lock covers the
 window; against a 0.14 contender it does not. `035` B-2 reverses the order.
 Read at source; the race itself was not executed.
+
+**Repair** (`035` B-2, D-8, candidate, unreleased): reversing the order alone was
+not enough, because the WAL writer also released `logs/lock.hql` before the
+SQLite writer had finished. The WAL locks now live with the owner lock until
+every writer of the node has stopped; each `lock.hql` is then unlinked while held
+and released, and the owner lock last. `LogStore::start` callers that own their
+lock get unlink-while-held at the writer's stop. Tested by U-6 in both crates.

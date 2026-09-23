@@ -160,7 +160,8 @@ impl AppState {
             .lock()
             .map(|mut guard| guard.take())
             .unwrap_or(None);
-        if taken.is_some() {
+        if let Some(ownership) = taken {
+            ownership.release_clean();
             tracing::info!("Exclusive storage ownership released");
         }
     }

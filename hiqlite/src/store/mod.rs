@@ -37,21 +37,46 @@ pub mod state_machine;
 
 pub type StorageResult<T> = Result<T, StorageError<NodeId>>;
 
+/// Start a WAL log store on the lock `035` B-1 took for it, or take the lock itself when this
+/// node took none (no data directory to exclude on).
+async fn start_log_store<T: openraft::RaftTypeConfig>(
+    dir: String,
+    node_config: &NodeConfig,
+    wal_lock: Option<&hiqlite_wal::LockFile>,
+) -> Result<hiqlite_wal::LogStore<T>, Error> {
+    Ok(match wal_lock {
+        Some(lock) => {
+            hiqlite_wal::LogStore::start_with_lock(
+                dir,
+                lock,
+                node_config.wal_sync.clone(),
+                node_config.wal_size,
+            )
+            .await?
+        }
+        None => {
+            hiqlite_wal::LogStore::start(dir, node_config.wal_sync.clone(), node_config.wal_size)
+                .await?
+        }
+    })
+}
+
 #[cfg(feature = "sqlite")]
 pub(crate) async fn start_raft_db(
     node_config: &NodeConfig,
     raft_config: Arc<RaftConfig>,
     do_reset_metadata: bool,
     lifecycle: crate::lifecycle::NodeLifecycle,
+    wal_lock: Option<&hiqlite_wal::LockFile>,
 ) -> Result<StateRaftDB, Error> {
     // We always want to start stopped and set to `false` as soon as we found out,
     // that we are not pristine node and need cleanup.
     let is_raft_stopped = Arc::new(AtomicBool::new(true));
 
-    let mut log_store = hiqlite_wal::LogStore::<TypeConfigSqlite>::start(
+    let mut log_store = start_log_store::<TypeConfigSqlite>(
         logs::logs_dir_db(&node_config.data_dir),
-        node_config.wal_sync.clone(),
-        node_config.wal_size,
+        node_config,
+        wal_lock,
     )
     .await?;
 
@@ -170,6 +195,7 @@ pub(crate) async fn start_raft_cache<C>(
     node_config: &NodeConfig,
     raft_config: Arc<RaftConfig>,
     lifecycle: crate::lifecycle::NodeLifecycle,
+    wal_lock: Option<&hiqlite_wal::LockFile>,
 ) -> Result<StateRaftCache, Error>
 where
     C: Debug + CacheVariants,
@@ -209,10 +235,10 @@ where
     let tx_dlock = state_machine_store.tx_dlock.clone();
 
     let (raft, shutdown_handle) = if node_config.cache_storage_disk {
-        let log_store = hiqlite_wal::LogStore::<TypeConfigKV>::start(
+        let log_store = start_log_store::<TypeConfigKV>(
             logs::logs_dir_cache(&node_config.data_dir),
-            node_config.wal_sync.clone(),
-            node_config.wal_size,
+            node_config,
+            wal_lock,
         )
         .await?;
         let shutdown_handle = log_store.shutdown_handle();
