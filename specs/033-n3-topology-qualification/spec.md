@@ -16,6 +16,9 @@ origin:
   retroactive: false
 establishes:
   - "standards/spec/n3-topology-proposal.md"
+  # D-5: the reconciliation handoff to Rahi, a repository-backed record of decision status and
+  # consumer obligations. It asserts nothing about Rahi's repository.
+  - "standards/spec/n3-rahi-reconciliation-handoff.md"
   # D-2: the real-node harness does not exist yet. It is a workspace-excluded crate so its
   # release builds and consumer feature sets never enter the library's own graph.
   - { kind: directory, path: "qualification/n3/", planned: true }
@@ -38,8 +41,8 @@ summary: >
   Proposes, for owner decision, how this fork would qualify a three-voter
   topology for the Statecraft cell on Kubernetes while N=1 stays supported and
   stays the Aicortex local profile. Owns the architecture and migration
-  proposal, records six findings the assessment established from source
-  (F-118 to F-123), and specifies the hiqlite-side repairs, the real-node
+  proposal and the reconciliation handoff to Rahi, records eight findings
+  established from source (F-118 to F-125), and specifies the hiqlite-side repairs, the real-node
   harness and the deterministic acceptance that stand between today and any
   claim of N=3 support. Records the owner's decision D-14: at N=3 the cell is
   two StatefulSets, one hiqlite node per pod, and the single-container
@@ -72,9 +75,10 @@ own test and adds its own edges (D-1).
 
 ## 2. Territory
 
-- **Establishes** `standards/spec/n3-topology-proposal.md`, a new document, and
+- **Establishes** `standards/spec/n3-topology-proposal.md` and
+  `standards/spec/n3-rahi-reconciliation-handoff.md`, new documents, and
   `qualification/n3/`, a planned directory for the real-node harness (B-2).
-- **Extends** `005`'s findings register, additively, with F-118 to F-123.
+- **Extends** `005`'s findings register, additively, with F-118 to F-125.
 - **References**, without claiming, the files the planned repairs would touch.
   Those are owned by `010`/`027` (`init.rs`, `client/mgmt.rs`,
   `membership_gate.rs`) and `031` (`hiqlite/Cargo.toml`). A change that
@@ -195,11 +199,15 @@ names.
 - **A-8. Rolling restart under load.** Each node restarted in turn, one at a
   time, while writes continue: no acknowledged write lost, membership unchanged
   throughout.
-- **A-9. Shutdown budget.** Every `SIGTERM` in A-1 to A-8 records the
-  end-to-end duration of the shutdown of each simulated pod (one hiqlite node
-  in the split layout, two in the co-located one); the maximum and the
-  distribution are reported. This is the measurement the
-  consumers' graces are set from, not a threshold chosen here.
+- **A-9. Shutdown budget.** Every `SIGTERM` in A-1 to A-8 records, per simulated
+  pod (one hiqlite node in the split layout, two in the co-located one), the
+  end-to-end duration and the **outcome**: confirmed graceful completion
+  (`Ok(())`), unconfirmed completion (`Err(Timeout)`, the sequence possibly still
+  running), or confirmed forced exit before completion. Reported separately as
+  M-N1 (co-located, N=1 profile) and M-S3 (split N=3), with the distribution
+  and the outcome counts. Only confirmed completions count as within budget; an
+  unconfirmed completion fails graceful-within-budget acceptance. This is the
+  measurement the consumers' graces are set from, not a threshold chosen here.
 - **A-10. Full stop and start.** All nodes stopped, then all started, which is
   the supported upgrade shape (proposal D-11): the cluster reforms with its
   membership and data.
@@ -257,6 +265,11 @@ than qualifying two. Recorded so nobody assumes "bootstrap at N=3" avoids
 **KD-6. F-123.** The release ledger contradicts itself about the cluster suite.
 `031`'s to resolve.
 
+**KD-7. F-124 and F-125.** A stopped data directory records neither its
+committed log id nor, after an unclean stop, an accurate applied log id. What an
+offline export can prove is therefore conditional; the proposal's section 13
+states the conditions and the alternatives, and `034` B-2 was rewritten.
+
 ## 6. Resolved decisions
 
 **D-1 (2026-09-23, territory is declared by the change that moves it).** This
@@ -292,8 +305,22 @@ and 032 and Statecraft 002 for N=3; nothing in this repository enforces them.
 For this spec the decision changes B-2 (both layouts, split as the one that
 must pass) and A-9 (one shutdown per pod), and removes KD-4's cause at N=3.
 
-**Owner decisions pending.** D-1 to D-13 of the proposal's section 11 are not
-decided by this spec. Each will be dated here when the owner records it.
+**D-5 (2026-09-23, reconciliation with Rahi decision packet 1).** A
+governance-only pass against Rahi's packet (D1 to D5, Rahi `b815b18`) and a
+source read of Rauthy `ccf2250`. It separated the five controls the migration
+had conflated (proposal 7.2), defined activation by authoritative mutations
+(7.3) and the tombstone as a proposed downstream feature, replaced the export's
+committed-index comparison with a proposed rule, its safety argument and two
+alternatives (section 13, F-124, F-125), split cache-replacement security from
+stale-backup security (section 14), stated three shutdown outcomes (section 4),
+and separated Track N1 from Track S7 (section 15). It added the handoff document
+this spec now establishes. It took **no** decision: D-8a to D-8e, D-15 and D-16
+were added as pending proposals, and D-4 above (the proposal's D-14) is
+unchanged.
+
+**Owner decisions pending.** D-1 to D-13, D-8a to D-8e, D-15 and D-16 of the
+proposal's section 11 are not decided by this spec. Each will be dated here
+when the owner records it.
 
 ## 7. Out of scope
 
@@ -313,4 +340,10 @@ grep -q '033-n3-topology-qualification' standards/spec/n3-topology-proposal.md
 grep -q '^### F-118 ' standards/spec/findings-register.md
 grep -q '^### F-123 ' standards/spec/findings-register.md
 grep -q '^## 12. D-14: the N=3 cell is two StatefulSets' standards/spec/n3-topology-proposal.md
+grep -q '^### F-125 ' standards/spec/findings-register.md
+grep -q '^## 13. Export currency' standards/spec/n3-topology-proposal.md
+grep -q '^## 14. Security state across migration, restore and upgrade' standards/spec/n3-topology-proposal.md
+grep -q '^\*\*7.2 Five controls, one authority' standards/spec/n3-topology-proposal.md
+test -f standards/spec/n3-rahi-reconciliation-handoff.md
+grep -q 'Decision status' standards/spec/n3-rahi-reconciliation-handoff.md
 ```

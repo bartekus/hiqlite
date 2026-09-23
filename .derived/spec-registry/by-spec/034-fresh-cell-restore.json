@@ -62,6 +62,8 @@
       "B-3. Restore is callable, checked, and applied at most once",
       "B-4. A fresh-cell restore either forms a single-voter cluster or fails",
       "B-5. An upload's outcome can be observed",
+      "B-6. A committed barrier, if the owner adopts it",
+      "B-7. A clean stop is recorded where an export can read it",
       "4. Acceptance, to be implemented",
       "5. Evidence and its limits",
       "6. Known defects",
@@ -70,9 +72,9 @@
     ],
     "specPath": "specs/034-fresh-cell-restore/spec.md",
     "status": "draft",
-    "summary": "Proposes the hiqlite half of the migration and disaster-recovery procedure in 033's proposal: a backup image that carries its own identity and digest, an offline export from a stopped data directory, a callable restore that is applied at most once and refuses the wrong image before it destroys anything, and a node-1 restore into an empty cell that either initializes or fails with an error, never waits forever. Addresses F-119, F-120, 026 KD-5 and KD-8 for that procedure. In-place multi-node restore (F-058) stays unsupported. Changes no code until an implementing change lands.\n",
+    "summary": "Proposes the hiqlite half of the migration and disaster-recovery procedure in 033's proposal: a backup image that carries its own identity and digest, an offline export from a stopped data directory, a callable restore that is applied at most once and refuses the wrong image before it destroys anything, and a node-1 restore into an empty cell that either initializes or fails with an error, never waits forever. Addresses F-119, F-120, 026 KD-5 and KD-8 for that procedure. The export's currency rule is a proposal whose safety argument and alternatives are in the topology proposal's section 13; the committed index it first relied on is not persisted (F-124). In-place multi-node restore (F-058) stays unsupported. Changes no code until an implementing change lands.\n",
     "title": "Restore a backup into a fresh three-voter cell, once, from an image that proves whose it is"
   },
-  "shardHash": "6d404ea6c3d6eb5885b4ebde3d7c8b6323bffc240494774b6ad5cc49c4381a4c",
+  "shardHash": "cbb61d690ee38cb3f6e4ef6efaa938cc72713dae4276f365e39ec55a8b90591c",
   "specVersion": "1.3.0"
 }

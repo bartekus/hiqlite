@@ -13,6 +13,10 @@
         "source": "spec-edge"
       },
       {
+        "path": "standards/spec/n3-rahi-reconciliation-handoff.md",
+        "source": "spec-edge"
+      },
+      {
         "path": "standards/spec/n3-topology-proposal.md",
         "source": "spec-edge"
       }
@@ -25,6 +29,19 @@
         "unit": {
           "kind": "directory",
           "path": "qualification/n3/"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "standards/spec/n3-rahi-reconciliation-handoff.md"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/n3-rahi-reconciliation-handoff.md"
         }
       },
       {
@@ -123,5 +140,5 @@
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "0d17eac6d8fda895bf01da3a82d7ed632226f9c9d4b16046a62fd52d5db0e81f"
+  "shardHash": "894a0ea5181c2843947ed7921b7e0e06810e84d24ab61cfb14dbfae8fd4f6928"
 }

@@ -3168,3 +3168,46 @@ published, repairing that stall, with "the cluster integration suite runs to
 completion for the first time in this repository". Both sentences are in the
 committed ledger. Recorded, not edited: the ledger is `031`'s unit, and which
 sentence is stale is a statement about published evidence that its owner makes.
+
+### F-124 `limit`, confidence `high`
+
+**The committed log id is not persisted, so it cannot be read from a stopped
+data directory.** `hiqlite-wal`'s `RaftLogStorage` implementation
+(`hiqlite-wal/src/log_store_impl.rs:162` onwards) does not implement
+`save_committed` or `read_committed`, so openraft 0.9.25's defaults apply: the
+save is a no-op and the read returns `None`
+(`openraft-0.9.25/src/storage/v2.rs:97-103`). The in-memory cache store has
+both commented out (`hiqlite/src/store/logs/memory.rs:144-160`).
+
+**Not a defect.** openraft makes persisting the committed id optional; nothing
+in hiqlite states that it is persisted, and nothing observed depends on it. It
+is recorded because a proposed design did depend on it: `034` B-2, as drafted
+at `48d0fc2`, requires an offline export to refuse "if the state machine's
+applied log id is behind the last committed entry in the raft log". With no
+persisted committed id, that comparison has no operand, so B-2 **cannot be
+implemented as written**. What can be read offline is the vote, the last purged
+and last log ids, and the state machine's applied log id (subject to F-125).
+The replacement rule, its safety argument and two alternatives, one of which
+adds committed persistence with a defined ordering, are in
+`standards/spec/n3-topology-proposal.md` section 13; all are proposals.
+
+Source-established, not executed. Recorded by `033`.
+
+### F-125 `limit`, confidence `high`
+
+**The SQLite state machine persists its applied log id only at a snapshot and
+at a clean writer exit.** In `hiqlite/src/store/state_machine/sqlite/writer.rs`
+each applied query updates an in-memory `StateMachineData`
+(`last_applied_log_id`), and `persist_metadata` writes it to `_metadata` when a
+snapshot is built (`:515-516`) and when the writer loop ends (`:697-698`), not
+per entry.
+
+Consequence for a reader of a stopped data directory: the persisted applied id
+is accurate after a clean writer exit, and after an unclean stop it can be
+**behind** the data the database already contains. An export that trusts it must
+first establish that the last stop was a confirmed graceful completion, which is
+why the proposal's rule A refuses otherwise (section 13.3, R-b). How the restart
+path reconciles the lag is `025`'s territory and is **not assessed here**; this
+entry claims nothing about restart correctness.
+
+Source-established, not executed. Recorded by `033`.

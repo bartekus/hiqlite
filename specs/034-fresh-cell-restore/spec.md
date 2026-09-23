@@ -34,8 +34,11 @@ summary: >
   applied at most once and refuses the wrong image before it destroys
   anything, and a node-1 restore into an empty cell that either initializes or
   fails with an error, never waits forever. Addresses F-119, F-120, 026 KD-5
-  and KD-8 for that procedure. In-place multi-node restore (F-058) stays
-  unsupported. Changes no code until an implementing change lands.
+  and KD-8 for that procedure. The export's currency rule is a proposal whose
+  safety argument and alternatives are in the topology proposal's section 13;
+  the committed index it first relied on is not persisted (F-124). In-place
+  multi-node restore (F-058) stays unsupported. Changes no code until an
+  implementing change lands.
 ---
 
 # 034: Restore a backup into a fresh three-voter cell, once, from an image that proves whose it is
@@ -71,8 +74,8 @@ and `027` B-7 froze the public surface this release exposes (D-3).
 Everything else is referenced, for the reason `033` D-1 gives: the
 implementing change adds `extends` on `hiqlite/src/backup.rs` (owned by `013`,
 superseded in part by `026`), on `hiqlite/src/start.rs` and
-`hiqlite/src/init.rs` where it changes them, declares `amends: ["026-backup-and-restore-integrity"]` for B-7 and KD-5,
-and carries `026`'s acceptance forward if it changes a line that block asserts
+`hiqlite/src/init.rs` where it changes them, declares
+`amends: ["026-backup-and-restore-integrity"]` for B-7 and KD-5, and carries `026`'s acceptance forward if it changes a line that block asserts
 (the rule `026` KD-1 records).
 
 **Boundaries.** hiqlite owns the per-cluster image, its manifest fields, the
@@ -102,13 +105,41 @@ depend on the archive to read it.
 
 ### B-2. An offline export from a stopped data directory
 
+*Revised 2026-09-23 (D-4).* The first draft required the export to refuse "if
+the state machine's applied log id is behind the last committed entry in the
+raft log". The committed log id is not persisted (F-124), so that requirement
+cannot be implemented as written. The replacement below is **proposed, not
+settled**: it is the topology proposal's section 13 rule A, whose safety
+argument, preserved-write statement and alternatives live there, and the
+owner's D-12 decides between them.
+
 A public entry point MUST produce a B-1 image from a data directory whose node
-is **not running**. It MUST take `024`'s exclusive storage lock first and refuse
-if it cannot. It MUST refuse, naming both values, if the state machine's applied
-log id is behind the last committed entry in the raft log, because an image of a
-state machine that has not applied what was committed is not the cluster's
-state; the remedy it names is to start and stop the node once. It MUST NOT
-modify the directory.
+is **not running**. It MUST take `024`'s exclusive storage lock first, refuse if
+it cannot, and hold it until the image is written and verified; a caller
+exporting several directories holds all their locks for the whole operation. It
+MUST NOT modify the directory.
+
+It MUST refuse, naming the case, on each of the proposal's refusal cases R-a to
+R-e (13.3): identity not matching the expected membership (and, once B-1 exists,
+cluster id); no confirmed clean stop (B-7); an unreadable vote, purge frontier,
+last log id or applied id, or a WAL that needs repair; applied outside
+`[last purged, last log id]`; a joint membership or a membership change in the
+uncommitted tail.
+
+For a single-voter directory it MUST also refuse unless `applied == last log
+id` (13.4). For a directory of a multi-voter cluster, a single directory cannot
+prove currency: the entry point MUST either accept the log state of a majority
+of the configuration's voters and apply 13.5's selection rule, or refuse and
+leave selection to a documented operator procedure; which of the two is the
+implementing change's decision.
+
+If the owner adopts the barrier (B-6), the export MUST also refuse an image
+whose state does not contain the barrier nonce it is given.
+
+What a passing export establishes is stated in the proposal, 13.4 and 13.5,
+with their conditions on storage rollback and `LogSync` mode. The storage lock
+establishes only that no cooperating hiqlite process on the same mount holds the
+directory while the export runs.
 
 ### B-3. Restore is callable, checked, and applied at most once
 
@@ -140,8 +171,8 @@ group, node 1 MUST return a startup error saying the cell is not fresh,
 **before** it moves anything in its own data directory and before any raft
 group is initialized, so an operator can correct the cell and retry with
 nothing to undo. `restore_backup_finish` MUST NOT wait without a bound:
-every wait in it is bounded and its expiry is a returned error (F-120). The listeners MUST be bound before any wait that another
-node's action could end.
+every wait in it is bounded and its expiry is a returned error (F-120). The
+listeners MUST be bound before any wait that another node's action could end.
 
 Followers in the fresh cell receive **no** restore instruction; they are empty
 and join by the ordinary path (`033` A-1). A follower that does receive one keeps
@@ -151,8 +182,26 @@ and join by the ordinary path (`033` A-1). A follower that does receive one keep
 
 A caller MUST be able to learn whether the S3 upload of a named image completed
 and with which remote digest, without reading the log (`026` KD-8). The shape is
-the implementing change's choice; the migration's B-3 step (proposal section 7)
+the implementing change's choice; the migration's B-4 step (proposal section 7)
 still verifies the remote object independently.
+
+### B-6. A committed barrier, if the owner adopts it
+
+*Proposed 2026-09-23 (D-4); alternative B of the proposal's 13.7; pending D-12.*
+A client entry point MUST commit a replicated barrier carrying a caller-supplied
+nonce through the ordinary write path, return only once it is committed and
+applied, and record the nonce in the state machine so that an image proves it
+(B-1's manifest carries it). It lets a consumer establish, end to end, that an
+image contains every write acknowledged before the barrier, including in a
+cluster whose schema that consumer does not own.
+
+### B-7. A clean stop is recorded where an export can read it
+
+*Proposed 2026-09-23 (D-4).* A shutdown that reaches confirmed graceful
+completion (the topology proposal's section 4) MUST leave a durable marker in
+the data directory, written after the WAL writer's flush and the SQLite writer's
+metadata persist and removed at the next start; an export reads it for refusal
+case R-b. Until it exists, the evidence is the consumer's recorded `Ok(())`.
 
 ## 4. Acceptance, to be implemented
 
@@ -174,8 +223,16 @@ consumer feature sets) unless it is a unit test, which says so.
   an error, and no node ever opens a database without its write-ahead log.
 - **R-5. Not a fresh cell.** A peer holding an initialized group: node 1 returns
   the B-4 error within its bound and does not initialize (F-120, F-118).
-- **R-6. Export refuses a lagging state machine.** Unit-level: a directory whose
-  applied id is behind its committed log is refused, naming both.
+- **R-6. Export refusal cases.** Unit-level, one directory per case: identity
+  mismatch; no clean-stop marker; missing log ids; applied outside the frontiers;
+  joint membership or a membership entry in the tail; single-voter
+  `applied < last log id`. Each is refused, naming the case, with the directory
+  unchanged.
+- **R-6a. Multi-voter selection.** Three replicas' directories with a tail on one:
+  the export either selects per 13.5 or refuses, never exports an unapplied or
+  uncommitted state.
+- **R-6b. Barrier.** An image without the given nonce is refused; with it,
+  accepted (if B-6 is adopted).
 - **R-7. Export does not modify.** The directory's bytes before and after an
   export are identical, and a running node's directory is refused by the lock.
 - **R-8. Upload outcome.** Against a local S3 double: success, a failed upload
@@ -196,14 +253,24 @@ operator's, and stage 8's.
 KD-2 are unchanged. This spec supports restoring into an empty cell, not into
 one whose followers hold state.
 
-**KD-2. The cache groups are not restored.** A backup image is the SQLite
-state machine. A restored cell's cache groups start empty; what that loses is
-each consumer's to enumerate (proposal D-8).
+**KD-2. The cache groups are not restored, and an older image rolls back
+SQLite.** A backup image is the SQLite state machine. A restored cell's cache
+groups start empty (cache replacement), and any image older than the source's
+last state undoes what was written after it, revocations included (stale
+backup). The two threats and the proposed, pending controls D-8a to D-8e are
+in the proposal's section 14; this spec restores images and implements none of
+those controls.
 
 **KD-3. A cluster identity cannot be proven for a cell that never recorded
 one.** Existing N=1 cells were started without B-1's identity. Their first
 export records its absence, and a restore of such an image can match only on
 digest, which the operator must carry from the export to the restore.
+
+**KD-4. Currency is proven only under stated conditions.** F-124 and F-125 limit
+what a stopped directory can prove. Rule A (B-2) preserves acknowledged writes
+only without storage rollback and, under asynchronous sync modes, without a host
+crash during the source's last run; only the barrier (B-6) detects a violation.
+The migration's zero-loss objective depends on which the owner adopts.
 
 ## 7. Resolved decisions
 
@@ -215,9 +282,11 @@ also gives the migration a disposable target and a byte-identical rollback.
 Recorded so a later spec that does need in-place restore starts from here.
 
 **D-2 (2026-09-23, offline export is the migration's source).** Proposal D-12,
-recommended and pending the owner's decision. If the owner chooses hot backup
-instead, B-2 is dropped and B-1's applied log id becomes the watermark a
-consumer compares across both clusters.
+recommended and pending the owner's decision. *Corrected 2026-09-23 (D-4):* the
+earlier sentence here said a hot backup would make B-1's applied log id "the
+watermark a consumer compares across both clusters". Two independent clusters'
+log ids share no clock, term or index and cannot be compared; a hot archive
+needs the proposal's restore validator (14.4) instead.
 
 **D-3 (2026-09-23, a new public module).** The entry points could be made
 public inside `backup`. A separate `restore` module keeps `backup`'s internals
@@ -225,10 +294,18 @@ private, makes the addition to `027` B-7's frozen surface one named module, and
 gives the implementing change a unit it establishes rather than a private file
 it has to open up.
 
+**D-4 (2026-09-23, reconciliation with Rahi decision packet 1).** B-2 rewritten
+as a proposal because its committed-index operand does not exist (F-124);
+B-6 (barrier) and B-7 (clean-stop marker) added as proposals; KD-2 split into
+cache replacement and stale backup; KD-4 added; D-2 corrected. No decision was
+taken: D-12 and the D-8 subdivisions stay pending.
+
 ## Verification
 
 ```verify:cli
 test -f standards/spec/n3-topology-proposal.md
 grep -q 'fresh-cell restore' standards/spec/n3-topology-proposal.md
 grep -q '^### F-120 ' standards/spec/findings-register.md
+grep -q '^### F-124 ' standards/spec/findings-register.md
+grep -q '^## 13. Export currency' standards/spec/n3-topology-proposal.md
 ```
