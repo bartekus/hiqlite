@@ -425,7 +425,9 @@ sh -c 'grep -q "hiqlite-wal = { package = \"hiqlite-wal-patched\", version = \"=
 # B-4: the packaged README and the handoff give the exact pin and the downgrade rule
 sh -c 'grep -q "version = \"=0.15.0-patched.2\"" hiqlite/README.md'
 grep -q '^## 12\. ' standards/spec/consumer-handoff.md
-sh -c 'grep -q "restore the verified pre-upgrade archive into a fresh volume" standards/spec/consumer-handoff.md'
+grep -q 'Downgrade to 0.14.x is unsupported' standards/spec/consumer-handoff.md
+# the phrase wraps in the document, so it is matched with line breaks folded to spaces
+sh -c 'tr "\n" " " < standards/spec/consumer-handoff.md | grep -q "restore the verified pre-upgrade archive into a fresh volume"'
 # every lockfile still satisfies its manifest
 cargo metadata --locked --format-version 1 --no-deps --manifest-path qualification/n1-upgrade/new/Cargo.toml
 sh -c '! grep -rl "$(printf "\342\200\224")" specs/036-n1-repair-release standards/spec/consumer-handoff.md hiqlite/README.md'
