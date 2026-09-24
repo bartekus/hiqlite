@@ -27,6 +27,10 @@
       {
         "path": "standards/spec/consumer-handoff.md",
         "source": "spec-edge"
+      },
+      {
+        "path": "standards/spec/release-ledger.md",
+        "source": "spec-edge"
       }
     ],
     "resolvedUnits": [
@@ -80,6 +84,19 @@
         "unit": {
           "kind": "file",
           "path": "standards/spec/consumer-handoff.md"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "standards/spec/release-ledger.md"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/release-ledger.md"
         }
       },
       {
@@ -146,24 +163,11 @@
           "kind": "file",
           "path": "standards/spec/n3-topology-proposal.md"
         }
-      },
-      {
-        "locations": [
-          {
-            "file": "standards/spec/release-ledger.md"
-          }
-        ],
-        "ownership": false,
-        "sourceField": "references",
-        "unit": {
-          "kind": "file",
-          "path": "standards/spec/release-ledger.md"
-        }
       }
     ],
     "specId": "036-n1-repair-release",
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "f926298bc98936733ee7f0c8b07bb42b9da6080d480cfd612a0d72b065c96b12"
+  "shardHash": "52858003400d29f47e0443b3b38a6fd5cf39418232ad2bd42fba46e8d61295d0"
 }

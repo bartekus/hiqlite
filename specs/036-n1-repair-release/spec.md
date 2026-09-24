@@ -5,7 +5,7 @@ status: draft
 created: "2026-09-23"
 owner: "hiqlite maintainers"
 risk: critical
-implementation: in-progress
+implementation: complete
 depends_on:
   - "000-hiqlite-ownership-bootstrap"
   - "016-derive-macros"
@@ -33,6 +33,10 @@ extends:
   - spec: "031-downstream-release-qualification"
     unit: { kind: file, path: "standards/spec/consumer-handoff.md" }
     nature: superseding
+  # The ledger's section for this release, added by the change that recorded the publication.
+  - spec: "031-downstream-release-qualification"
+    unit: { kind: file, path: "standards/spec/release-ledger.md" }
+    nature: additive
   # The examples' lockfiles follow the workspace version (`031` KD-5's shape).
   - spec: "017-examples-as-documentation"
     unit: { kind: directory, path: "examples/" }
@@ -45,8 +49,6 @@ references:
   - unit: { kind: file, path: "Cargo.lock" }
     role: "context"
   - unit: { kind: file, path: "hiqlite/README.md" }
-    role: "context"
-  - unit: { kind: file, path: "standards/spec/release-ledger.md" }
     role: "context"
   - unit: { kind: file, path: "standards/spec/n3-topology-proposal.md" }
     role: "context"
@@ -92,8 +94,9 @@ downgrade only": B-4's downgrade paragraph is that statement.
   (its lockfile), `017`'s examples (their lockfiles) and `031`'s consumer
   handoff (section 5's downgrade paragraph and a new section 12).
 - **References**, without claiming, the unowned manifests and root lockfile it
-  edits, the packaged README, the release ledger (updated only after
-  publication, on evidence) and the proposal's decision table.
+  edits, the packaged README and the proposal's decision table.
+- **Extends** `031`'s release ledger with this release's section, written by the
+  change that recorded the publication (D-4).
 
 **Boundaries.** hiqlite owns the three packages' identity, their requirements
 and the guidance it gives. Each consumer owns its own pin, lockfile, rebuild
@@ -208,11 +211,63 @@ Rahi's re-pin and Rauthy's rebuild are their owners' acts.
 
 ## 4. Evidence and its limits
 
-Recorded outside the repository, bound to the release tree's hash, under
-`~/DevDep/hiqlite-release-artifacts/0.15.0-patched.2/` (the convention of
-`031`), and moved into this section by the change that records the
-publication. This commit carries the obligation, not the results: recording
-results here before the tag would change the tree they describe.
+Recorded after the tag (D-3). The raw logs, binaries' digests, package
+inventories and the consumer build are outside the repository under
+`~/DevDep/hiqlite-release-artifacts/0.15.0-patched.2/` (`CANDIDATE.md` is the
+index), as `031`'s were.
+
+**Trees.** The runs used the frozen candidate `f5352a6` (tree `4fce93b9`). The
+release commit is `5c2cdef` on `spec-spine` (tree `1c3c09bc`), the squash of
+#38. The two trees differ only in one acceptance command of this spec (the
+handoff sentence it greps wraps across a line) and two `.derived` shards; the
+subtrees `hiqlite/`, `hiqlite-wal/`, `hiqlite-derive/`,
+`qualification/n1-upgrade/` and `Cargo.lock`, `Cargo.toml` are byte-identical,
+so every package and harness input is the one qualified.
+
+| item (B-5) | where | result |
+|---|---|---|
+| 1. gates and acceptance | macOS arm64, pinned `spec-spine` 0.20.0 | `spine-check` 0; `couple` OK; `spine-verify 036` passed (128 commands) on `5c5f11c` (tree `1c3c09bc`); `spine-verify 035` passed on `f5352a6` |
+| 2. packages | local, from `f5352a6` | three `.crate` files, 172, 17 and 7 files; exact internal requirements; `openraft =0.9.25` |
+| 3. harness, arm64 | native Linux arm64 (Docker Desktop VM), 4 CPUs, 8 GB, named volume, release builds, `panic = "abort"` | X-1 to X-5: 30 of 30 pass; X-7: 6 recorded; 330 launches; 500 s |
+| 3. D-11 regression, arm64 | same, release build | 3 of 3 launches pass (the WAL test; the start test under Rahi's and Rauthy's sets) |
+| 4. harness, amd64 | native Linux amd64, GitHub-hosted runner, run 35947633017 (tree hash checked in the job) | X-1 to X-5: 30 of 30 pass; X-7: 6 recorded; 330 launches; 521 s |
+| 4. D-11 regression, amd64 | same | 3 of 3 pass |
+| 5. CI | PR #38 | `Check` and `govern` pass on `5c5f11c`; `Acceptance` passes on `5c2cdef` (run 35950937754) |
+
+**X-7, recorded on both architectures.** hiqlite 0.14 over an upgraded
+directory aborted in all twelve runs (in `hiqlite-wal`'s reader or its store
+setup); neither group's `meta.hql` was torn; `state_machine/lock` was left; the
+release refused afterwards under Rahi's set and started under Rauthy's
+(`auto-heal`). The downgrade stays unsupported (B-4).
+
+**Graph.** `cargo tree` for both consumer feature sets, against the published
+`0.15.0-patched.1` tree: identical except the three workspace versions. The
+**mixed graph** (B-4) was reproduced with a local overlay standing in for the
+registry: `hiqlite-patched =0.15.0-patched.1` resolved to
+`hiqlite-wal-patched` and `hiqlite-derive-patched` `0.15.0-patched.2` and
+compiled under both feature sets. That is recorded as a compile check of an
+unqualified configuration and nothing more.
+
+**Publication** (2026-09-24). Signed tag `v0.15.0-patched.2` on `5c2cdef`
+(GitHub: verified); publish run 35952175390, both jobs passed. The registry
+serves:
+
+| package | registry sha256 |
+|---|---|
+| `hiqlite-patched` | `67ae1ca7cd5c601fc0176f5e6e15dfc480b088b048ed9d482add288f655c229d` |
+| `hiqlite-wal-patched` | `d65dd8c35c40f8204c64c62a549614da93078e12d290e7db48937bc6c828d290` |
+| `hiqlite-derive-patched` | `ce54d2189eadd47c368537b9a6687afef94df64a1eed0ae192614f350a57f2e2` |
+
+Each was downloaded anonymously and matched its checksum. The two leaf crates'
+contents, apart from `.cargo_vcs_info.json` (which names the packaging commit),
+are identical to the candidate's. `hiqlite-patched` differs from the candidate
+in one file, its packaged `Cargo.lock`, which carries the registry `source` and
+`checksum` lines of the two leaf crates that the candidate's local overlay could
+not; those checksums are the published ones. A fresh consumer outside this
+checkout, resolving only from the registry (no path, Git or patch), built,
+exercised the alias and both derives, and started, wrote, stopped and restarted
+an N=1 node under Rauthy's and Rahi's feature sets, resolving all three at
+`0.15.0-patched.2` and `openraft 0.9.25`.
 
 What this release does not establish: the Rauthy image, a Rahi cell, N>1, a
 kernel crash or power loss at the move's fault points, and anything `035`
@@ -251,6 +306,11 @@ change the tree after it was qualified, so either the evidence would describe a
 different tree or the qualification would have to run again. They are kept
 outside the tree, bound to its hash, and recorded here by the post-publication
 change, as `031`'s results were (`72e09a6`).
+
+**D-4 (2026-09-24, the ledger records this release in a section of its own).**
+The ledger's rows describe `0.15.0-patched.1` and cite its evidence. This
+release's rows are added in a separate section instead of editing those rows,
+so each release's record stays true of that release.
 
 ## 7. Out of scope
 

@@ -10,7 +10,8 @@ in `standards/spec/release-ledger.md`. Each finding id is an entry in
 `standards/spec/findings-register.md`.
 
 **Status: published 2026-09-22.** Every coordinate below comes from the
-registry's and the forge's own responses.
+registry's and the forge's own responses. **Section 12 covers
+`0.15.0-patched.2`, published 2026-09-24**, which carries `035`'s N=1 repair.
 
 ---
 
@@ -355,12 +356,23 @@ release of it carries what you need: these packages exist to be replaced. Note
 that upstream's own next release will contain the same cache log format change
 (F-111).
 
-## 12. 0.15.0-patched.2 and pinning (prepared, not published)
+## 12. 0.15.0-patched.2 and pinning (published 2026-09-24)
 
-Added 2026-09-23 by `036-n1-repair-release`. **Nothing in this section is
-published.** It becomes a release's handoff only after the tag and the upload,
-with the registry's own checksums; until then no version, checksum or tag below
-is a coordinate to pin.
+Added by `036-n1-repair-release`; the coordinates below come from the
+registry's and the forge's own responses (`036` section 4).
+
+| | |
+|---|---|
+| tag | `v0.15.0-patched.2` (signed), on `5c2cdef6c4168aeaa322f1a24d2b30b6f5f9d518` |
+| GitHub release | https://github.com/bartekus/hiqlite/releases/tag/v0.15.0-patched.2 |
+| publish run | https://github.com/bartekus/hiqlite/actions/runs/35952175390 |
+| `hiqlite-patched` | `0.15.0-patched.2`, sha256 `67ae1ca7cd5c601fc0176f5e6e15dfc480b088b048ed9d482add288f655c229d` |
+| `hiqlite-wal-patched` | `0.15.0-patched.2`, sha256 `d65dd8c35c40f8204c64c62a549614da93078e12d290e7db48937bc6c828d290` |
+| `hiqlite-derive-patched` | `0.15.0-patched.2`, sha256 `ce54d2189eadd47c368537b9a6687afef94df64a1eed0ae192614f350a57f2e2` |
+
+Rauthy (hiqlite defaults plus its list) and Rahi (`default-features = false`
+plus its list) keep their feature lists from section 3 and change only the
+version to `=0.15.0-patched.2`.
 
 **What 0.15.0-patched.2 changes** (`035`): a live hiqlite node of either version
 is refused before anything is moved, with or without

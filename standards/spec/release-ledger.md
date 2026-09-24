@@ -96,3 +96,28 @@ Stated here so a reader does not have to infer it from an absence.
   stands: nothing here was proposed to or accepted by the upstream project.
 - **It does not claim the cluster suite passes.** The remote-client stall
   (F-051) is unrepaired and `012`'s evidence limits are unchanged.
+
+## 0.15.0-patched.2 (published 2026-09-24)
+
+Added by `036-n1-repair-release` (`036` D-4). The rows above describe
+`0.15.0-patched.1` and are not edited. This release carries one repair, `035`,
+alone; its identity and evidence are `036` section 4.
+
+| | |
+|---|---|
+| version | `0.15.0-patched.2`, all three packages; `hiqlite-patched` requires the other two at `=0.15.0-patched.2` |
+| release commit | `5c2cdef6c4168aeaa322f1a24d2b30b6f5f9d518` on `spec-spine` (squash of #38), tree `1c3c09bc` |
+| supported topology | `N = 1`, unchanged |
+
+| id | subject | state | evidence |
+|---|---|---|---|
+| R-28 | `035`: exclusion of every live node before the legacy cache move, the lock handoff, the resumable consent move | published | `035` U-1 to U-7 and the regression file (observed failing on the published source); real-version X-1 to X-5 30 of 30 on native Linux arm64 and native Linux amd64, X-7 recorded; `035` D-11's regression in a release build on both |
+| R-29 | exact internal requirements (`=0.15.0-patched.2`) | published | `036` B-2; the registry's `hiqlite-patched` manifest; a registry-only consumer resolved all three at `0.15.0-patched.2` |
+| R-30 | independent review | reviewed | the independent review of `3b11e4a` (`035` D-11), acted on in `787e6aa`. The AI review run 35953622705 on `5c2cdef` completed but produced no report (the CLI printed only its last message); it is not counted as a review |
+| R-31 | publication to crates.io | published | signed tag `v0.15.0-patched.2`; publish run 35952175390; checksums in the handoff's section 12; each download matched its checksum |
+| R-32 | external consumer verification | consumer-verified | a consumer outside this checkout, registry only (no path, Git or patch), both applications' feature sets: built, exercised the alias and both derives, started, restarted and wrote an N=1 node |
+| R-33 | the fork release | published | https://github.com/bartekus/hiqlite/releases/tag/v0.15.0-patched.2 |
+| R-34 | the consumer handoff | published | `standards/spec/consumer-handoff.md` section 12; section 5's downgrade paragraph corrected to `035` B-4 |
+
+**Not established by this release:** the Rauthy image, a Rahi cell, N>1. Each
+consumer's re-pin, rebuild and release is its owner's act.
