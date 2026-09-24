@@ -538,7 +538,7 @@ the six binaries, then 101 s after one change to the node binary (below).
 | X-6 | not applicable (D-17 not adopted) | not applicable | 0 |
 | X-7 downgrade, **recorded** | 3 runs | 3 runs | 4 |
 
-Totals: 36 passing runs and 6 recorded, 330 node launches, 503 s of harness wall
+Totals: 36 runs, of which 30 passed and 6 (X-7) were recorded, 330 node launches, 503 s of harness wall
 time (the cap is 1,800 s), no run near its 60 s bound (longest 31.9 s, X-4), 1.1
 MB of volume. No failure, so no retry and no kept failing directory. Evidence:
 `~/DevDep/hiqlite-release-artifacts/n1-upgrade-x-2026-09-23/linux-arm64/`
@@ -566,6 +566,13 @@ before the run above. No candidate behavior changed.
 changes the lock lifecycle on failed starts and three messages; it was not
 re-run in the harness (section 5's bounds allow no unchanged retry, and a new
 sequence needs a new allowance).
+
+**Commit names after the rebase** (2026-09-23). When `033`'s proposal was
+squash-merged into `spec-spine` as `8a09edb`, this branch was rebased onto it
+without change. The commits named in this spec keep their trees and change
+their names: `3b11e4a` is `96f7553` (tree `09e5ce85`), `048fcec` is `787e6aa`
+(tree `ae49b281`). Evidence recorded against the old names applies to the new
+ones because the trees are identical, and to nothing else.
 
 **Not executed.** A native Linux amd64 leg: none was available; an emulated
 amd64 run on this arm64 kernel, if it completes, is recorded below as what it

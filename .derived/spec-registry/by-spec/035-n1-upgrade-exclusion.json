@@ -157,6 +157,6 @@
     "summary": "The immediate N=1 producer safety item, independent of any N=3 work. A hiqlite-patched 0.15.0-patched.1 start with HQL_CACHE_LEGACY_MOVE_ASIDE=true moves a live hiqlite 0.14 node's cache directories aside before it discovers the 0.14 node's WAL lock (F-126), and over a 0.14 unclean-stop marker it moves the cache and rewrites the SQLite raft log before it panics on the marker (F-127). This spec is the repair contract and, since lane A, its implementation: exclusion of every live hiqlite node of either version before any rename or authoritative storage write, by WAL locks held from before the first mutation until this node's last write and handed to the log stores rather than released; refusals that are errors and say exactly what they left; a consent move that is one resumable operation and moves the legacy evidence last; and, only if the owner adopts it, a public exclusion handle. Records what probes on real 0.14 and 0.15 builds established, what the repaired build was tested against, and what it was not. Releases nothing and changes no consumer's pin.\n",
     "title": "Exclude every live node before the legacy cache move, and hand that exclusion to the node that starts"
   },
-  "shardHash": "96eb3e4fadc04aac5366ac39edd6a8ca304ded79531fff481a1c2db60385c8fd",
+  "shardHash": "07241096d9c94c1c5c686360ee3232b142d65ea89b667e0d0805b38e549a3fc1",
   "specVersion": "1.3.0"
 }
