@@ -96,7 +96,9 @@ impl TryFrom<&str> for LogSync {
 #[allow(clippy::type_complexity)]
 pub fn spawn(
     base_path: String,
-    lockfile: LockFile,
+    // A share of the caller's lock (`LogStore::start_with_lock`) is only dropped, never unlinked,
+    // so the lock stays held until both the writer and the caller are done. `None` only in tests.
+    lockfile: Option<LockFile>,
     sync: LogSync,
     wal_size: u32,
     wal_deep_integrity_check: bool,
@@ -450,7 +452,7 @@ macro_rules! answer_or_end {
 /// Everything related to locking and memory mapping is being `unwrap()`ped. If anything fails in
 /// this regard, it's either a physical storage or OS issue and this code an do nothing about it.
 fn run(
-    lockfile: LockFile,
+    lockfile: Option<LockFile>,
     meta: Arc<RwLock<Metadata>>,
     wal_locked: Arc<RwLock<WalFileSet>>,
     mut wal: WalFileSet,
@@ -722,11 +724,15 @@ fn run(
     active.flush()?;
     Metadata::write(meta, &wal.base_path)?;
 
-    // drop the lockfile before trying to remove it to unlock it
-    drop(lockfile);
-    if let Err(err) = LockFile::remove(&wal.base_path) {
-        // The lock itself was released by dropping it above; a leftover file only means the
-        // next start takes the not-a-clean-start path. Not worth ending the process for.
+    // Every write of this thread is done. The lock file is unlinked while still held and only
+    // then released (`035` B-2, F-133): released first, a contender could lock the file in
+    // between and be left holding an inode the unlink made unreachable. A lock the caller
+    // holds (`start_with_lock`) is the caller's to release, after its own last write.
+    if let Some(lockfile) = lockfile
+        && let Err(err) = lockfile.unlink_while_held(&wal.base_path)
+    {
+        // The lock is released either way; a leftover file only means the next start takes
+        // the not-a-clean-start path. Not worth ending the process for.
         error!("Could not remove the WAL lock file in {}: {err}", wal.base_path);
     }
 
@@ -741,6 +747,93 @@ fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn acquire(base: &str) -> LockFile {
+        match LockFile::try_acquire(base).unwrap() {
+            crate::lockfile::TryAcquire::Acquired(lock) => lock,
+            crate::lockfile::TryAcquire::Held { .. } => panic!("{base} is locked"),
+        }
+    }
+
+    /// `035` U-6, F-133: at a clean stop the lock file is unlinked while the lock is still
+    /// held, so no contender can lock a file that is about to disappear from its path. The
+    /// order was release, then unlink.
+    #[test]
+    fn a_clean_stop_unlinks_the_lock_file_while_holding_it() {
+        let base = "test_data/unlink_while_held".to_string();
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).unwrap();
+
+        let lockfile = acquire(&base);
+        let meta = Arc::new(RwLock::new(Metadata::read_or_create(&base).unwrap()));
+        let (tx, _wal, _fail) =
+            spawn(base.clone(), Some(lockfile), LogSync::Immediate, 64 * 1024, false, meta)
+                .unwrap();
+
+        let (ack_tx, ack_rx) = oneshot::channel();
+        tx.send(Action::Shutdown(ack_tx)).unwrap();
+        ack_rx.blocking_recv().unwrap();
+
+        assert!(!std::path::Path::new(&format!("{base}/lock.hql")).exists());
+        let observed = crate::lockfile::UNLINK_OBSERVED.lock().unwrap().clone();
+        let held = observed
+            .iter()
+            .find(|(path, _)| *path == base)
+            .map(|(_, held)| *held);
+        assert_eq!(
+            held,
+            Some(true),
+            "the lock file must be unlinked while the lock is held, observed {observed:?}"
+        );
+    }
+
+    /// `035` B-2, found in review: when the caller drops its lock first (a start that failed after
+    /// its log store opened), the writer's share keeps the lock held until the writer's own last
+    /// write, and the writer never unlinks the caller's file.
+    #[test]
+    fn a_shared_lock_is_held_until_the_writer_stops() {
+        let base = "test_data/shared_lock".to_string();
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).unwrap();
+
+        let caller = acquire(&base);
+        let share = caller.share().unwrap();
+        let meta = Arc::new(RwLock::new(Metadata::read_or_create(&base).unwrap()));
+        let (tx, _wal, _fail) =
+            spawn(base.clone(), Some(share), LogSync::Immediate, 64 * 1024, false, meta).unwrap();
+
+        drop(caller);
+        assert!(LockFile::is_locked(&base).unwrap(), "the writer still holds it");
+
+        let (ack_tx, ack_rx) = oneshot::channel();
+        tx.send(Action::Shutdown(ack_tx)).unwrap();
+        ack_rx.blocking_recv().unwrap();
+        drop(tx);
+        assert!(LockFile::exists(&base).unwrap(), "a share never unlinks");
+        assert!(!LockFile::is_locked(&base).unwrap(), "released once both are done");
+    }
+
+    /// A writer started without the lock (the caller holds it) neither releases nor unlinks it.
+    #[test]
+    fn a_caller_held_lock_outlives_the_writer() {
+        let base = "test_data/caller_held_lock".to_string();
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).unwrap();
+
+        let lockfile = acquire(&base);
+        let meta = Arc::new(RwLock::new(Metadata::read_or_create(&base).unwrap()));
+        let (tx, _wal, _fail) =
+            spawn(base.clone(), None, LogSync::Immediate, 64 * 1024, false, meta).unwrap();
+
+        let (ack_tx, ack_rx) = oneshot::channel();
+        tx.send(Action::Shutdown(ack_tx)).unwrap();
+        ack_rx.blocking_recv().unwrap();
+
+        assert!(lockfile.is_linked_at(&base).unwrap(), "the caller's file is still linked");
+        assert!(LockFile::is_locked(&base).unwrap(), "and still locked by the caller");
+        lockfile.unlink_while_held(&base).unwrap();
+        assert!(!LockFile::exists(&base).unwrap());
+    }
 
     /// Capture `tracing` ERROR events so a test can assert on a report whose only channel is a
     /// log line. The writer runs on its own `std::thread`, which does not inherit a thread-local
@@ -900,12 +993,11 @@ mod tests {
         let _ = std::fs::remove_dir_all(base);
         std::fs::create_dir_all(base).unwrap();
 
-        let lockfile = LockFile::create(base).unwrap();
-        lockfile.lock().unwrap();
+        let lockfile = acquire(base);
         let meta = Arc::new(RwLock::new(Metadata::read_or_create(base).unwrap()));
 
         let (tx, _wal, _fail) =
-            spawn(base.to_string(), lockfile, sync, 64 * 1024, false, meta).unwrap();
+            spawn(base.to_string(), Some(lockfile), sync, 64 * 1024, false, meta).unwrap();
         tx
     }
 
@@ -1455,13 +1547,12 @@ mod tests {
         let _ = std::fs::remove_dir_all(&base);
         std::fs::create_dir_all(&base).unwrap();
 
-        let lockfile = LockFile::create(&base).unwrap();
-        lockfile.lock().unwrap();
+        let lockfile = acquire(&base);
         let meta = Arc::new(RwLock::new(Metadata::read_or_create(&base).unwrap()));
 
         let (tx, _wal, _fail) = spawn(
             base.clone(),
-            lockfile,
+            Some(lockfile),
             LogSync::Immediate,
             64 * 1024,
             false,

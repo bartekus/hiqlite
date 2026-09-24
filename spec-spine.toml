@@ -60,6 +60,10 @@ extra_hashed_inputs = [
   "hiqlite/src/init.rs",
   "hiqlite/src/app_state.rs",
   "hiqlite/src/split_brain_check.rs",
+  # The N=1 upgrade exclusion and its regression tests, claimed by 035. The crate root and
+  # the tests directory, which no other glob here reaches.
+  "hiqlite/src/upgrade_exclusion.rs",
+  "hiqlite/tests/upgrade_exclusion.rs",
   # Transport security material and its REST client, claimed by 011, plus that
   # spec's own environment-route test target, which sits outside the
   # hiqlite/tests/cluster glob below.

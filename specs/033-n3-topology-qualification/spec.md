@@ -340,7 +340,20 @@ adoption and support. The handoff to Rahi was rewritten against 043, and the
 request to Rauthy's maintainer added. The N=1 upgrade hazard Rahi reported is
 `035`'s, a separate producer item that waits for none of this.
 
-**Owner decisions pending.** D-1 to D-13, D-8a to D-8e and D-15 to D-18 of the
+**D-7 (2026-09-23, third reconciliation pass).** Against Rahi 043 revision 3
+(`c2c7c72`, `abd66fd`, `fc3f339`), its producer requests version 2, and Rauthy
+`d7d087aa` (unpublished). The proposal's section 11 restates D-8b for Rahi's
+permanent floor and lifetime ceiling, changes D-17's recommendation to "when a
+consumer asks" (Rahi no longer holds hiqlite's locks), makes D-18's label
+conditional on its availability at publication, and adds D-19 with section 17's
+evaluation of a producer-side downgrade fence; 13.7 (b) is corrected and 13.13
+states what recurring barriers prove; section 16 records A1 as an unreleased
+candidate, prepares lane B and the lane C contracts, and counts the launches
+inside each qualification run, restore scenarios included. The Rahi handoff is
+rewritten with the answer to Rahi's H-7, and the Rauthy request gains a producer
+notice. Nothing in this pass decides anything or supports N=3.
+
+**Owner decisions pending.** D-1 to D-13, D-8a to D-8e and D-15 to D-19 of the
 proposal's section 11 are not decided by this spec. Each will be dated here
 when the owner records it.
 
@@ -372,4 +385,9 @@ test -f standards/spec/n3-rauthy-request.md
 grep -q '^## 11. Owner decisions: the one packet' standards/spec/n3-topology-proposal.md
 grep -q '^## 16. Dependency graph, critical path and lane authorizations' standards/spec/n3-topology-proposal.md
 grep -q '^### F-132 ' standards/spec/findings-register.md
+grep -q '^\*\*13.13 What recurring external barriers prove' standards/spec/n3-topology-proposal.md
+grep -q '^## 17. A producer-side downgrade fence' standards/spec/n3-topology-proposal.md
+grep -q '^## 3. H-7: an adversarial reading' standards/spec/n3-rahi-reconciliation-handoff.md
+grep -q '^## Third pass (2026-09-23): producer notice' standards/spec/n3-rauthy-request.md
+sh -c '! grep -rl "$(printf "\342\200\224")" specs/033-n3-topology-qualification standards/spec/n3-topology-proposal.md standards/spec/n3-rahi-reconciliation-handoff.md standards/spec/n3-rauthy-request.md'
 ```

@@ -37,10 +37,16 @@ const OWNER_LOCK_FILE: &str = "hiqlite-owner.lock";
 #[derive(Debug)]
 pub(crate) struct StorageOwnership {
     /// Holding this open holds the lock. Never unlinked: see `OWNER_LOCK_FILE`.
-    _file: File,
+    file: File,
     /// Diagnostics, and the one path the restore sweep has to skip.
     #[cfg_attr(not(any(test, feature = "backup")), allow(dead_code))]
     path: PathBuf,
+    /// This start created the lock file, rather than finding it. A refusal says which (`035`
+    /// B-3): the file is the only entry a refused start leaves behind.
+    created: bool,
+    /// The WAL directories' locks, held from before the first mutation until every writer of
+    /// this node has stopped (`035` B-2). Released before the owner lock, which is last.
+    wal_exclusion: Option<crate::upgrade_exclusion::UpgradeExclusion>,
 }
 
 impl StorageOwnership {
@@ -49,7 +55,17 @@ impl StorageOwnership {
     /// Refusing does not touch anything else in the directory. That matters: the caller is
     /// about to run a restore, a migration, or a state-machine rebuild, and a contender that
     /// mutated storage before discovering it had lost would defeat the point.
+    #[cfg_attr(not(any(test, feature = "__abort-probe")), allow(dead_code))]
     pub(crate) fn acquire(data_dir: &str) -> Result<Self, Error> {
+        let mut slf = Self::acquire_without_note(data_dir)?;
+        slf.record_owner_note(data_dir);
+        Ok(slf)
+    }
+
+    /// [`Self::acquire`] without writing the owner note, so a start refused by a later check
+    /// leaves the previous note as it was (`035` B-3). [`Self::record_owner_note`] writes it
+    /// once the start has passed those checks.
+    pub(crate) fn acquire_without_note(data_dir: &str) -> Result<Self, Error> {
         std::fs::create_dir_all(data_dir).map_err(|err| {
             Error::Config(format!("cannot create the data directory {data_dir}: {err}").into())
         })?;
@@ -59,17 +75,29 @@ impl StorageOwnership {
         // `truncate(false)` on purpose. Truncating would discard the previous owner's
         // diagnostics before we know whether we are allowed to have the lock at all, and it
         // would do it to a file another process may be holding.
-        let mut file = OpenOptions::new()
+        let open_err = |err: std::io::Error| {
+            Error::Config(
+                format!("cannot open the storage owner lock {}: {err}", path.display()).into(),
+            )
+        };
+        let (mut file, created) = match OpenOptions::new()
             .read(true)
             .write(true)
-            .create(true)
-            .truncate(false)
+            .create_new(true)
             .open(&path)
-            .map_err(|err| {
-                Error::Config(
-                    format!("cannot open the storage owner lock {}: {err}", path.display()).into(),
-                )
-            })?;
+        {
+            Ok(file) => (file, true),
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => (
+                OpenOptions::new()
+                    .read(true)
+                    .write(true)
+                    .truncate(false)
+                    .open(&path)
+                    .map_err(open_err)?,
+                false,
+            ),
+            Err(err) => return Err(open_err(err)),
+        };
 
         match FileExt::try_lock(&file) {
             Ok(()) => {}
@@ -82,7 +110,13 @@ impl StorageOwnership {
                 return Err(Error::StorageInUse(
                     format!(
                         "the data directory {data_dir} is owned by another live process, so this \
-                         node refuses to start and has changed nothing. Last recorded owner: {}",
+                         node refuses to start and {}. Last recorded owner, for diagnosis only (it \
+                         may be an earlier process that has since stopped): {}",
+                        if created {
+                            "changed no data; it created hiqlite-owner.lock, which stays"
+                        } else {
+                            "has changed nothing"
+                        },
                         if held_by.is_empty() {
                             "(the lock file carries no owner record)"
                         } else {
@@ -107,6 +141,53 @@ impl StorageOwnership {
             }
         }
 
+        info!("Exclusive storage ownership acquired for {data_dir}");
+        Ok(Self {
+            file,
+            path,
+            created,
+            wal_exclusion: None,
+        })
+    }
+
+    /// Whether this start created `hiqlite-owner.lock`.
+    pub(crate) fn created(&self) -> bool {
+        self.created
+    }
+
+    /// Keep the WAL locks with the owner lock, so both are released at the end of shutdown,
+    /// WAL locks first.
+    pub(crate) fn attach_wal_exclusion(
+        &mut self,
+        exclusion: crate::upgrade_exclusion::UpgradeExclusion,
+    ) {
+        self.wal_exclusion = Some(exclusion);
+    }
+
+    /// The WAL locks, for the log stores that adopt them.
+    pub(crate) fn wal_exclusion(&self) -> Option<&crate::upgrade_exclusion::UpgradeExclusion> {
+        self.wal_exclusion.as_ref()
+    }
+
+    pub(crate) fn wal_exclusion_mut(
+        &mut self,
+    ) -> Option<&mut crate::upgrade_exclusion::UpgradeExclusion> {
+        self.wal_exclusion.as_mut()
+    }
+
+    /// Release after a clean stop: the WAL lock files are unlinked while held and released,
+    /// then the owner lock is released. Dropping without this keeps the WAL lock files, which
+    /// is how the next start learns the stop was not clean.
+    pub(crate) fn release_clean(mut self) {
+        if let Some(exclusion) = self.wal_exclusion.take() {
+            exclusion.release_clean();
+        }
+    }
+
+    /// Record who holds the lock, for diagnosis. Written only after the start's checks passed.
+    pub(crate) fn record_owner_note(&mut self, data_dir: &str) {
+        let path = &self.path;
+        let file = &mut self.file;
         // Diagnostics for an operator reading the file after a crash. Never read back as proof
         // of anything: a process id can be reused and a hostname can be a container's.
         let record = format!(
@@ -128,9 +209,6 @@ impl StorageOwnership {
             // up ownership we already have.
             warn!("Could not record the storage owner note in {}: {err}", path.display());
         }
-
-        info!("Exclusive storage ownership acquired for {data_dir}");
-        Ok(Self { _file: file, path })
     }
 
     /// The lock file path, for a caller that must make sure it does not delete it.
@@ -146,6 +224,15 @@ impl StorageOwnership {
     #[cfg_attr(not(any(test, feature = "backup")), allow(dead_code))]
     pub(crate) fn is_owner_lock_file(path: &Path) -> bool {
         path.file_name().is_some_and(|n| n == OWNER_LOCK_FILE)
+    }
+}
+
+impl Drop for StorageOwnership {
+    /// The WAL locks go before the owner lock on every drop, clean or not, so the owner lock is
+    /// always the last one released (fields drop in declaration order, which is the reverse;
+    /// found in review).
+    fn drop(&mut self) {
+        drop(self.wal_exclusion.take());
     }
 }
 

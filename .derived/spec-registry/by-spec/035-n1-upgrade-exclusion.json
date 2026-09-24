@@ -1,5 +1,11 @@
 {
   "record": {
+    "amends": [
+      "027-node-lifecycle-and-startup-errors"
+    ],
+    "amendsVerification": [
+      "027-node-lifecycle-and-startup-errors"
+    ],
     "created": "2026-09-23",
     "dependsOn": [
       "000-hiqlite-ownership-bootstrap",
@@ -11,16 +17,58 @@
     "establishes": [
       {
         "kind": "file",
-        "path": "hiqlite/src/upgrade_exclusion.rs",
-        "planned": true
+        "path": "hiqlite/src/upgrade_exclusion.rs"
+      },
+      {
+        "kind": "file",
+        "path": "hiqlite/tests/upgrade_exclusion.rs"
       },
       {
         "kind": "directory",
-        "path": "qualification/n1-upgrade/",
-        "planned": true
+        "path": "qualification/n1-upgrade/"
       }
     ],
     "extends": [
+      {
+        "nature": "superseding",
+        "spec": "010-node-lifecycle-and-split-brain",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/start.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "010-node-lifecycle-and-split-brain",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/app_state.rs"
+        }
+      },
+      {
+        "nature": "superseding",
+        "spec": "024-exclusive-storage-ownership",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/storage_lock.rs"
+        }
+      },
+      {
+        "nature": "superseding",
+        "spec": "007-cache-log-store",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/store/logs/"
+        }
+      },
+      {
+        "nature": "superseding",
+        "spec": "001-wal-durability-and-completion",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite-wal/src/"
+        }
+      },
       {
         "nature": "additive",
         "spec": "005-adoption-assessment-and-plan",
@@ -28,10 +76,18 @@
           "kind": "file",
           "path": "standards/spec/findings-register.md"
         }
+      },
+      {
+        "nature": "additive",
+        "spec": "000-hiqlite-ownership-bootstrap",
+        "unit": {
+          "kind": "file",
+          "path": "spec-spine.toml"
+        }
       }
     ],
     "id": "035-n1-upgrade-exclusion",
-    "implementation": "pending",
+    "implementation": "complete",
     "origin": {
       "retroactive": false
     },
@@ -41,21 +97,21 @@
         "role": "context",
         "unit": {
           "kind": "file",
-          "path": "hiqlite/src/start.rs"
+          "path": "hiqlite/src/store/mod.rs"
         }
       },
       {
         "role": "context",
         "unit": {
           "kind": "file",
-          "path": "hiqlite/src/store/logs/mod.rs"
+          "path": "hiqlite/src/lib.rs"
         }
       },
       {
         "role": "context",
         "unit": {
           "kind": "file",
-          "path": "hiqlite/src/storage_lock.rs"
+          "path": "hiqlite/Cargo.toml"
         }
       },
       {
@@ -63,27 +119,6 @@
         "unit": {
           "kind": "file",
           "path": "hiqlite/src/store/state_machine/sqlite/state_machine.rs"
-        }
-      },
-      {
-        "role": "context",
-        "unit": {
-          "kind": "file",
-          "path": "hiqlite-wal/src/log_store.rs"
-        }
-      },
-      {
-        "role": "context",
-        "unit": {
-          "kind": "file",
-          "path": "hiqlite-wal/src/lockfile.rs"
-        }
-      },
-      {
-        "role": "context",
-        "unit": {
-          "kind": "file",
-          "path": "hiqlite-wal/src/writer.rs"
         }
       },
       {
@@ -105,19 +140,23 @@
       "B-2. Lock lifecycle and handoff",
       "B-3. Refusals are errors, and say exactly what they left",
       "B-4. The old version, before and after the repair",
-      "B-5. Interruption and concurrency, from exclusion to startup",
+      "B-5. The consent move is one resumable operation",
       "B-6. A consumer exclusion handle, if the owner adopts it (proposal D-17)",
       "B-7. Release and adoption are separate acts",
-      "5. Acceptance, to be implemented",
+      "5. Acceptance",
+      "Unit and in-process (`hiqlite/src/upgrade_exclusion.rs`, `hiqlite-wal`)",
+      "Regression tests that also run against the published source",
+      "Real versions, in `qualification/n1-upgrade/`",
+      "5.1 Results",
       "6. Known defects",
       "7. Resolved decisions",
       "Verification"
     ],
     "specPath": "specs/035-n1-upgrade-exclusion/spec.md",
     "status": "draft",
-    "summary": "The immediate N=1 producer safety item, independent of any N=3 work. A hiqlite-patched 0.15.0-patched.1 start with HQL_CACHE_LEGACY_MOVE_ASIDE=true moves a live hiqlite 0.14 node's cache directories aside before it discovers the 0.14 node's WAL lock (F-126), and over a 0.14 unclean-stop marker it moves the cache and rewrites the SQLite raft log before it panics on the marker (F-127). This spec is the repair contract: exclusion of every live hiqlite node of either version before any rename or authoritative storage write; a defined lock lifecycle and handoff with no release-and-reacquire; refusals that are errors and say exactly what they left behind; an interruption-safe move; and, if the owner adopts it, a public exclusion handle so a consumer can run its own steps under the same locks. Records what probes on real 0.14 and 0.15 builds established and what they did not. Changes no code until an implementing change lands, and changes no consumer's pin.\n",
+    "summary": "The immediate N=1 producer safety item, independent of any N=3 work. A hiqlite-patched 0.15.0-patched.1 start with HQL_CACHE_LEGACY_MOVE_ASIDE=true moves a live hiqlite 0.14 node's cache directories aside before it discovers the 0.14 node's WAL lock (F-126), and over a 0.14 unclean-stop marker it moves the cache and rewrites the SQLite raft log before it panics on the marker (F-127). This spec is the repair contract and, since lane A, its implementation: exclusion of every live hiqlite node of either version before any rename or authoritative storage write, by WAL locks held from before the first mutation until this node's last write and handed to the log stores rather than released; refusals that are errors and say exactly what they left; a consent move that is one resumable operation and moves the legacy evidence last; and, only if the owner adopts it, a public exclusion handle. Records what probes on real 0.14 and 0.15 builds established, what the repaired build was tested against, and what it was not. Releases nothing and changes no consumer's pin.\n",
     "title": "Exclude every live node before the legacy cache move, and hand that exclusion to the node that starts"
   },
-  "shardHash": "b5740d965e6ee8b657c03a416c388630cbb199509dbbfc12748cad284b7ba614",
+  "shardHash": "07241096d9c94c1c5c686360ee3232b142d65ea89b667e0d0805b38e549a3fc1",
   "specVersion": "1.3.0"
 }

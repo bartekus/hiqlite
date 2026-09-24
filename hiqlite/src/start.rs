@@ -247,24 +247,30 @@ where
     // Exclusive storage ownership, before anything touches the data directory. The restore
     // below deletes things, the state machines below that rebuild things, and a second process
     // doing either to the same directory is F-005. Held in `AppState` from here on.
-    let storage_ownership = if storage_ownership_required(&node_config) {
-        Some(crate::storage_lock::StorageOwnership::acquire(
+    //
+    // `035` B-1: the owner lock excludes another node of this version only. hiqlite 0.14 takes
+    // the WAL locks and nothing else, so those are taken next, before the unclean-stop check,
+    // the legacy cache check and its consent move (`027` B-10), and they are handed to the log
+    // stores rather than released. Only the owner lock is created, and kept, by a refused start;
+    // the owner note is written once every check has passed.
+    let mut storage_ownership = if storage_ownership_required(&node_config) {
+        #[cfg(feature = "cache")]
+        let (opens_cache_log, consent) = (
+            node_config.cache_storage_disk,
+            store::logs::legacy_move_consent()?,
+        );
+        #[cfg(not(feature = "cache"))]
+        let (opens_cache_log, consent) = (false, false);
+        Some(crate::upgrade_exclusion::acquire_storage(
             &node_config.data_dir,
+            cfg!(feature = "sqlite"),
+            opens_cache_log,
+            consent,
         )?)
     } else {
         debug!("This node keeps no state on disk, so no storage ownership is taken");
         None
     };
-
-    // B-10: before the restore, the reset and both raft groups, so that a refused start has
-    // opened nothing. It used to run inside the cache raft's construction, after the SQLite
-    // raft had opened the database, and SQLite checkpoints its WAL and records optimizer
-    // statistics on open and close: the refusal's "Nothing was changed" was not literally true
-    // (observed by the Rauthy integration). Only the owner lock is created before this.
-    #[cfg(feature = "cache")]
-    if node_config.cache_storage_disk {
-        store::logs::ensure_cache_log_format(&node_config.data_dir).await?;
-    }
 
     #[cfg(any(feature = "s3", feature = "dashboard"))]
     node_config.init_enc_keys();
@@ -278,34 +284,40 @@ where
     let raft_config = Arc::new(node_config.raft_config.clone().validate().unwrap());
 
     let _do_reset_metadata = init::check_execute_reset(&node_config.data_dir).await?;
+
+    // The restore's quarantine and `HQL_DANGER_RAFT_STATE_RESET` move or delete the WAL
+    // directories, and a lock follows its inode, not its path. Lock the files now at those
+    // paths before the log stores adopt them; the new cache log directory gets its marker
+    // (the reset deleted `logs_cache`, marker and all).
+    if let Some(exclusion) = storage_ownership
+        .as_mut()
+        .and_then(|o| o.wal_exclusion_mut())
+    {
+        exclusion.relock_moved()?;
+        #[cfg(feature = "cache")]
+        if node_config.cache_storage_disk {
+            exclusion.mark_cache_log_if_unmarked()?;
+        }
+    }
+    #[cfg(any(feature = "sqlite", feature = "cache"))]
+    let wal_exclusion = storage_ownership.as_ref().and_then(|o| o.wal_exclusion());
+
     #[cfg(feature = "sqlite")]
     let raft_db = store::start_raft_db(
         &node_config,
         raft_config.clone(),
         _do_reset_metadata,
         lifecycle.clone(),
+        wal_exclusion.and_then(|e| e.db_lock()),
     )
     .await?;
-
-    // Again, now that the reset has run: `HQL_DANGER_RAFT_STATE_RESET` deletes `logs_cache`,
-    // marker and all, and the cache raft below would write new WAL files into a directory the
-    // next start refuses as legacy (found in review). Idempotent: a marked directory passes, and
-    // an empty one is marked.
-    #[cfg(feature = "cache")]
-    if node_config.cache_storage_disk
-        && let Err(err) = store::logs::ensure_cache_log_format(&node_config.data_dir).await
-    {
-        lifecycle.begin_shutdown();
-        #[cfg(feature = "sqlite")]
-        teardown_raft_db(raft_db).await;
-        return Err(err);
-    }
 
     #[cfg(feature = "cache")]
     let raft_cache = match store::start_raft_cache::<C>(
         &node_config,
         raft_config.clone(),
         lifecycle.clone(),
+        wal_exclusion.and_then(|e| e.cache_lock()),
     )
     .await
     {

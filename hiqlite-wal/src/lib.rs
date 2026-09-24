@@ -3,6 +3,7 @@
 #![doc = include_str!("../README.md")]
 
 pub use crate::writer::LogSync;
+pub use lockfile::{LockFile, TryAcquire};
 pub use log_store::{LogStore, LogStoreReader};
 pub use shutdown::ShutdownHandle;
 pub use writer::{Action, AppendCompletion};
