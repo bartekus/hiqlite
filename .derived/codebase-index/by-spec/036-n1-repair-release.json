@@ -1,90 +1,111 @@
 {
   "mapping": {
+    "amends": [
+      "031-downstream-release-qualification",
+      "032-listen-notify-subscription-readiness"
+    ],
     "dependsOn": [
       "000-hiqlite-ownership-bootstrap",
-      "012-cluster-integration-evidence",
-      "026-backup-and-restore-integrity",
-      "027-node-lifecycle-and-startup-errors",
-      "031-downstream-release-qualification"
+      "016-derive-macros",
+      "031-downstream-release-qualification",
+      "032-listen-notify-subscription-readiness",
+      "035-n1-upgrade-exclusion"
     ],
     "implementingPaths": [
       {
-        "path": "standards/spec/findings-register.md",
+        "path": "examples/",
         "source": "spec-edge"
       },
       {
-        "path": "standards/spec/n3-rahi-reconciliation-handoff.md",
+        "path": "hiqlite-derive",
         "source": "spec-edge"
       },
       {
-        "path": "standards/spec/n3-rauthy-request.md",
+        "path": "qualification/n1-upgrade/",
         "source": "spec-edge"
       },
       {
-        "path": "standards/spec/n3-topology-proposal.md",
+        "path": "standards/spec/consumer-handoff.md",
         "source": "spec-edge"
       }
     ],
     "resolvedUnits": [
       {
-        "locations": [],
+        "locations": [
+          {
+            "file": "hiqlite-derive"
+          }
+        ],
         "ownership": true,
-        "sourceField": "establishes",
+        "sourceField": "extends",
+        "unit": {
+          "id": "hiqlite-derive-patched",
+          "kind": "crate"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "examples/"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
         "unit": {
           "kind": "directory",
-          "path": "qualification/n3/"
+          "path": "examples/"
         }
       },
       {
         "locations": [
           {
-            "file": "standards/spec/n3-rahi-reconciliation-handoff.md"
+            "file": "qualification/n1-upgrade/"
           }
         ],
         "ownership": true,
-        "sourceField": "establishes",
+        "sourceField": "extends",
         "unit": {
-          "kind": "file",
-          "path": "standards/spec/n3-rahi-reconciliation-handoff.md"
+          "kind": "directory",
+          "path": "qualification/n1-upgrade/"
         }
       },
       {
         "locations": [
           {
-            "file": "standards/spec/n3-rauthy-request.md"
-          }
-        ],
-        "ownership": true,
-        "sourceField": "establishes",
-        "unit": {
-          "kind": "file",
-          "path": "standards/spec/n3-rauthy-request.md"
-        }
-      },
-      {
-        "locations": [
-          {
-            "file": "standards/spec/n3-topology-proposal.md"
-          }
-        ],
-        "ownership": true,
-        "sourceField": "establishes",
-        "unit": {
-          "kind": "file",
-          "path": "standards/spec/n3-topology-proposal.md"
-        }
-      },
-      {
-        "locations": [
-          {
-            "file": "standards/spec/findings-register.md"
+            "file": "standards/spec/consumer-handoff.md"
           }
         ],
         "ownership": true,
         "sourceField": "extends",
         "unit": {
           "kind": "file",
-          "path": "standards/spec/findings-register.md"
+          "path": "standards/spec/consumer-handoff.md"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "Cargo.lock"
+          }
+        ],
+        "ownership": false,
+        "sourceField": "references",
+        "unit": {
+          "kind": "file",
+          "path": "Cargo.lock"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite-wal/Cargo.toml"
+          }
+        ],
+        "ownership": false,
+        "sourceField": "references",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite-wal/Cargo.toml"
         }
       },
       {
@@ -103,59 +124,46 @@
       {
         "locations": [
           {
-            "file": "hiqlite/src/client/mgmt.rs"
+            "file": "hiqlite/README.md"
           }
         ],
         "ownership": false,
         "sourceField": "references",
         "unit": {
           "kind": "file",
-          "path": "hiqlite/src/client/mgmt.rs"
+          "path": "hiqlite/README.md"
         }
       },
       {
         "locations": [
           {
-            "file": "hiqlite/src/init.rs"
+            "file": "standards/spec/n3-topology-proposal.md"
           }
         ],
         "ownership": false,
         "sourceField": "references",
         "unit": {
           "kind": "file",
-          "path": "hiqlite/src/init.rs"
+          "path": "standards/spec/n3-topology-proposal.md"
         }
       },
       {
         "locations": [
           {
-            "file": "hiqlite/src/membership_gate.rs"
+            "file": "standards/spec/release-ledger.md"
           }
         ],
         "ownership": false,
         "sourceField": "references",
         "unit": {
           "kind": "file",
-          "path": "hiqlite/src/membership_gate.rs"
-        }
-      },
-      {
-        "locations": [
-          {
-            "file": "standards/spec/consumer-handoff.md"
-          }
-        ],
-        "ownership": false,
-        "sourceField": "references",
-        "unit": {
-          "kind": "file",
-          "path": "standards/spec/consumer-handoff.md"
+          "path": "standards/spec/release-ledger.md"
         }
       }
     ],
-    "specId": "033-n3-topology-qualification",
+    "specId": "036-n1-repair-release",
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "68c32292f5055bc04c93956b07a8f6be3fab33d9f2593f0fa11000790f7fed7a"
+  "shardHash": "f926298bc98936733ee7f0c8b07bb42b9da6080d480cfd612a0d72b065c96b12"
 }

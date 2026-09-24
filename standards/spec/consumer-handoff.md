@@ -148,10 +148,16 @@ WebAuthn challenges, PoW, rate limits, IP blacklist entries, counters and
 distributed locks. An in-memory cache loses all of that on every restart anyway.
 Rauthy keeps sessions in SQLite, so users stay logged in.
 
-**Downgrade to 0.14.x.** Stop the node and move `logs_cache` and
-`state_machine_cache` aside, then start 0.14.x. It has no format check, and this
-release's cache log would decode there as the wrong commands. Also remove the
-`tls_*_ca` keys from any configuration file, because 0.14.0 refuses unknown keys.
+**Downgrade to 0.14.x is unsupported** (corrected 2026-09-23 by `036`, after
+`035`'s probes). A hiqlite 0.14 binary on a directory any 0.15 build has written
+can panic and tear both raft groups' metadata (`035` P-6, X-7, F-129), and
+moving `logs_cache` and `state_machine_cache` aside by hand before a 0.14 start
+is **not** shown safe: the SQLite raft log's compatibility from 0.15 back to
+0.14 was never probed. The supported way back is to restore the verified
+pre-upgrade archive into a fresh volume. No 0.15 build makes a 0.14 binary
+refuse its directory. The earlier text of this paragraph recommended the manual
+move-aside; do not follow it. (0.14.0 also refuses the `tls_*_ca` configuration
+keys, which matters only for a restored configuration file.)
 
 **Evidence.** The cycle was run once, on the directory Rauthy v0.36.2 wrote, with
 Rauthy's 22-variant cache enum and feature set: upgrade with the opt-in,
@@ -348,3 +354,40 @@ This fork's governance binds only this fork. Prefer upstream `hiqlite` once a
 release of it carries what you need: these packages exist to be replaced. Note
 that upstream's own next release will contain the same cache log format change
 (F-111).
+
+## 12. 0.15.0-patched.2 and pinning (prepared, not published)
+
+Added 2026-09-23 by `036-n1-repair-release`. **Nothing in this section is
+published.** It becomes a release's handoff only after the tag and the upload,
+with the registry's own checksums; until then no version, checksum or tag below
+is a coordinate to pin.
+
+**What 0.15.0-patched.2 changes** (`035`): a live hiqlite node of either version
+is refused before anything is moved, with or without
+`HQL_CACHE_LEGACY_MOVE_ASIDE`; the consent move is one resumable operation that
+works in `pre-upgrade-<secs>.partial/` until it completes; refusals are errors
+that say what they created; WAL lock files are removed at the end of a clean
+stop and kept after a failed start (the next start runs the deep integrity
+check). Scope the consent variable to the upgrade start and remove it after the
+first successful start. The downgrade rule of section 5 is unchanged: restore
+the verified pre-upgrade archive into a fresh volume.
+
+**Pinning, because 0.15.0-patched.1's requirements are caret.** The published
+`hiqlite-patched 0.15.0-patched.1` requires `hiqlite-wal-patched` and
+`hiqlite-derive-patched` `^0.15.0-patched.1`, which `0.15.0-patched.2`
+satisfies. A published manifest cannot be changed, so once the new WAL crate is
+on the registry:
+
+- **Moving to 0.15.0-patched.2:** pin
+  `hiqlite = { package = "hiqlite-patched", version = "=0.15.0-patched.2" }`. Its
+  internal requirements are exact, so the other two follow. Move all three
+  together; never combine versions.
+- **Staying on 0.15.0-patched.1:** commit the lockfile and build with
+  `--locked`, or pin `hiqlite-wal-patched` and `hiqlite-derive-patched` to
+  `=0.15.0-patched.1` directly. Without either, a fresh resolution or a
+  `cargo update` can combine the old `hiqlite-patched` with the new WAL crate: a
+  graph nobody qualified, which still has F-126 and F-130.
+
+**Rahi:** its exact pin moves only by its own governed decision. **Rauthy:** an
+image rebuilt on the published packages, with its own F-130 acceptance. Neither
+is done by this repository.
