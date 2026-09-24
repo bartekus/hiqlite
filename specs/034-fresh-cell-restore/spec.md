@@ -513,7 +513,7 @@ grep -q '13.10 The clean-stop marker' standards/spec/n3-topology-proposal.md
 sh -c 'spec-spine index owner hiqlite/src/backup.rs | grep -q 034-fresh-cell-restore'
 grep -q 'const RESTORE_RECORD_FILE: &str = "hiqlite-restore.record";' hiqlite/src/backup.rs
 sh -c '! grep -q "debug_assert!(" hiqlite/src/backup.rs'
-sh -c 'a=$(grep -n "member_db.await??;" hiqlite/src/start.rs | head -1 | cut -d: -f1); b=$(grep -n "backup::restore_backup_finish(&state" hiqlite/src/start.rs | head -1 | cut -d: -f1); c=$(grep -n "\"the external API endpoint\"," hiqlite/src/start.rs | tail -1 | cut -d: -f1); test -n "$a" && test -n "$b" && test -n "$c" && test "$c" -lt "$a" && test "$a" -lt "$b"'
+sh -c 'a=$(grep -n "member_db.await??;" hiqlite/src/start.rs | head -1 | cut -d: -f1); b=$(grep -n "backup::restore_backup_finish(" hiqlite/src/start.rs | head -1 | cut -d: -f1); c=$(grep -n "\"the external API endpoint\"," hiqlite/src/start.rs | tail -1 | cut -d: -f1); test -n "$a" && test -n "$b" && test -n "$c" && test "$c" -lt "$a" && test "$a" -lt "$b"'
 grep -q 'fn teardown_started_node' hiqlite/src/start.rs
 cargo test -p hiqlite-patched --lib backup::lane_b_tests
 cargo test -p hiqlite-patched --lib app_state::restore_hold_tests
