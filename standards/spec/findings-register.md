@@ -3021,3 +3021,324 @@ rejection; this is the one that hid its reason.
 **Tested directly, not by re-running the race.** The three verdict paths are
 driven through the function itself, because whether a given machine loses the
 race is not something a test should depend on.
+
+---
+
+## Found by the N=3 topology assessment (2026-09-23)
+
+Recorded by `033-n3-topology-qualification`, against `spec-spine` revision
+`aa559f5dcaa59bd9f27b0622b51ae5b57dc2185f` and tree `72e09a6`, with
+`openraft 0.9.25` from the committed lock. Every entry below was read at source;
+**none was executed**, and the confidence of each says so. None is repaired
+here, and none authorizes a repair: each proposed change is `033` or `034`
+territory and waits for its own implementation. The class and state tables
+above are not recomputed by this section, as they were not by the section
+before it.
+
+### F-118 `defect`, confidence `medium`
+
+**A pristine node 1 treats an unreachable peer as evidence that the cluster is
+fresh.** `hiqlite/src/init.rs:150-222` (`should_node_1_skip_init`) seeds
+`skip_nodes` with `vec![1]` and computes `quorum = nodes.len() / 2`, which is
+`1` at N=3. The seed therefore already satisfies the quorum before any peer is
+asked. The first peer that is not node 1 is queried once: a success with a
+non-empty membership returns "skip init"; a non-success is pushed; and a
+**connection error pushes nothing but still falls through to the quorum check**,
+which passes on the seed alone and returns "initialize". Node 3 is consulted
+only if node 2 answered with a membership.
+
+The wait before it does not help. `is_initialized_timeout_sqlite`
+(`init.rs:785-821`) sleeps five heartbeats so that an existing leader can reach
+the node, but the node's raft streams are refused until `set_raft_running`
+(`raft_server.rs:89-96`, `119-126`), which runs after this decision, so no
+leader can.
+
+Consequence, inferred from control flow and not executed: at N=3, node 1 whose
+data directory is empty (volume loss, a wrong or new PVC, or a restore that
+removed its logs) and whose first peer is momentarily unreachable, for example
+because that pod is itself restarting, calls `Raft::initialize` with itself as
+the only voter. It becomes leader of a new single-node cluster and accepts
+writes, while nodes 2 and 3 still hold a majority of the old membership and
+accept writes too. That is two authoritative clusters. The split-brain watchdog
+was removed by `027` B-8 and never detected this shape. The cache group has the
+same function and, when `cache_storage_disk = false`, reaches it on every start
+of node 1. The in-process suite's "full volume loss on node 1" phase passes
+because node 2 is always reachable there.
+
+**Consumer triage.** Reaches both consumers at N>1 only, and only on node 1.
+Rahi 032 starts pods with `podManagementPolicy: Parallel`, which makes a
+simultaneous restart of node 1 and node 2 an ordinary event. Not reachable at
+N=1, where `nodes.len() < 2` returns before the loop.
+
+### F-119 `limit`, confidence `high`
+
+**`HQL_BACKUP_RESTORE` restores again on every start for as long as it is set.**
+`hiqlite/src/backup.rs:393-433` (`restore_backup_start`) runs
+`restore_backup` on node 1 whenever the variable parses, with no record that
+this restore was already applied; on every other node it quarantines the data
+directory again (`026` KD-3). `README.md:237` states the caller obligation:
+"remove the `HQL_BACKUP_RESTORE` env value" after the restart. Classed as a
+limit because the obligation is documented; what no document states is its
+consequence under an orchestrator, which restarts pods without asking.
+
+Consequence: at N=1, any restart of a pod whose template still carries the
+variable replaces the live database with the backup and discards every write
+since it. At N>1 the follower quarantine makes each restart a full re-join by
+snapshot, and node 1 reaches F-118 or F-120 depending on whether its first peer
+answers. Rahi already refuses to start its own node while the variable is set
+and hands it to Rauthy once behind a marker (Rahi 030 D-2, 031); that is a
+consumer mitigation, not a hiqlite property.
+
+### F-120 `defect`, confidence `medium`
+
+**A node-1 restore that skipped its own initialization waits forever before it
+binds a listener.** `hiqlite/src/start.rs:416-419` calls
+`backup::restore_backup_finish` after both raft groups start and **before** the
+listeners are served and before `become_cluster_member` runs (`start.rs:505-560`).
+`restore_backup_finish` (`backup.rs:728-746`) loops without a bound until the
+SQLite raft reports itself initialized, then loops without a bound until a
+leader is known, and then `debug_assert!`s that the leader is node 1.
+
+If node 1 finds an initialized cluster on a peer (F-118's "skip init" branch),
+it does not initialize, and the only thing that would make it initialized, the
+join, is sequenced after the wait. Consequence, inferred and not executed: the
+start never returns, no listener is bound, `/ready` is never served, and an
+orchestrator's liveness probe restarts the pod into the same wait, restoring
+again each time because of F-119. In a release build the `debug_assert!` is
+absent; in a debug build a restored node 1 that is not leader panics.
+
+### F-121 `decision`, confidence `high`
+
+**The `cache` feature relaxes a consensus safety check for both raft groups.**
+`hiqlite/Cargo.toml:41` defines `cache = ["__cluster",
+"openraft/loosen-follower-log-revert"]`. A Cargo feature is crate-wide, so every
+build with `cache`, which is both consumers, runs the durable SQLite group with
+the relaxation too, not only the cache group it was presumably added for.
+
+What the flag does is openraft's to define, and it defines it narrowly
+(`openraft-0.9.25/src/progress/entry/mod.rs:150-170`,
+`docs/feature_flags/feature-flags.md`): a follower whose log reverts to an
+earlier state no longer panics the leader, which instead accepts the revert.
+openraft's own FAQ says the flag does not make an erased node safe in an odd
+cluster, and gives the N=3-shaped sequence in which a committed entry is lost:
+the entry is committed on the leader and one follower, that follower loses it,
+and the leader fails before anyone else has it.
+
+hiqlite's side of the boundary: its full-volume-loss path removes a pristine
+node from the membership before that node accepts raft traffic (`init.rs`
+"leave before proceed", and the stream gate above), so the erased-node case is
+mitigated by hiqlite, not by openraft. What is **not** covered is a partial
+revert on a node that is still initialized. Under `LogSync::ImmediateAsync`, the
+default and the only mode the environment route can select (F-035), an append is
+acknowledged when writeback has been **requested** (`001` section 3), so a
+kernel crash or power loss can remove an acknowledged tail from a follower that
+counted toward a commit. With the flag, the leader accepts that follower's
+shorter log silently; without it, the leader would panic, which is loud and
+also not a repair. Recorded as a decision because no document says which
+behavior the durable group should have at N=3; under `LogSync::Immediate` the
+revert this flag tolerates should not arise from a crash at all.
+
+### F-122 `evidence`, confidence `high`
+
+**No multi-node evidence matches the configuration either consumer runs.**
+Every N=3 result in this repository comes from `hiqlite/tests/cluster/`, which
+starts three nodes in **one process**, in a **debug** build with unwinding,
+with `tls_raft` and `tls_api` set to `None` (F-053) and
+`cache_storage_disk = false` for every node (`start.rs:79-86`), under the
+feature union of `just test-no-s3`, with sleeps between phases (F-054, F-116)
+and two tests sharing the process (F-049, F-055, F-102).
+
+Both consumers run `cache_storage_disk = true` (the default), release builds
+under `panic = "abort"`, `LogSync::ImmediateAsync`, their own feature sets, and
+two hiqlite nodes per pod in **two processes** (Rahi 031). So: the disk-backed
+cache group has never been restarted at N=3 by any test; the shutdown path that
+self-leaves the cache (`client/mgmt.rs:428`) is the one the suite exercises and
+the one neither consumer takes; no N=3 run crosses a process or host boundary,
+so no partition, `SIGKILL` or packet loss has been applied to a real peer; and
+F-107's release-build consequence (`027` KD-9) stays unexecuted. The external
+consumer checks of `031` ran at N=1 only.
+
+### F-123 `contradiction`, confidence `high`
+
+**The release ledger says the cluster suite's blocker is unrepaired, and also
+that it was repaired.** `standards/spec/release-ledger.md:97-98` says the
+release "does not claim the cluster suite passes" because "the remote-client
+stall (F-051) is unrepaired". Row R-18 of the same file (`:69`) records `032` as
+published, repairing that stall, with "the cluster integration suite runs to
+completion for the first time in this repository". Both sentences are in the
+committed ledger. Recorded, not edited: the ledger is `031`'s unit, and which
+sentence is stale is a statement about published evidence that its owner makes.
+
+### F-124 `limit`, confidence `high`
+
+**The committed log id is not persisted, so it cannot be read from a stopped
+data directory.** `hiqlite-wal`'s `RaftLogStorage` implementation
+(`hiqlite-wal/src/log_store_impl.rs:162` onwards) does not implement
+`save_committed` or `read_committed`, so openraft 0.9.25's defaults apply: the
+save is a no-op and the read returns `None`
+(`openraft-0.9.25/src/storage/v2.rs:97-103`). The in-memory cache store has
+both commented out (`hiqlite/src/store/logs/memory.rs:144-160`).
+
+**Not a defect.** openraft makes persisting the committed id optional; nothing
+in hiqlite states that it is persisted, and nothing observed depends on it. It
+is recorded because a proposed design did depend on it: `034` B-2, as drafted
+at `48d0fc2`, requires an offline export to refuse "if the state machine's
+applied log id is behind the last committed entry in the raft log". With no
+persisted committed id, that comparison has no operand, so B-2 **cannot be
+implemented as written**. What can be read offline is the vote, the last purged
+and last log ids, and the state machine's applied log id (subject to F-125).
+The replacement rule, its safety argument and two alternatives, one of which
+adds committed persistence with a defined ordering, are in
+`standards/spec/n3-topology-proposal.md` section 13; all are proposals.
+
+Source-established, not executed. Recorded by `033`.
+
+### F-125 `limit`, confidence `high`
+
+**The SQLite state machine persists its applied log id only at a snapshot and
+at a clean writer exit.** In `hiqlite/src/store/state_machine/sqlite/writer.rs`
+each applied query updates an in-memory `StateMachineData`
+(`last_applied_log_id`), and `persist_metadata` writes it to `_metadata` when a
+snapshot is built (`:515-516`) and when the writer loop ends (`:697-698`), not
+per entry.
+
+Consequence for a reader of a stopped data directory: the persisted applied id
+is accurate after a clean writer exit, and after an unclean stop it can be
+**behind** the data the database already contains. An export that trusts it must
+first establish that the last stop was a confirmed graceful completion, which is
+why the proposal's rule A refuses otherwise (section 13.3, R-b). How the restart
+path reconciles the lag is `025`'s territory and is **not assessed here**; this
+entry claims nothing about restart correctness.
+
+Source-established, not executed. Recorded by `033`.
+
+---
+
+## Found by the N=1 upgrade-exclusion probes and the export review (2026-09-23)
+
+Recorded by `035-n1-upgrade-exclusion` (F-126 to F-131, F-133) and
+`033-n3-topology-qualification` (F-132), against `spec-spine` revision
+`aa559f5dcaa59bd9f27b0622b51ae5b57dc2185f` and tree `ec8fc6d`, whose `hiqlite/`
+and `hiqlite-wal/` equal the published source `3392c12`. Unlike the section
+before it, several entries here were **observed by execution**: bounded probes on
+disposable directories, on one macOS arm64 host (APFS), debug builds of hiqlite
+0.14 at upstream `8f3b9bd` and of the published `hiqlite-patched
+0.15.0-patched.1`, Rahi's feature set, `cache_storage_disk = true`. Each entry
+names which of its facts were executed, reported by Rahi, or read at source.
+None is repaired here; `035` is the repair contract and waits for its own
+implementing change. The class and state tables above are not recomputed.
+
+### F-126 `defect`, confidence `high`
+
+**The consent move runs before a live hiqlite 0.14 node is excluded.** With
+`HQL_CACHE_LEGACY_MOVE_ASIDE=true`, `start_node_inner` takes `024`'s owner lock
+and then runs `027` B-10's move (`start.rs:251,266`;
+`store/logs/mod.rs:36-74`). A live 0.14 node never takes the owner lock; it
+holds advisory locks on `logs/lock.hql` and `logs_cache/lock.hql`, which the
+0.15 start first meets in the SQLite `LogStore::start`, after the move
+(`hiqlite-wal/src/log_store.rs:45-50`).
+
+**Observed by execution** (probe P-2 of `035`), reproducing Rahi's report: the
+live node's `logs_cache` (same inode) and `state_machine_cache` were moved into
+`pre-upgrade-<secs>/`, a new format-2 `logs_cache/` and the owner lock were
+created, and the start then failed on `logs/lock.hql` through a task panic. The
+0.14 node kept serving and wrote into the **moved** WAL after the move, so the
+moved-aside copy was not a stable record of the old cache. At stop its cache
+writer panicked on the missing lock file while `shutdown` returned `Ok` and the
+process exited `0`, and it wrote its metadata into the new directory. Its restart
+failed with `InitializeError` and left `state_machine/lock`, after which neither
+version started the directory without manual repair.
+
+**Consumer triage.** Reaches any consumer whose first 0.15 start with consent
+meets a 0.14 process still running on the same volume: Rahi 043 excludes it with
+its own locks for the app store and states it as an operator precondition for
+Rauthy's store (043 B-5); a Rauthy started with consent on its own has no such
+guard.
+
+### F-127 `defect`, confidence `high`
+
+**Over a 0.14 unclean-stop marker, a consent start moves the cache and rewrites
+the SQLite raft log, then panics.** `state_machine/lock` is checked in the SQLite
+state machine's constructor (`state_machine.rs:287-316`), after the move and after
+the SQLite `LogStore` has opened `logs/`, and a present marker is a panic, not an
+error. **Observed by execution** (P-3): after a `SIGKILL` of 0.14, a 0.15 start
+with consent moved the cache aside, rewrote the SQLite raft's WAL file (same
+size, different content) and created `logs/meta.hql~`, then panicked, exit 101.
+Rahi reported the move-then-panic part.
+
+### F-128 `contradiction`, confidence `high`
+
+**Two refusals say nothing changed after creating a file.** The legacy-cache
+refusal ends "Nothing was changed." (`store/logs/mod.rs:163`) and the
+`StorageInUse` refusal says the node "has changed nothing" (`storage_lock.rs:85`),
+but both run after `StorageOwnership::acquire` has created `hiqlite-owner.lock`
+if it was absent, and the first after it has also written the refused process's
+owner note into it. **Observed by execution** (P-1): the only change was a new
+188-byte owner lock naming the refused process. Separately (P-4), a
+`StorageInUse` refusal named a previous, stopped process as the "last recorded
+owner" while a different process held the lock; the text calls it recorded, but
+not possibly stale. Rahi reported the first part.
+
+### F-129 `limit`, confidence `high`
+
+**Starting hiqlite 0.14 over a cache that 0.15 wrote is destructive, and 0.15
+cannot prevent it.** 0.14 reads no format marker and decodes 0.15's
+`CacheRequest` layout. **Observed by execution** (P-6), three runs: a panic in
+all three (`DecodeError: invalid value: integer 14, expected variant index 0 <= i
+< 14`); in two, `logs/meta.hql` (the SQLite raft) and `logs_cache/meta.hql` were
+left torn (7 and 8 bytes; 0 and 7 bytes, from 32) with `state_machine/lock`
+behind, and 0.15 then refused the directory with `WAL: FileCorrupted: invalid
+metadata file length`. Rahi reported two runs, both panics, one destructive. Five
+runs, five panics, three destructive: a rate, not a bound. The consequence belongs
+beside the consumer handoff's downgrade warning; whether a manual move-aside of
+the 0.15 cache before a 0.14 start is safe was **not** probed.
+
+### F-130 `defect`, confidence `medium`
+
+**An interrupted consent move can leave a 0.14 cache snapshot that the next start
+restores without refusal or consent.** `move_legacy_cache_aside` renames
+`logs_cache` first and `state_machine_cache` second (`store/logs/mod.rs:52`); the
+legacy check looks only for `.wal` files in `logs_cache` (`:151`); a disk-backed
+cache restores its latest snapshot at start (`memory/state_machine.rs:405-411`).
+A crash between the two renames leaves no `.wal` evidence and the old snapshots in
+place, so the next start, with or without consent, writes the marker and opens
+them. Read at source; the crash was **not** executed, and what a 0.14 snapshot
+does in a 0.15 cache raft (decodes, fails, or conflicts with the empty log) is
+inferred, which is why the confidence is `medium`.
+
+### F-131 `gap`, confidence `high`
+
+**No supported mechanism hands a consumer's exclusion to hiqlite's start.**
+`StorageOwnership` is crate-private and every start acquires its own locks. An
+advisory `flock` belongs to an open file description, so a process that holds the
+owner lock or a WAL lock file on one descriptor cannot take it again on another.
+**Observed by execution** (P-4, P-5): with Rahi 043's T0 locks held in the same
+process, the in-process start of its T3 was refused with `StorageInUse` in
+0.27 ms. Releasing the locks first leaves a window in which a 0.14 process can
+start. Closing that window needs a producer API and a new release (`035` B-6,
+pending the owner's D-17).
+
+### F-132 `limit`, confidence `high`
+
+**A barrier write proves nothing about acknowledged writes lost before it was
+committed.** The proposal's section 13.7 (at `ec8fc6d`) said a barrier "detects
+storage rollback, asynchronous-sync loss and a wrong source". It detects them
+only when they happen **after** the barrier commits: a barrier is appended to
+whatever log the cluster holds at that moment, so an earlier loss produces a
+shorter log with the barrier on top. **Observed by execution**, with a SQL row
+through the ordinary client standing in for the barrier (no barrier entry point
+exists): an N=1 0.15 node acknowledged `w1` and `w2`; its directory was rolled
+back to a copy taken before `w2`; a barrier was then written; the offline image
+held `w1` and the barrier and not `w2`, so a barrier check **passed** with an
+acknowledged write missing. With the rollback after the barrier, the same check
+refused. Recorded by `033`; the proposal's 13.7 and `034` B-6 are corrected.
+
+### F-133 `limit`, confidence `high`
+
+**A clean WAL stop releases its lock before it unlinks the lock file.**
+`hiqlite-wal/src/writer.rs:725-727` drops the lock and then removes `lock.hql`.
+A contender that opens the file between the two holds a lock on an inode that is
+then unlinked, and a later process can create and lock a new file at the same
+path (P-5, observed on macOS). Between two 0.15 nodes the owner lock covers the
+window; against a 0.14 contender it does not. `035` B-2 reverses the order.
+Read at source; the race itself was not executed.

@@ -1,0 +1,158 @@
+{
+  "mapping": {
+    "dependsOn": [
+      "000-hiqlite-ownership-bootstrap",
+      "001-wal-durability-and-completion",
+      "024-exclusive-storage-ownership",
+      "027-node-lifecycle-and-startup-errors",
+      "031-downstream-release-qualification"
+    ],
+    "implementingPaths": [
+      {
+        "path": "standards/spec/findings-register.md",
+        "source": "spec-edge"
+      }
+    ],
+    "resolvedUnits": [
+      {
+        "locations": [],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "directory",
+          "path": "qualification/n1-upgrade/"
+        }
+      },
+      {
+        "locations": [],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/upgrade_exclusion.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "standards/spec/findings-register.md"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/findings-register.md"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite-wal/src/lockfile.rs"
+          }
+        ],
+        "ownership": false,
+        "sourceField": "references",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite-wal/src/lockfile.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite-wal/src/log_store.rs"
+          }
+        ],
+        "ownership": false,
+        "sourceField": "references",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite-wal/src/log_store.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite-wal/src/writer.rs"
+          }
+        ],
+        "ownership": false,
+        "sourceField": "references",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite-wal/src/writer.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/start.rs"
+          }
+        ],
+        "ownership": false,
+        "sourceField": "references",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/start.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/storage_lock.rs"
+          }
+        ],
+        "ownership": false,
+        "sourceField": "references",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/storage_lock.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/store/logs/mod.rs"
+          }
+        ],
+        "ownership": false,
+        "sourceField": "references",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/store/logs/mod.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/store/state_machine/sqlite/state_machine.rs"
+          }
+        ],
+        "ownership": false,
+        "sourceField": "references",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/store/state_machine/sqlite/state_machine.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "standards/spec/consumer-handoff.md"
+          }
+        ],
+        "ownership": false,
+        "sourceField": "references",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/consumer-handoff.md"
+        }
+      }
+    ],
+    "specId": "035-n1-upgrade-exclusion",
+    "specStatus": "draft"
+  },
+  "schemaVersion": "1.1.0",
+  "shardHash": "256cceb3eb375293bb2829988a2de4e35b2624e2107ce3a55ed7a573222efe28"
+}

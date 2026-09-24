@@ -1,0 +1,80 @@
+{
+  "record": {
+    "created": "2026-09-23",
+    "dependsOn": [
+      "000-hiqlite-ownership-bootstrap",
+      "013-backup-retention-and-object-storage",
+      "024-exclusive-storage-ownership",
+      "026-backup-and-restore-integrity",
+      "033-n3-topology-qualification"
+    ],
+    "establishes": [
+      {
+        "kind": "file",
+        "path": "hiqlite/src/restore.rs",
+        "planned": true
+      }
+    ],
+    "id": "034-fresh-cell-restore",
+    "implementation": "pending",
+    "origin": {
+      "retroactive": false
+    },
+    "owner": "hiqlite maintainers",
+    "references": [
+      {
+        "role": "context",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/backup.rs"
+        }
+      },
+      {
+        "role": "context",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/start.rs"
+        }
+      },
+      {
+        "role": "context",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/init.rs"
+        }
+      },
+      {
+        "role": "context",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/n3-topology-proposal.md"
+        }
+      }
+    ],
+    "risk": "critical",
+    "sectionHeadings": [
+      "034: Restore a backup into a fresh three-voter cell, once, from an image that proves whose it is",
+      "1. Purpose",
+      "2. Territory",
+      "3. Behavior",
+      "B-1. An image carries its manifest",
+      "B-2. An offline export from a stopped data directory",
+      "B-3. Restore is callable, checked, and applied at most once",
+      "B-4. A fresh-cell restore either forms a single-voter cluster or fails",
+      "B-5. An upload's outcome can be observed",
+      "B-6. A committed barrier, if the owner adopts it",
+      "B-7. A clean stop is recorded where an export can read it",
+      "4. Acceptance, to be implemented",
+      "5. Evidence and its limits",
+      "6. Known defects",
+      "7. Resolved decisions",
+      "Verification"
+    ],
+    "specPath": "specs/034-fresh-cell-restore/spec.md",
+    "status": "draft",
+    "summary": "Proposes the hiqlite half of the migration and disaster-recovery procedure in 033's proposal: a backup image that carries its own identity and digest, an offline export from a stopped data directory, a callable restore that is applied at most once and refuses the wrong image before it destroys anything, and a node-1 restore into an empty cell that either initializes or fails with an error, never waits forever. Addresses F-119, F-120, 026 KD-5 and KD-8 for that procedure. The export's currency rule is a proposal whose safety argument and alternatives are in the topology proposal's section 13; the committed index it first relied on is not persisted (F-124). In-place multi-node restore (F-058) stays unsupported. Changes no code until an implementing change lands.\n",
+    "title": "Restore a backup into a fresh three-voter cell, once, from an image that proves whose it is"
+  },
+  "shardHash": "811f07bc6d45712d21996c37e744ebb6baaa4b28630cc6c3a61b4400de516836",
+  "specVersion": "1.3.0"
+}
