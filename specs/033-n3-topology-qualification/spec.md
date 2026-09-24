@@ -61,6 +61,11 @@ extends:
   - spec: "009-configuration-contract"
     unit: { kind: file, path: "hiqlite.env" }
     nature: additive
+  # D-9: the server binary's generated configuration documents the same two keys, so F-071's
+  # pinned drift between it and `hiqlite.toml` does not widen.
+  - spec: "015-server-binary-and-proxy"
+    unit: { kind: file, path: "hiqlite/src/server/config.rs" }
+    nature: additive
 references:
   - unit: { kind: file, path: "hiqlite/src/membership_gate.rs" }
     role: "context"
@@ -129,7 +134,8 @@ own test and adds its own edges (D-1).
   `hiqlite/src/network/` (the explicit answer) and `hiqlite/src/client/` (the
   shutdown option and its outcome); `001`'s `config.rs` and `009`'s
   `config_toml.rs`, `hiqlite.toml` and `hiqlite.env`, which is how the two new
-  options are recorded in `009`'s configuration contract. `store/mod.rs` and
+  options are recorded in `009`'s configuration contract; `015`'s
+  `server/config.rs`, whose generated file lists the same keys. `store/mod.rs` and
   `error.rs`, which no spec owns, are referenced.
 
 **Boundaries.** OpenRaft owns elections, quorum, log matching, the
@@ -481,6 +487,9 @@ one. Corrected here, not in the proposal: `client/mgmt.rs` is owned by `003`'s
 `hiqlite/src/client/` directory, not by `010` as section 16's table says. The
 two options are recorded in `009`'s contract through the reference files it
 establishes, `hiqlite.toml` and `hiqlite.env`; `009`'s own text is not edited.
+The server binary's generated configuration (`015`'s
+`hiqlite/src/server/config.rs`) lists both keys as well, so the
+drift `011`, `029` and `030` pin between it and `hiqlite.toml` stays as it was.
 
 **Owner decisions pending.** D-1 to D-13, D-8a to D-8e and D-15 to D-19 of the
 proposal's section 11 are not decided by this spec. Each will be dated here
