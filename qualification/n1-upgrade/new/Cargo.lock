@@ -1378,7 +1378,7 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "hiqlite-derive-patched"
-version = "0.15.0-patched.1"
+version = "0.15.0-patched.2"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1387,7 +1387,7 @@ dependencies = [
 
 [[package]]
 name = "hiqlite-patched"
-version = "0.15.0-patched.1"
+version = "0.15.0-patched.2"
 dependencies = [
  "argon2",
  "axum",
@@ -1447,7 +1447,7 @@ dependencies = [
 
 [[package]]
 name = "hiqlite-wal-patched"
-version = "0.15.0-patched.1"
+version = "0.15.0-patched.2"
 dependencies = [
  "bincode",
  "byteorder",

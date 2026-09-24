@@ -11,8 +11,9 @@
 > Upstream provenance: `v0.14.0` plus the nineteen commits on upstream `main` up to
 > `52122ae7163d051d6b488d751018f76596f7d8f7`, plus this fork's repairs.
 >
-> Use `hiqlite = { package = "hiqlite-patched", version = "0.15.0-patched.1" }` so that
-> `use hiqlite::..` and the paths the derive macros emit keep resolving.
+> Use `hiqlite = { package = "hiqlite-patched", version = "=0.15.0-patched.2" }` so that
+> `use hiqlite::..` and the paths the derive macros emit keep resolving. Pin exactly, and move
+> `hiqlite-patched`, `hiqlite-wal-patched` and `hiqlite-derive-patched` together.
 >
 > Prefer upstream `hiqlite` when a release of it carries what you need.
 

@@ -1,0 +1,124 @@
+{
+  "record": {
+    "amends": [
+      "031-downstream-release-qualification",
+      "032-listen-notify-subscription-readiness"
+    ],
+    "amendsVerification": [
+      "032-listen-notify-subscription-readiness"
+    ],
+    "created": "2026-09-23",
+    "dependsOn": [
+      "000-hiqlite-ownership-bootstrap",
+      "016-derive-macros",
+      "031-downstream-release-qualification",
+      "032-listen-notify-subscription-readiness",
+      "035-n1-upgrade-exclusion"
+    ],
+    "extends": [
+      {
+        "nature": "additive",
+        "spec": "016-derive-macros",
+        "unit": {
+          "id": "hiqlite-derive-patched",
+          "kind": "crate"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "035-n1-upgrade-exclusion",
+        "unit": {
+          "kind": "directory",
+          "path": "qualification/n1-upgrade/"
+        }
+      },
+      {
+        "nature": "superseding",
+        "spec": "031-downstream-release-qualification",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/consumer-handoff.md"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "017-examples-as-documentation",
+        "unit": {
+          "kind": "directory",
+          "path": "examples/"
+        }
+      }
+    ],
+    "id": "036-n1-repair-release",
+    "implementation": "in-progress",
+    "owner": "hiqlite maintainers",
+    "references": [
+      {
+        "role": "context",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/Cargo.toml"
+        }
+      },
+      {
+        "role": "context",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite-wal/Cargo.toml"
+        }
+      },
+      {
+        "role": "context",
+        "unit": {
+          "kind": "file",
+          "path": "Cargo.lock"
+        }
+      },
+      {
+        "role": "context",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/README.md"
+        }
+      },
+      {
+        "role": "context",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/release-ledger.md"
+        }
+      },
+      {
+        "role": "context",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/n3-topology-proposal.md"
+        }
+      }
+    ],
+    "risk": "critical",
+    "sectionHeadings": [
+      "036: Release the N=1 exclusion repair alone, as 0.15.0-patched.2",
+      "1. Purpose",
+      "2. Territory",
+      "3. Behavior",
+      "B-1. One version, three packages, in lockstep",
+      "B-2. The internal requirements are exact",
+      "B-3. No other change to the graph",
+      "B-4. What the published 0.15.0-patched.1 keeps, and what consumers do",
+      "B-5. The release tree is qualified as itself",
+      "B-6. Publication, adoption and ratification are separate acts",
+      "4. Evidence and its limits",
+      "5. Known defects",
+      "6. Resolved decisions",
+      "7. Out of scope",
+      "Verification"
+    ],
+    "specPath": "specs/036-n1-repair-release/spec.md",
+    "status": "draft",
+    "summary": "The release identity of the standalone N=1 repair of `035`: all three packages at 0.15.0-patched.2, in lockstep, with the internal requirements on hiqlite-wal-patched and hiqlite-derive-patched made exact, and no other change to the dependency graph (openraft stays =0.9.25). States the exposure the published 0.15.0-patched.1 keeps (its caret requirements accept the new WAL crate), the pin and lock guidance consumers need because of it, the qualification the release tree must carry, and what stays separate: ratification, merge, tag, publication and each consumer's adoption. Carries `032`'s acceptance forward with its version command replaced.\n",
+    "title": "Release the N=1 exclusion repair alone, as 0.15.0-patched.2, with exact internal requirements"
+  },
+  "shardHash": "783d3b9de9c8a3c2b8ff0fbfeff1c2b09107c0f2bc550cfb793edd73dfcbf2a3",
+  "specVersion": "1.3.0"
+}

@@ -1,6 +1,6 @@
 [package]
 name = "hiqlite-derive-patched"
-version = "0.15.0-patched.1"
+version = "0.15.0-patched.2"
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
