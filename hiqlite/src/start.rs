@@ -91,6 +91,66 @@ async fn teardown_raft_db(raft_db: crate::app_state::StateRaftDB) {
     }
 }
 
+/// Stop a node whose start failed after its listeners were serving.
+///
+/// The listeners are told to stop, then every raft group and writer, in the order the shutdown
+/// uses. Storage ownership (`024`, and `035`'s WAL locks inside it) is released only if every
+/// component acknowledged its stop; otherwise it stays held until this state is dropped or the
+/// process ends, because a component that did not stop may still write to the directory.
+async fn teardown_started_node(
+    state: &Arc<AppState>,
+    tx_shutdown: &tokio::sync::watch::Sender<bool>,
+) {
+    state.lifecycle.begin_shutdown();
+    state
+        .is_shutting_down
+        .store(true, std::sync::atomic::Ordering::Relaxed);
+    state.membership.close();
+    let _ = tx_shutdown.send(true);
+
+    #[allow(unused_mut)]
+    let mut clean = true;
+    #[cfg(feature = "cache")]
+    {
+        state
+            .raft_cache
+            .is_raft_stopped
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        clean &= state.raft_cache.raft.shutdown().await.is_ok();
+        if let Some(handle) = &state.raft_cache.shutdown_handle {
+            clean &= handle.shutdown().await.is_ok();
+        }
+    }
+    #[cfg(feature = "sqlite")]
+    {
+        state
+            .raft_db
+            .is_raft_stopped
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        clean &= state.raft_db.raft.shutdown().await.is_ok();
+        clean &= state.raft_db.shutdown_handle.shutdown().await.is_ok();
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        clean &= match state
+            .raft_db
+            .sql_writer
+            .send_async(crate::store::state_machine::sqlite::writer::WriterRequest::Shutdown(tx))
+            .await
+        {
+            Ok(()) => rx.await.is_ok(),
+            Err(_) => false,
+        };
+    }
+
+    if clean {
+        state.release_storage_ownership();
+    } else {
+        tracing::error!(
+            "A start that failed could not stop every component; storage ownership stays held \
+             until this node's state is dropped or the process ends"
+        );
+    }
+}
+
 /// Bind a listener, or fail startup saying which endpoint and why.
 pub(crate) async fn bind_listener(
     addr: &str,
@@ -414,6 +474,9 @@ where
         tx_client_stream: tx_client_stream.clone(),
         health_check_delay_secs: node_config.health_check_delay_secs,
         learner_only: node_config.learner_only,
+        pre_shutdown_delay: Duration::from_millis(node_config.pre_shutdown_delay_ms as u64),
+        #[cfg(all(feature = "backup", feature = "sqlite"))]
+        restore_hold: AtomicBool::new(backup_applied),
         #[cfg(feature = "s3")]
         s3_config: node_config.s3_config.clone(),
     });
@@ -424,11 +487,6 @@ where
         node_config.nodes.clone(),
         node_config.tls_api.is_some(),
     )?;
-
-    #[cfg(all(feature = "backup", feature = "sqlite"))]
-    if backup_applied {
-        backup::restore_backup_finish(&state).await;
-    }
 
     let (tx_shutdown, rx_shutdown) = tokio::sync::watch::channel(false);
 
@@ -570,10 +628,35 @@ where
         }))
     };
 
-    #[cfg(feature = "sqlite")]
-    member_db.await??;
-    #[cfg(feature = "cache")]
-    member_cache.await??;
+    // Everything from here on runs with both listeners serving. A failure no longer returns with
+    // the raft groups, the writers and the listeners still running against the data directory:
+    // it stops them, and releases storage ownership only once they have acknowledged it.
+    let joined: Result<(), Error> = async {
+        #[cfg(feature = "sqlite")]
+        member_db.await??;
+        #[cfg(feature = "cache")]
+        member_cache.await??;
+
+        // `034` B-4 (F-120): after the listeners are bound and after `become_cluster_member`,
+        // so nothing it waits for depends on a step this start had not taken yet, and bounded.
+        // It used to run before either, and waited without a bound for an initialization that
+        // only the join sequenced after it could provide.
+        #[cfg(all(feature = "backup", feature = "sqlite"))]
+        if backup_applied {
+            backup::restore_backup_finish(&state, backup::RESTORE_FINISH_BOUNDS).await?;
+            // F-119: only now is the instruction recorded as applied.
+            backup::restore_instruction_completed(node_config.data_dir.as_ref()).await?;
+            state
+                .restore_hold
+                .store(false, std::sync::atomic::Ordering::Release);
+        }
+        Ok(())
+    }
+    .await;
+    if let Err(err) = joined {
+        teardown_started_node(&state, &tx_shutdown).await;
+        return Err(err);
+    }
 
     let client = Client::new_local(
         state,

@@ -1394,6 +1394,15 @@ must be observed failing on the unrepaired tree first.
 | F-120 (`034` B-4) | `restore_backup_finish` runs after the listeners are bound and after `become_cluster_member`, and its two waits are bounded; on expiry it returns a startup error; the `debug_assert!` on the leader becomes a returned error | as F-119 | unit with a stand-in raft that never initializes: today the start never returns (bounded by the test), after the repair it errors within the bound |
 | pre-shutdown delay (`033` B-4) | `NodeConfig` option, code, TOML and environment, default 9.5 s; `009`'s configuration contract records it | `033` extends `010`'s `client/mgmt.rs` and `009`'s config units | unit: the default equals today's constant; a configured value is used |
 
+**Lane B, implemented (2026-09-23), not merged.** Authorized by the owner on
+2026-09-23 and implemented on the branch `fix/033-lane-b-n3-start`, as `033` D-8
+and D-9 and `034` D-6 to D-8 record. Three departures from the table above, each
+recorded there: F-118 also changes the peer's answer (`003`'s
+`hiqlite/src/network/`), since no peer could give the explicit one before;
+`client/mgmt.rs` is `003`'s, not `010`'s; and F-120's reordering needed a hold
+on SQLite membership changes while node 1 finishes a restore. No harness run,
+publication or consumer change is part of it.
+
 Authorization to sign, when wanted: "Implement lane B as prepared in proposal
 section 16 (F-118, F-119, F-120 and the pre-shutdown option), each with its
 failing-first test observed and recorded, `033` and `034` edges in the same

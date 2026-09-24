@@ -136,6 +136,13 @@ pub(crate) struct AppState {
     pub tx_client_stream: flume::Sender<ClientStreamReq>,
     pub health_check_delay_secs: u32,
     pub learner_only: bool,
+    /// `033` B-4: `NodeConfig::pre_shutdown_delay_ms`, taken before a multi-member shutdown.
+    pub(crate) pre_shutdown_delay: std::time::Duration,
+    /// `034` B-4: set while this node finishes a restore it applied. Membership changes of the
+    /// SQLite group are refused meanwhile, so no learner can be added and catch up from the log
+    /// before the snapshot that holds the restored database exists and the log is purged.
+    #[cfg(all(feature = "backup", feature = "sqlite"))]
+    pub(crate) restore_hold: AtomicBool,
 }
 
 #[cfg(any(feature = "backup", feature = "dashboard"))]

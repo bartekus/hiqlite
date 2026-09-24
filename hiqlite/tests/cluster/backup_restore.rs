@@ -14,8 +14,17 @@ pub async fn start_test_cluster_with_backup(
         unsafe {
             env::set_var("HQL_BACKUP_SKIP_VALIDATION", "true");
         }
+        // `034` B-4 (F-119): an instruction is applied at most once per data directory, so the
+        // same `file:` path on a later restore is a logged no-op. Each restore of this suite is
+        // meant to apply, so each names its own copy of the image.
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let path = format!("{BACKUP_PATH_FILE}.{nanos}");
+        tokio::fs::copy(BACKUP_PATH_FILE, &path).await?;
         unsafe {
-            env::set_var("HQL_BACKUP_RESTORE", format!("file:{}", BACKUP_PATH_FILE));
+            env::set_var("HQL_BACKUP_RESTORE", format!("file:{path}"));
         }
     } else {
         let path = backup::find_backup_file(1).await;

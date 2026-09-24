@@ -77,6 +77,7 @@ pub async fn init_pristine_node_1_db(
     secret_api: &str,
     tls: bool,
     tls_no_verify: bool,
+    peer_wait: Duration,
 ) -> Result<(), Error> {
     if node_id == 1 {
         let this_node = get_this_node(node_id, nodes);
@@ -86,7 +87,15 @@ pub async fn init_pristine_node_1_db(
             return Ok(());
         }
 
-        if should_node_1_skip_init(&RaftType::Sqlite, nodes, secret_api, tls, tls_no_verify).await?
+        if should_node_1_skip_init(
+            &RaftType::Sqlite,
+            nodes,
+            secret_api,
+            tls,
+            tls_no_verify,
+            peer_wait,
+        )
+        .await?
         {
             info!("node 1 (DB) should skip its own init - found existing cluster on remotes");
             return Ok(());
@@ -104,6 +113,7 @@ pub async fn init_pristine_node_1_db(
 // TODO this duplication is not pretty but getting the types correct is pretty hard
 /// Initializes a fresh node 1, if it has not been set up yet.
 #[cfg(feature = "cache")]
+#[allow(clippy::too_many_arguments)]
 pub async fn init_pristine_node_1_cache(
     raft: &openraft::Raft<TypeConfigKV>,
     wal_on_disk: bool,
@@ -112,6 +122,7 @@ pub async fn init_pristine_node_1_cache(
     secret_api: &str,
     tls: bool,
     tls_no_verify: bool,
+    peer_wait: Duration,
 ) -> Result<(), Error> {
     if node_id == 1 {
         let this_node = get_this_node(node_id, nodes);
@@ -121,7 +132,17 @@ pub async fn init_pristine_node_1_cache(
             return Ok(());
         }
 
-        if should_node_1_skip_init(&RaftType::Cache, nodes, secret_api, tls, tls_no_verify).await? {
+        // `033` B-3: the cache group takes the same decision as the SQLite group.
+        if should_node_1_skip_init(
+            &RaftType::Cache,
+            nodes,
+            secret_api,
+            tls,
+            tls_no_verify,
+            peer_wait,
+        )
+        .await?
+        {
             info!("node 1 (cache) should skip its own init - found existing cluster on remotes");
             return Ok(());
         }
@@ -147,32 +168,66 @@ fn get_this_node(this_node: u64, nodes: &[Node]) -> Node {
     (*node).clone()
 }
 
+/// What a pristine node 1 learned from its peers about one raft group (`033` B-3).
+#[derive(Debug, PartialEq)]
+pub(crate) enum PeerInitEvidence {
+    /// A peer answered, authenticated, with a non-empty membership: the group exists.
+    Initialized { peer: NodeId },
+    /// At least `N / 2` (rounded down) distinct peers answered, authenticated, that their own
+    /// group is not initialized, so together with this node a majority has positively said so.
+    Fresh,
+}
+
+/// Ask the peers whether this raft group already exists (`033` B-3, repairs F-118).
+///
+/// Only an **explicit** answer counts: an authenticated `200` whose body is a membership. An
+/// empty one is a peer saying "my group is not initialized"; a non-empty one is an existing
+/// group. A connection error, a timeout, a `401`, any other status and a body that does not
+/// decode count for nothing. In particular the `400` a peer returns while its raft is stopped
+/// is not read as "not initialized": an initialized peer answers that while it starts or shuts
+/// down.
+///
+/// Node 1 never counts itself. The unrepaired decision seeded its own id, which at N=3
+/// satisfied the quorum of one before any peer was asked, so a single unreachable peer made a
+/// pristine node 1 initialize a second cluster beside a live majority.
+///
+/// Bounded by `wait`: on expiry this returns `Error::Startup` naming every peer that did not
+/// give an explicit answer and why. It never initializes by default.
 #[tracing::instrument(skip(nodes, secret_api, tls, tls_no_verify))]
-async fn should_node_1_skip_init(
+pub(crate) async fn peer_init_evidence(
     raft_type: &RaftType,
+    this_node: NodeId,
     nodes: &[Node],
     secret_api: &str,
     tls: bool,
     tls_no_verify: bool,
-) -> Result<bool, Error> {
-    if nodes.len() < 2 {
-        return Ok(false);
+    wait: Duration,
+) -> Result<PeerInitEvidence, Error> {
+    // Distinct peers, and never this node.
+    let mut peers: BTreeMap<NodeId, &Node> = BTreeMap::new();
+    for node in nodes.iter().filter(|n| n.id != this_node) {
+        peers.entry(node.id).or_insert(node);
+    }
+    let quorum = nodes.len() / 2;
+    if quorum == 0 {
+        return Ok(PeerInitEvidence::Fresh);
     }
 
     let client = build_http_client(tls_no_verify);
-
-    // no need for +1 since this very node is the +1
-    let quorum = nodes.len() / 2;
-
     let scheme = if tls { "https" } else { "http" };
-    let mut skip_nodes = vec![1];
+
+    let deadline = time::Instant::now() + wait;
+    let mut fresh = std::collections::BTreeSet::new();
+    let mut silent: BTreeMap<NodeId, String> = peers
+        .keys()
+        .map(|id| (*id, "not asked yet".to_string()))
+        .collect();
 
     loop {
-        for node in nodes {
-            if skip_nodes.contains(&node.id) {
+        for (id, node) in &peers {
+            if fresh.contains(id) {
                 continue;
             }
-
             let url = format!(
                 "{}://{}/cluster/membership/{}",
                 scheme,
@@ -181,45 +236,109 @@ async fn should_node_1_skip_init(
             );
             debug!("checking membership via {}", url);
 
-            let res = client
+            // Each request is bounded by what is left of the wait, so a peer that accepts the
+            // connection and never answers cannot hold the decision past its bound.
+            let left = deadline
+                .saturating_duration_since(time::Instant::now())
+                .max(Duration::from_millis(100));
+            let req = client
                 .get(url)
                 .header(HEADER_NAME_SECRET, secret_api)
-                .send()
-                .await;
-            match res {
-                Ok(resp) => {
-                    debug!("{} status: {}", node.id, resp.status());
-                    if resp.status().is_success() {
-                        let body = resp.bytes().await?;
-                        let membership: Membership<NodeId, Node> = deserialize(body.as_ref())?;
-
-                        if membership.nodes().count() > 0 {
-                            return Ok(true);
-                        } else {
-                            panic!(
-                                "The remote node {} is initialized but has no configured members. \
-                            This should never happen",
-                                node.id
-                            );
-                        }
-                    } else {
-                        let body = resp.bytes().await?;
-                        let err: Error = serde_json::from_slice(&body)?;
-                        error!("{}", err);
-                        skip_nodes.push(node.id);
+                .send();
+            let reason = match time::timeout(left, req).await {
+                Err(_) => format!("no answer within {left:?}"),
+                Ok(Err(err)) => format!("unreachable: {err}"),
+                Ok(Ok(resp)) if resp.status().is_success() => {
+                    match time::timeout(left, resp.bytes()).await {
+                        Ok(Ok(body)) => match deserialize::<Membership<NodeId, Node>>(&body) {
+                            Ok(m) if m.nodes().count() > 0 => {
+                                info!(
+                                    "node {id} answered with an initialized {} group",
+                                    raft_type.as_str()
+                                );
+                                return Ok(PeerInitEvidence::Initialized { peer: *id });
+                            }
+                            Ok(_) => {
+                                fresh.insert(*id);
+                                silent.remove(id);
+                                continue;
+                            }
+                            Err(err) => {
+                                format!("answered 200 with a body that is not a membership: {err}")
+                            }
+                        },
+                        Ok(Err(err)) => format!("answered 200 and the body failed: {err}"),
+                        Err(_) => format!("answered 200 and sent no body within {left:?}"),
                     }
                 }
-                Err(err) => {
-                    debug!("Error sending membership request: {}", err);
+                Ok(Ok(resp)) => {
+                    let status = resp.status();
+                    let body = time::timeout(Duration::from_millis(500), resp.bytes())
+                        .await
+                        .ok()
+                        .and_then(|r| r.ok())
+                        .map(|b| String::from_utf8_lossy(&b).chars().take(200).collect::<String>())
+                        .unwrap_or_default();
+                    format!("answered {status}, which is not an explicit answer: {body}")
                 }
-            }
-
-            if skip_nodes.len() >= quorum {
-                return Ok(false);
-            }
+            };
+            debug!("node {id} did not answer explicitly: {reason}");
+            silent.insert(*id, reason);
         }
 
-        time::sleep(Duration::from_secs(1)).await;
+        if fresh.len() >= quorum {
+            info!(
+                "{} of {} peers answered that their {} group is not initialized: a fresh cluster",
+                fresh.len(),
+                peers.len(),
+                raft_type.as_str()
+            );
+            return Ok(PeerInitEvidence::Fresh);
+        }
+
+        let now = time::Instant::now();
+        if now >= deadline {
+            let mut names = String::new();
+            for (id, reason) in &silent {
+                let addr = peers.get(id).map(|n| n.addr_api.as_str()).unwrap_or("?");
+                let _ = write!(names, "; node {id} ({addr}): {reason}");
+            }
+            return Err(Error::Startup(
+                format!(
+                    "node {this_node} cannot tell whether the {} raft group already exists: it \
+                     needs {quorum} peer(s) to answer, authenticated, that they are not \
+                     initialized, and {} did within {wait:?}. It does not initialize without \
+                     that evidence (033 B-3). Peers without an explicit answer{names}",
+                    raft_type.as_str(),
+                    fresh.len(),
+                )
+                .into(),
+            ));
+        }
+        info!(
+            "Waiting for {} more peer(s) to answer whether the {} group exists",
+            quorum - fresh.len(),
+            raft_type.as_str()
+        );
+        time::sleep(Duration::from_secs(1).min(deadline - now)).await;
+    }
+}
+
+/// `true` if a pristine node 1 must not initialize this group because a peer already holds it.
+async fn should_node_1_skip_init(
+    raft_type: &RaftType,
+    nodes: &[Node],
+    secret_api: &str,
+    tls: bool,
+    tls_no_verify: bool,
+    wait: Duration,
+) -> Result<bool, Error> {
+    if nodes.len() < 2 {
+        return Ok(false);
+    }
+    match peer_init_evidence(raft_type, 1, nodes, secret_api, tls, tls_no_verify, wait).await? {
+        PeerInitEvidence::Initialized { .. } => Ok(true),
+        PeerInitEvidence::Fresh => Ok(false),
     }
 }
 
@@ -962,5 +1081,266 @@ mod tests {
     fn get_this_node_panics_when_the_id_is_absent() {
         let nodes = vec![node(2), node(3)];
         let _ = get_this_node(1, &nodes);
+    }
+
+    use test_peers::{Answer, SECRET, closed_addr, peer, some_raft_type, stub_peer};
+
+    /// The bound these tests give the decision. Short, so a refusal is observed quickly.
+    const F118_WAIT: Duration = Duration::from_millis(1500);
+
+    /// `033` B-3: one authenticated "not initialized" at N=3 is `⌊3/2⌋ = 1` peer, which with
+    /// node 1 is a majority: node 1 initializes, whatever the other peer does.
+    #[tokio::test]
+    async fn f118_one_explicit_answer_at_n3_is_a_fresh_cluster() {
+        let p2 = stub_peer(Answer::NotInitialized).await;
+        let nodes = vec![peer(1, &closed_addr()), peer(2, &p2), peer(3, &closed_addr())];
+        let skip =
+            should_node_1_skip_init(&some_raft_type(), &nodes, SECRET, false, false, F118_WAIT)
+                .await
+                .expect("one explicit answer is enough at N=3");
+        assert!(!skip, "a fresh cluster: node 1 initializes");
+    }
+
+    /// `033` B-3: at N=5 the evidence needed is two distinct peers. One is not enough, and the
+    /// same peer does not count twice however often it is asked.
+    #[tokio::test]
+    async fn f118_at_n5_two_distinct_peers_must_answer() {
+        let p2 = stub_peer(Answer::NotInitialized).await;
+        let one = vec![
+            peer(1, &closed_addr()),
+            peer(2, &p2),
+            peer(3, &closed_addr()),
+            peer(4, &closed_addr()),
+            peer(5, &closed_addr()),
+        ];
+        let err =
+            should_node_1_skip_init(&some_raft_type(), &one, SECRET, false, false, F118_WAIT)
+                .await
+                .expect_err("one of the two answers needed");
+        let text = err.to_string();
+        assert!(text.contains("needs 2 peer(s)") && text.contains("1 did"), "got: {text}");
+        assert!(!text.contains("node 2 ("), "node 2 answered and is not silent: {text}");
+
+        let p3 = stub_peer(Answer::NotInitialized).await;
+        let two = vec![
+            peer(1, &closed_addr()),
+            peer(2, &p2),
+            peer(3, &p3),
+            peer(4, &closed_addr()),
+            peer(5, &closed_addr()),
+        ];
+        assert!(
+            !should_node_1_skip_init(&some_raft_type(), &two, SECRET, false, false, F118_WAIT)
+                .await
+                .expect("two explicit answers at N=5")
+        );
+    }
+
+    /// An initialized peer is the one answer that ends the decision on its own: node 1 skips
+    /// its init and joins, as before.
+    #[tokio::test]
+    async fn f118_an_initialized_peer_means_join_not_initialize() {
+        let p2 = stub_peer(Answer::Initialized).await;
+        let nodes = vec![peer(1, &closed_addr()), peer(2, &p2), peer(3, &closed_addr())];
+        assert!(
+            should_node_1_skip_init(&some_raft_type(), &nodes, SECRET, false, false, F118_WAIT)
+                .await
+                .expect("an initialized peer is an answer")
+        );
+        assert_eq!(
+            peer_init_evidence(&some_raft_type(), 1, &nodes, SECRET, false, false, F118_WAIT)
+                .await
+                .unwrap(),
+            PeerInitEvidence::Initialized { peer: 2 }
+        );
+    }
+
+    /// `033` B-3: at N=1 the decision is unchanged. No peer is asked and nothing waits.
+    #[tokio::test]
+    async fn f118_n1_is_unchanged() {
+        let nodes = vec![peer(1, &closed_addr())];
+        let started = std::time::Instant::now();
+        assert!(
+            !should_node_1_skip_init(
+                &some_raft_type(),
+                &nodes,
+                SECRET,
+                false,
+                false,
+                Duration::from_secs(3600)
+            )
+            .await
+            .unwrap()
+        );
+        assert!(started.elapsed() < Duration::from_secs(1), "no wait at N=1");
+    }
+
+    /// A peer that accepts the connection and never answers is bounded by the wait as well.
+    #[tokio::test]
+    async fn f118_a_peer_that_never_answers_is_bounded() {
+        let hung = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let hung_addr = hung.local_addr().unwrap().to_string();
+        let nodes = vec![peer(1, &closed_addr()), peer(2, &hung_addr), peer(3, &hung_addr)];
+        let res = time::timeout(
+            Duration::from_secs(10),
+            should_node_1_skip_init(&some_raft_type(), &nodes, SECRET, false, false, F118_WAIT),
+        )
+        .await
+        .expect("bounded by the wait, not by the HTTP client's own timeout");
+        assert!(res.is_err());
+        drop(hung);
+    }
+
+    /// `033` B-3, F-118: a peer that cannot be reached is not evidence that the cluster is
+    /// fresh. The unrepaired decision seeded node 1's own vote, which satisfied the quorum at
+    /// N=3 before any peer was asked, so a connection error on node 2 still returned
+    /// "initialize".
+    #[tokio::test]
+    async fn f118_unreachable_peers_are_not_evidence_of_a_fresh_cluster() {
+        let nodes = vec![peer(1, &closed_addr()), peer(2, &closed_addr()), peer(3, &closed_addr())];
+
+        let res = time::timeout(
+            Duration::from_secs(10),
+            should_node_1_skip_init(&some_raft_type(), &nodes, SECRET, false, false, F118_WAIT),
+        )
+        .await
+        .expect("the decision is bounded and returns");
+
+        let err = res.expect_err(
+            "two silent peers are no evidence of a fresh cluster; initializing here is F-118",
+        );
+        let text = err.to_string();
+        assert!(text.starts_with("Startup: "), "a startup error, got: {text}");
+        assert!(text.contains("node 2") && text.contains("node 3"), "names the silent peers: {text}");
+    }
+
+    /// `033` B-3: an answer the peer refused to authenticate (`401`) counts for nothing. The
+    /// unrepaired decision pushed every non-success answer, whatever it was, as a vote for
+    /// "not initialized".
+    #[tokio::test]
+    async fn f118_an_unauthenticated_answer_is_not_evidence() {
+        let p2 = stub_peer(Answer::Unauthorized).await;
+        let p3 = stub_peer(Answer::Unauthorized).await;
+        let nodes = vec![peer(1, &closed_addr()), peer(2, &p2), peer(3, &p3)];
+
+        let res = time::timeout(
+            Duration::from_secs(10),
+            should_node_1_skip_init(&some_raft_type(), &nodes, SECRET, false, false, F118_WAIT),
+        )
+        .await
+        .expect("the decision is bounded and returns");
+        let err = res.expect_err("a 401 is not a peer saying it is not initialized");
+        assert!(err.to_string().contains("401"), "says why the peer did not count: {err}");
+    }
+
+    /// `033` B-3: the error a peer answers while its raft is **stopped** is not evidence either.
+    /// Before this repair a peer answered `400 Config("Raft node has not been initialized")`
+    /// both when it was pristine and when it was initialized but not yet running (its start
+    /// had not reached `set_raft_running`, or it was shutting down). Counting that answer let
+    /// an initialized peer vote "fresh".
+    #[tokio::test]
+    async fn f118_a_stopped_peer_answer_is_not_evidence() {
+        let p2 = stub_peer(Answer::StoppedOrLegacy).await;
+        let p3 = stub_peer(Answer::StoppedOrLegacy).await;
+        let nodes = vec![peer(1, &closed_addr()), peer(2, &p2), peer(3, &p3)];
+
+        let res = time::timeout(
+            Duration::from_secs(10),
+            should_node_1_skip_init(&some_raft_type(), &nodes, SECRET, false, false, F118_WAIT),
+        )
+        .await
+        .expect("the decision is bounded and returns");
+        res.expect_err("an ambiguous error answer is not a peer saying it is not initialized");
+    }
+}
+
+/// A stand-in for the peers a pristine node 1 asks, for `033` B-3's tests. Each stub is a real
+/// HTTP/2 listener on an ephemeral port, so the request path, the secret header and the
+/// status handling are the production ones.
+#[cfg(test)]
+pub(crate) mod test_peers {
+    use crate::app_state::RaftType;
+    use crate::network::HEADER_NAME_SECRET;
+    use crate::{Error, Node, NodeId};
+    use axum::Router;
+    use axum::http::HeaderMap;
+    use axum::response::{IntoResponse, Response};
+    use axum::routing::get;
+    use openraft::Membership;
+    use std::collections::{BTreeMap, BTreeSet};
+
+    pub(crate) const SECRET: &str = "a-test-api-secret-of-some-length";
+
+    /// What a stub peer answers on `GET /cluster/membership/{raft_type}`.
+    #[derive(Clone, Copy, Debug)]
+    pub(crate) enum Answer {
+        /// Authenticated `200` with an empty membership: the explicit "not initialized".
+        NotInitialized,
+        /// Authenticated `200` with a membership holding node 2: an initialized group.
+        Initialized,
+        /// `401`, as a peer with another secret answers.
+        Unauthorized,
+        /// `400 Config`, what an unrepaired peer answered both when pristine and when stopped.
+        StoppedOrLegacy,
+    }
+
+    pub(crate) fn peer(id: NodeId, addr_api: &str) -> Node {
+        Node {
+            id,
+            addr_raft: "127.0.0.1:1".to_string(),
+            addr_api: addr_api.to_string(),
+        }
+    }
+
+    /// An address nothing listens on: bound, then released.
+    pub(crate) fn closed_addr() -> String {
+        let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        l.local_addr().unwrap().to_string()
+    }
+
+    pub(crate) fn some_raft_type() -> RaftType {
+        #[cfg(feature = "sqlite")]
+        {
+            RaftType::Sqlite
+        }
+        #[cfg(not(feature = "sqlite"))]
+        {
+            RaftType::Cache
+        }
+    }
+
+    pub(crate) async fn stub_peer(answer: Answer) -> String {
+        let handler = move |headers: HeaderMap| async move { respond(answer, &headers) };
+        let app = Router::new().route("/cluster/membership/{raft_type}", get(handler));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap().to_string();
+        tokio::spawn(async move {
+            let _ = axum::serve(listener, app.into_make_service()).await;
+        });
+        addr
+    }
+
+    fn respond(answer: Answer, headers: &HeaderMap) -> Response {
+        let authenticated = headers
+            .get(HEADER_NAME_SECRET)
+            .is_some_and(|v| v.as_bytes() == SECRET.as_bytes());
+        match answer {
+            Answer::Unauthorized => Error::Token("Invalid API Secret".into()).into_response(),
+            _ if !authenticated => Error::Token("Invalid API Secret".into()).into_response(),
+            Answer::NotInitialized => {
+                let m = Membership::<NodeId, Node>::default();
+                crate::network::serialize_network(&m).into_response()
+            }
+            Answer::Initialized => {
+                let m = Membership::<NodeId, Node>::new(
+                    vec![BTreeSet::from([2])],
+                    BTreeMap::from([(2, peer(2, "127.0.0.1:1"))]),
+                );
+                crate::network::serialize_network(&m).into_response()
+            }
+            Answer::StoppedOrLegacy => {
+                Error::Config("Raft node has not been initialized".into()).into_response()
+            }
+        }
     }
 }

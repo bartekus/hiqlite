@@ -262,6 +262,17 @@ impl NodeConfig {
             .unwrap_or(30);
         let learner_only =
             t_bool(&mut map, t_name, "learner_only", "HQL_LEARNER_ONLY")?.unwrap_or(false);
+        // `033` B-4 and B-3, readable from code, TOML and the environment like the rest.
+        let pre_shutdown_delay_ms = t_u32(
+            &mut map,
+            t_name,
+            "pre_shutdown_delay_ms",
+            PRE_SHUTDOWN_DELAY_ENV,
+        )?
+        .unwrap_or(crate::config::DEFAULT_PRE_SHUTDOWN_DELAY_MS);
+        let init_peer_wait_secs =
+            t_u32(&mut map, t_name, "init_peer_wait_secs", INIT_PEER_WAIT_ENV)?
+                .unwrap_or(crate::config::DEFAULT_INIT_PEER_WAIT_SECS);
 
         #[cfg(feature = "backup")]
         let (backup_config, backup_keep_days_local) = {
@@ -432,6 +443,8 @@ impl NodeConfig {
             insecure_cookie,
             health_check_delay_secs,
             learner_only,
+            pre_shutdown_delay_ms,
+            init_peer_wait_secs,
             #[cfg(feature = "cache")]
             rate_limit_cache,
             #[cfg(feature = "sqlite")]
@@ -517,6 +530,12 @@ fn t_bool(
 /// Named rather than inlined so a test can assert the parser is given it: F-032 was an empty
 /// string in this position, which made the variable a documentation-only fiction.
 pub(crate) const HEALTH_CHECK_DELAY_ENV: &str = "HQL_HEALTH_CHECK_DELAY_SECS";
+
+/// The documented environment variable for `pre_shutdown_delay_ms` (`033` B-4).
+pub(crate) const PRE_SHUTDOWN_DELAY_ENV: &str = "HQL_PRE_SHUTDOWN_DELAY_MS";
+
+/// The documented environment variable for `init_peer_wait_secs` (`033` B-3).
+pub(crate) const INIT_PEER_WAIT_ENV: &str = "HQL_INIT_PEER_WAIT_SECS";
 
 fn t_i64(
     map: &mut toml::Table,
@@ -1006,6 +1025,39 @@ mod tests {
     /// is F-055's shape inside the library's own test binary. The line for this variable in
     /// `hiqlite.env` is commented out for exactly that reason, which is also what keeps this
     /// assertion about the TOML key meaningful.
+    /// `033` B-3 and B-4: the two lane B options are documented keys of the TOML route. A key
+    /// the parser does not consume makes the whole configuration unknown, so before the options
+    /// existed this was a rejected file.
+    #[tokio::test]
+    async fn the_lane_b_options_are_accepted_toml_keys() {
+        parse_cfg("pre_shutdown_delay_ms = 1500\ninit_peer_wait_secs = 30\n")
+            .await
+            .expect("pre_shutdown_delay_ms and init_peer_wait_secs are configuration keys");
+    }
+
+    /// `033` B-4: the default is exactly the 9.5 s constant it replaced, on the code route and
+    /// the TOML route; a configured value is the value used. B-3's bound likewise. The
+    /// environment route is asserted at the parser boundary, for the reason
+    /// `health_check_delay_secs_is_settable_from_toml_and_from_the_environment` gives.
+    #[tokio::test]
+    async fn the_lane_b_options_default_to_today_and_take_a_configured_value() {
+        assert_eq!(NodeConfig::default().pre_shutdown_delay_ms, 9_500);
+        assert_eq!(NodeConfig::default().init_peer_wait_secs, 120);
+
+        let default_cfg = parse_cfg("").await.unwrap();
+        assert_eq!(default_cfg.pre_shutdown_delay_ms, 9_500);
+        assert_eq!(default_cfg.init_peer_wait_secs, 120);
+
+        let cfg = parse_cfg("pre_shutdown_delay_ms = 1500\ninit_peer_wait_secs = 30\n")
+            .await
+            .unwrap();
+        assert_eq!(cfg.pre_shutdown_delay_ms, 1500);
+        assert_eq!(cfg.init_peer_wait_secs, 30);
+
+        assert_eq!(PRE_SHUTDOWN_DELAY_ENV, "HQL_PRE_SHUTDOWN_DELAY_MS");
+        assert_eq!(INIT_PEER_WAIT_ENV, "HQL_INIT_PEER_WAIT_SECS");
+    }
+
     #[tokio::test]
     async fn health_check_delay_secs_is_settable_from_toml_and_from_the_environment() {
         let cfg = parse_cfg("health_check_delay_secs = 7\n").await.unwrap();

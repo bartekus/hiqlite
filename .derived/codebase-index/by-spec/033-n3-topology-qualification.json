@@ -9,6 +9,42 @@
     ],
     "implementingPaths": [
       {
+        "path": "hiqlite.env",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite.toml",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/app_state.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/client/",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/config.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/config_toml.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/init.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/network/",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/start.rs",
+        "source": "spec-edge"
+      },
+      {
         "path": "qualification/n3/",
         "source": "spec-edge"
       },
@@ -85,6 +121,123 @@
       {
         "locations": [
           {
+            "file": "hiqlite/src/client/"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/client/"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/network/"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/network/"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite.env"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite.env"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite.toml"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite.toml"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/app_state.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/app_state.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/config.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/config.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/config_toml.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/config_toml.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/init.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/init.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/start.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/start.rs"
+        }
+      },
+      {
+        "locations": [
+          {
             "file": "standards/spec/findings-register.md"
           }
         ],
@@ -111,27 +264,14 @@
       {
         "locations": [
           {
-            "file": "hiqlite/src/client/mgmt.rs"
+            "file": "hiqlite/src/error.rs"
           }
         ],
         "ownership": false,
         "sourceField": "references",
         "unit": {
           "kind": "file",
-          "path": "hiqlite/src/client/mgmt.rs"
-        }
-      },
-      {
-        "locations": [
-          {
-            "file": "hiqlite/src/init.rs"
-          }
-        ],
-        "ownership": false,
-        "sourceField": "references",
-        "unit": {
-          "kind": "file",
-          "path": "hiqlite/src/init.rs"
+          "path": "hiqlite/src/error.rs"
         }
       },
       {
@@ -145,6 +285,19 @@
         "unit": {
           "kind": "file",
           "path": "hiqlite/src/membership_gate.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/store/mod.rs"
+          }
+        ],
+        "ownership": false,
+        "sourceField": "references",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/store/mod.rs"
         }
       },
       {
@@ -165,5 +318,5 @@
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "339d7d2b276f2dc6ce72348bcf1cafe8e3794911bddb74fb00a96f133dea1938"
+  "shardHash": "10119f4b3de6bb43f295295e8a2e399d1273e5d50b776705eb9888f9ef27c9a9"
 }
