@@ -310,7 +310,10 @@ ephemeral ports serving the production route shape, not hiqlite nodes, so they
 show the decision's reading of each answer and its bound, not that a real peer
 gives those answers at the right moments; the server half is exercised only by
 the in-process cluster suite, whose every N=3 bootstrap now depends on it. No
-harness scenario (A-1, A-6) has run.
+harness scenario (A-1, A-6) has run. After review (D-10),
+`init::tests::f118_a_black_holed_peer_does_not_hold_the_decision` took 20 s on
+the first lane B commit, where the peers were asked one after another, and
+passes within the 5 s cap now.
 
 What B-6 would add, when implemented, and what it still would not: one host,
 so no kernel crash and no real disk loss, which is where `ImmediateAsync` and
@@ -352,6 +355,9 @@ offline export can prove is therefore conditional; the proposal's section 13
 states the conditions and the alternatives, and `034` B-2 was rewritten.
 
 ## 6. Resolved decisions
+
+The D-numbers below are this spec's own. A decision of the proposal's section 11
+is always cited as "the proposal's D-n"; the two numberings are unrelated.
 
 **D-1 (2026-09-23, territory is declared by the change that moves it).** This
 spec references the source files its planned repairs would touch instead of
@@ -461,8 +467,10 @@ lane B, 2026-09-23. B-3 is imprecise on four points, decided here:
   answer changed shape: an unrepaired node 1 panics ("initialized but has no
   configured members") on a repaired pristine peer's `200`, and a repaired node 1
   never counts an unrepaired pristine peer's ambiguous `400`, so a fresh
-  bootstrap needs every node on a repaired build. Neither case arises when an
-  existing cluster restarts, because an initialized peer's answer is unchanged.
+  bootstrap needs every node on a repaired build. *Corrected by D-10:* the
+  first sentence above also holds for a full restart of an **existing** cluster
+  whose cache group is in memory (`cache_storage_disk = false`), whose cache
+  group is pristine on every start.
 
 The rule is B-3's and is not changed here. Its limit, stated rather than
 repaired: at N=3 one pristine peer is enough, so a cell that lost two of its
@@ -482,14 +490,59 @@ an error for which the new `Error::is_shutdown_unconfirmed()` is `true` is an
 unconfirmed completion; any other error is a shutdown that returned without
 stopping everything, including a membership drain that timed out and stopped
 nothing, which is also an `Error::Timeout` and was indistinguishable before. The
-method is an addition to the public surface `027` B-7 describes, and the only
-one. Corrected here, not in the proposal: `client/mgmt.rs` is owned by `003`'s
+method is an addition to the public surface `027` B-7 describes. *Corrected by
+D-10:* it is not the only one. Corrected here, not in the proposal: `client/mgmt.rs` is owned by `003`'s
 `hiqlite/src/client/` directory, not by `010` as section 16's table says. The
 two options are recorded in `009`'s contract through the reference files it
 establishes, `hiqlite.toml` and `hiqlite.env`; `009`'s own text is not edited.
 The server binary's generated configuration (`015`'s
 `hiqlite/src/server/config.rs`) lists both keys as well, so the
 drift `011`, `029` and `030` pin between it and `hiqlite.toml` stays as it was.
+
+**D-10 (2026-09-23, lane B: an independent review's corrections to D-8 and D-9).**
+
+- *Bootstrap under `OrderedReady`, and the in-memory cache.* The node-1 decision
+  runs before the listeners are bound, so while node 1 waits it serves neither
+  `/ready` nor `/health`. A StatefulSet with the default `OrderedReady` policy
+  creates pods 1 and 2 only once pod 0 is ready, so node 1 waits out
+  `init_peer_wait_secs`, fails and restarts, for ever: a new cluster never forms.
+  D-8 said that cannot happen to an existing cluster; it can, when the cache group
+  is in memory, because that group is pristine after every start, so a full
+  restart of such a cluster under `OrderedReady` crashloops node 1 in the cache
+  decision. Before lane B, `/ready` answered ready for a pristine node 1 after ten
+  seconds, and at N=3 node 1 had already initialized itself on no evidence
+  (F-118), so neither showed. **`podManagementPolicy: Parallel` is required**,
+  and is now said where the option is documented and in the README's StatefulSet
+  example. The review's preferred repair, taking the decision after the listeners
+  and answering ready meanwhile, is **not** made: B-3 says node 1 "reports
+  not-ready" while its evidence is missing, and answering ready is the opposite.
+  Which of the two B-3 should say is the owner's decision, reported with lane B
+  and not taken here.
+- *A second cache cluster at N=3 with an in-memory cache.* A peer's in-memory
+  cache group is pristine after every restart, so when node 1 and node 2 restart
+  together and node 3 is silent, node 2's "not initialized" is true and is enough
+  evidence at N=3: node 1 forms a new cache cluster while node 3 still holds the
+  old one. The old one cannot commit on its own, having one voter of three, but
+  its votes and the new cluster's may mix (inferred from openraft's protocol, not
+  observed), which is the in-memory hazard
+  `NodeConfig::cache_storage_disk` already warns of. The rule cannot tell this
+  apart: the peer does not know it was a member, because nothing of its cache
+  group survives its restart. Not repaired; recorded here and in the F-118
+  register note. The proposal's D-3 (`cache_storage_disk = true` at N=3) removes
+  the case.
+- *The public surface.* Besides `Error::is_shutdown_unconfirmed()`, `NodeConfig`
+  gains two public fields, `pre_shutdown_delay_ms` and `init_peer_wait_secs`.
+  `NodeConfig` is not `#[non_exhaustive]`, so a consumer that builds it with a
+  struct literal and no `..Default::default()` no longer compiles; one built from
+  `Default`, `from_env` or `from_toml` is unaffected.
+- *The HTTP API.* `GET /cluster/membership/{raft_type}` answers `200` with an
+  empty membership for a group that is not initialized, where it answered `400`;
+  for an initialized group that is not running it answers a `400` with new text.
+  The route is internal to the cluster, but its answer changed.
+- *The peers are asked concurrently.* Each round asks every peer still without an
+  explicit answer at once, each request capped at 5 s and at what is left of the
+  wait, so a peer that never answers no longer takes the whole wait from the
+  peers after it.
 
 **Owner decisions pending.** D-1 to D-13, D-8a to D-8e and D-15 to D-19 of the
 proposal's section 11 are not decided by this spec. Each will be dated here
@@ -536,6 +589,8 @@ grep -q 'HQL_PRE_SHUTDOWN_DELAY_MS' hiqlite.env
 grep -q 'HQL_INIT_PEER_WAIT_SECS' hiqlite.env
 grep -q 'pre_shutdown_delay_ms = 9500' hiqlite.toml
 grep -q 'init_peer_wait_secs = 120' hiqlite.toml
+grep -q 'podManagementPolicy: Parallel' README.md
+grep -q 'const PEER_REQUEST_CAP' hiqlite/src/init.rs
 sh -c '! grep -q "Duration::from_millis(9500)" hiqlite/src/client/mgmt.rs'
 cargo test -p hiqlite-patched --lib init::tests::f118
 cargo test -p hiqlite-patched --lib --no-default-features --features cache init::tests::f118

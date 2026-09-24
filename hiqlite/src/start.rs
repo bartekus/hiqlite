@@ -91,12 +91,19 @@ async fn teardown_raft_db(raft_db: crate::app_state::StateRaftDB) {
     }
 }
 
+/// How long a failed start waits for any one component to acknowledge its stop.
+const TEARDOWN_STOP_BOUND: Duration = Duration::from_secs(10);
+
 /// Stop a node whose start failed after its listeners were serving.
 ///
-/// The listeners are told to stop, then every raft group and writer, in the order the shutdown
-/// uses. Storage ownership (`024`, and `035`'s WAL locks inside it) is released only if every
-/// component acknowledged its stop; otherwise it stays held until this state is dropped or the
-/// process ends, because a component that did not stop may still write to the directory.
+/// The listeners are told to stop and the membership gate is closed and **drained**, bounded by
+/// `SHUTDOWN_DRAIN`, as the shutdown does (F-107): a membership change admitted before the
+/// failure finishes before anything stops under it, and if it does not finish in time nothing
+/// is stopped. Then every raft group and writer, in the order the shutdown uses, each stop
+/// bounded by `TEARDOWN_STOP_BOUND`. Storage ownership (`024`, and `035`'s WAL locks inside it)
+/// is released only if the drain succeeded and every component acknowledged its stop within its
+/// bound; otherwise it stays held until this state is dropped or the process ends, because a
+/// component that did not stop may still write to the directory.
 async fn teardown_started_node(
     state: &Arc<AppState>,
     tx_shutdown: &tokio::sync::watch::Sender<bool>,
@@ -108,17 +115,51 @@ async fn teardown_started_node(
     state.membership.close();
     let _ = tx_shutdown.send(true);
 
+    let held = match state
+        .membership
+        .drain(crate::membership_gate::SHUTDOWN_DRAIN)
+        .await
+    {
+        Ok(Some(held)) => held,
+        Ok(None) => return,
+        Err(err) => {
+            tracing::error!(
+                "A start that failed could not drain a running membership change ({err}); \
+                 nothing is stopped under it, and storage ownership stays held until this \
+                 node's state is dropped or the process ends"
+            );
+            return;
+        }
+    };
+
     #[allow(unused_mut)]
     let mut clean = true;
+    let bounded = |what: &'static str, ok: Result<bool, tokio::time::error::Elapsed>| match ok {
+        Ok(stopped) => stopped,
+        Err(_) => {
+            tracing::error!("{what} did not stop within {TEARDOWN_STOP_BOUND:?}");
+            false
+        }
+    };
     #[cfg(feature = "cache")]
     {
         state
             .raft_cache
             .is_raft_stopped
             .store(true, std::sync::atomic::Ordering::Relaxed);
-        clean &= state.raft_cache.raft.shutdown().await.is_ok();
+        clean &= bounded(
+            "the cache raft",
+            tokio::time::timeout(TEARDOWN_STOP_BOUND, async {
+                state.raft_cache.raft.shutdown().await.is_ok()
+            })
+            .await,
+        );
         if let Some(handle) = &state.raft_cache.shutdown_handle {
-            clean &= handle.shutdown().await.is_ok();
+            clean &= bounded(
+                "the cache log writer",
+                tokio::time::timeout(TEARDOWN_STOP_BOUND, async { handle.shutdown().await.is_ok() })
+                    .await,
+            );
         }
     }
     #[cfg(feature = "sqlite")]
@@ -127,20 +168,41 @@ async fn teardown_started_node(
             .raft_db
             .is_raft_stopped
             .store(true, std::sync::atomic::Ordering::Relaxed);
-        clean &= state.raft_db.raft.shutdown().await.is_ok();
-        clean &= state.raft_db.shutdown_handle.shutdown().await.is_ok();
-        let (tx, rx) = tokio::sync::oneshot::channel();
-        clean &= match state
-            .raft_db
-            .sql_writer
-            .send_async(crate::store::state_machine::sqlite::writer::WriterRequest::Shutdown(tx))
-            .await
-        {
-            Ok(()) => rx.await.is_ok(),
-            Err(_) => false,
-        };
+        clean &= bounded(
+            "the sqlite raft",
+            tokio::time::timeout(TEARDOWN_STOP_BOUND, async {
+                state.raft_db.raft.shutdown().await.is_ok()
+            })
+            .await,
+        );
+        clean &= bounded(
+            "the sqlite WAL writer",
+            tokio::time::timeout(TEARDOWN_STOP_BOUND, async {
+                state.raft_db.shutdown_handle.shutdown().await.is_ok()
+            })
+            .await,
+        );
+        clean &= bounded(
+            "the SQLite writer",
+            tokio::time::timeout(TEARDOWN_STOP_BOUND, async {
+                let (tx, rx) = tokio::sync::oneshot::channel();
+                match state
+                    .raft_db
+                    .sql_writer
+                    .send_async(
+                        crate::store::state_machine::sqlite::writer::WriterRequest::Shutdown(tx),
+                    )
+                    .await
+                {
+                    Ok(()) => rx.await.is_ok(),
+                    Err(_) => false,
+                }
+            })
+            .await,
+        );
     }
 
+    state.membership.mark_stopped(&held, clean);
     if clean {
         state.release_storage_ownership();
     } else {
@@ -149,6 +211,7 @@ async fn teardown_started_node(
              until this node's state is dropped or the process ends"
         );
     }
+    drop(held);
 }
 
 /// Bind a listener, or fail startup saying which endpoint and why.
@@ -631,6 +694,12 @@ where
     // Everything from here on runs with both listeners serving. A failure no longer returns with
     // the raft groups, the writers and the listeners still running against the data directory:
     // it stops them, and releases storage ownership only once they have acknowledged it.
+    // Kept so a failure can stop both joins: a join task left running would keep retrying, and
+    // keep this node's state, and with it storage ownership, alive (review finding 4).
+    #[cfg(feature = "sqlite")]
+    let abort_member_db = member_db.abort_handle();
+    #[cfg(feature = "cache")]
+    let abort_member_cache = member_cache.abort_handle();
     let joined: Result<(), Error> = async {
         #[cfg(feature = "sqlite")]
         member_db.await??;
@@ -643,7 +712,12 @@ where
         // only the join sequenced after it could provide.
         #[cfg(all(feature = "backup", feature = "sqlite"))]
         if backup_applied {
-            backup::restore_backup_finish(&state, backup::RESTORE_FINISH_BOUNDS).await?;
+            backup::restore_backup_finish(
+                &state,
+                node_config.nodes.len() > 1,
+                backup::RESTORE_FINISH_BOUNDS,
+            )
+            .await?;
             // F-119: only now is the instruction recorded as applied.
             backup::restore_instruction_completed(node_config.data_dir.as_ref()).await?;
             state
@@ -654,6 +728,10 @@ where
     }
     .await;
     if let Err(err) = joined {
+        #[cfg(feature = "sqlite")]
+        abort_member_db.abort();
+        #[cfg(feature = "cache")]
+        abort_member_cache.abort();
         teardown_started_node(&state, &tx_shutdown).await;
         return Err(err);
     }

@@ -250,3 +250,36 @@ impl StateRaftCache {
         }
     }
 }
+
+/// `034` B-4 (review finding 3): refuse while this node finishes a restore it applied.
+///
+/// Readiness, client streams and dashboard writes go through this. A write acknowledged before
+/// the post-restore sequence completed would be lost if that sequence then failed, because the
+/// next start finishes (and, with the instruction still set, may apply) the image again.
+#[cfg(all(feature = "backup", feature = "sqlite"))]
+pub(crate) fn ensure_not_restoring(hold: &AtomicBool) -> Result<(), crate::Error> {
+    if hold.load(std::sync::atomic::Ordering::Acquire) {
+        Err(crate::Error::Error(
+            "this node is finishing a database restore and serves no clients until it has".into(),
+        ))
+    } else {
+        Ok(())
+    }
+}
+
+#[cfg(all(test, feature = "backup", feature = "sqlite"))]
+mod restore_hold_tests {
+    use super::*;
+
+    /// Review finding 3: while node 1 finishes a restore it applied, it is neither ready nor
+    /// open to client writes. A write acknowledged in that window would be discarded if the
+    /// finish then failed and the next start applied the image again.
+    #[test]
+    fn a_node_finishing_a_restore_is_not_ready_and_takes_no_client_writes() {
+        let hold = AtomicBool::new(true);
+        let err = ensure_not_restoring(&hold).expect_err("held");
+        assert!(err.to_string().contains("restore"), "says why: {err}");
+        hold.store(false, std::sync::atomic::Ordering::Release);
+        ensure_not_restoring(&hold).expect("released");
+    }
+}

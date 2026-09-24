@@ -271,8 +271,12 @@ secret_api = "SuperSecureSecret1337"
 # not initialized before it initializes one. A peer that cannot be reached,
 # times out, or rejects the secret counts for nothing. On expiry the start
 # fails with an error naming the silent peers; node 1 never initializes
-# without that evidence. Bootstrapping a new cluster therefore needs the
-# peers started alongside node 1. Also bounds node 1's check, before a
+# without that evidence. Bootstrapping a new cluster, and a full restart of
+# one whose cache is in memory (`cache_storage_disk = false`), therefore needs
+# the peers started alongside node 1: on Kubernetes, a StatefulSet with
+# `podManagementPolicy: Parallel`. Under the default `OrderedReady` node 1 is
+# not ready while it waits, the other pods are never created, and node 1 fails
+# at this bound and restarts. Also bounds node 1's check, before a
 # restore, that no peer holds an initialized group. Unused at N=1.
 # default: 120
 # overwritten by: HQL_INIT_PEER_WAIT_SECS

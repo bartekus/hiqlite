@@ -37,6 +37,10 @@ extends:
   - spec: "003-client-consistency-and-retry-outcomes"
     unit: { kind: directory, path: "hiqlite/src/network/" }
     nature: additive
+  # D-9: the dashboard's writes are held while a restore is finished.
+  - spec: "018-dashboard-service-and-ui"
+    unit: { kind: file, path: "hiqlite/src/dashboard/query.rs" }
+    nature: additive
   # D-7: the in-process suite's second file restore names its own copy of the image.
   - spec: "012-cluster-integration-evidence"
     unit: { kind: file, path: "hiqlite/tests/cluster/backup_restore.rs" }
@@ -96,7 +100,8 @@ and `027` B-7 froze the public surface this release exposes (D-3).
 
 **Extends, since lane B** (D-6, D-7): `013`'s `hiqlite/src/backup.rs` and
 `010`'s `start.rs` (superseding: the restore start and finish are replaced),
-`010`'s `app_state.rs`, `003`'s `hiqlite/src/network/`, `012`'s
+`010`'s `app_state.rs`, `003`'s `hiqlite/src/network/`, `018`'s
+`hiqlite/src/dashboard/query.rs` (D-9), `012`'s
 `hiqlite/tests/cluster/backup_restore.rs` and `005`'s findings register; and
 **amends** `026` for the follower quarantine.
 
@@ -327,6 +332,15 @@ quarantine); they do not kill a process. The reordering in `start.rs` and the
 membership hold are exercised only by the in-process cluster suite's restore
 phases, not by a test that fails without them. R-1 to R-8 have not run.
 
+**After review (2026-09-23, D-9).** Observed failing on the first lane B
+commit, then passing: `f119_a_committed_but_unfinished_restore_is_finished_without_the_instruction`
+(the start without the instruction returned "nothing to do") and
+`f120_at_n1_a_missing_snapshot_or_purge_does_not_fail_the_restore` (a startup
+error), the latter behind a seam that added `RestoreRaft::has_peers` unused.
+`app_state::restore_hold_tests` failed only by not compiling, since the check did
+not exist; it tests the check, not the three places that call it. The teardown's
+drain, bounds and aborts have no test that fails without them.
+
 **Before lane B: nothing here had been executed.** What the
 acceptance would establish when it passes: the hiqlite half of the procedure,
 on one host, against a local S3 double. It would not establish the consumer
@@ -363,6 +377,10 @@ the owner to accept the proposal's 13.7 assumptions, or independent evidence
 (13.7 (a) or (b)), under D-9 and D-12.
 
 ## 7. Resolved decisions
+
+The D-numbers below are this spec's own. A decision of the proposal's section 11
+is always cited as "the proposal's D-n" (its D-7 names the manifest fields, its
+D-8 the stale-backup controls); this spec's D-7 and D-8 are unrelated to them.
 
 **D-1 (2026-09-23, fresh cell, not coordinated followers).** The alternative
 was to repair F-058 directly: a coordination point through which followers wait
@@ -453,6 +471,35 @@ enough restarted followers to answer that they are empty, and refuses if any
 answers with an initialized group; a follower left running used to be restored
 around, silently. That in-place topology stays unsupported (`026` B-7).
 
+**D-9 (2026-09-23, lane B: an independent review's corrections to D-6 and
+D-7).**
+
+- *The record has three states, not two.* `pending` is written before anything
+  moves; `committed` once the image is in place; `applied` once the start that
+  finished it completed. D-6's two states forgot a committed image as soon as the
+  operator removed `HQL_BACKUP_RESTORE`: the next start took the ordinary path,
+  with no hold, no snapshot and no purge, and a follower then caught up from a log
+  without the restored data. A `committed` record now makes node 1 finish the
+  restore **whatever the environment says**, without pulling the image again;
+  only a different instruction replaces it. A `pending` record without the
+  instruction is abandoned with a warning, since nothing had moved.
+- *Not ready, and no client writes, while a restore is finished.*
+  `become_cluster_member` marks the start finished before the finish runs, so
+  `/ready` answered ready and client streams were accepted for as long as the
+  finish took (up to 60 s + 60 s + 30 min). `restore_hold` now also refuses
+  readiness, the client stream and the dashboard's writes: a write acknowledged
+  there would be lost if the finish failed.
+- *N=1.* A snapshot that is not built, or a purge that gives up, is logged and
+  the restore completes: no follower can catch up from the log at N=1, and D-7's
+  fatal treatment made every restart apply the image again while the instruction
+  stayed set.
+- *The failed-start teardown.* It aborts both join tasks (one left running kept
+  retrying and kept the node's state, and its storage ownership, alive), drains
+  the membership gate with `SHUTDOWN_DRAIN` before stopping anything (F-107: if
+  the drain times out nothing is stopped), and bounds each component's stop at
+  10 s. Storage ownership is released only after a drain and every stop within
+  its bound.
+
 ## Verification
 
 ```verify:cli
@@ -469,4 +516,10 @@ sh -c '! grep -q "debug_assert!(" hiqlite/src/backup.rs'
 sh -c 'a=$(grep -n "member_db.await??;" hiqlite/src/start.rs | head -1 | cut -d: -f1); b=$(grep -n "backup::restore_backup_finish(&state" hiqlite/src/start.rs | head -1 | cut -d: -f1); c=$(grep -n "\"the external API endpoint\"," hiqlite/src/start.rs | tail -1 | cut -d: -f1); test -n "$a" && test -n "$b" && test -n "$c" && test "$c" -lt "$a" && test "$a" -lt "$b"'
 grep -q 'fn teardown_started_node' hiqlite/src/start.rs
 cargo test -p hiqlite-patched --lib backup::lane_b_tests
+cargo test -p hiqlite-patched --lib app_state::restore_hold_tests
+grep -q 'Committed,' hiqlite/src/backup.rs
+sh -c 'test "$(grep -c "ensure_not_restoring(&state.restore_hold)?;" hiqlite/src/network/api.rs)" -eq 2'
+grep -q 'ensure_not_restoring(&state.restore_hold)?;' hiqlite/src/dashboard/query.rs
+sh -c 'grep -A40 "async fn teardown_started_node" hiqlite/src/start.rs | grep -q "SHUTDOWN_DRAIN"'
+grep -q 'abort_member_cache.abort();' hiqlite/src/start.rs
 ```

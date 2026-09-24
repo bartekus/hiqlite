@@ -224,6 +224,15 @@ pub(crate) async fn peer_init_evidence(
         .collect();
 
     loop {
+        // One round: every peer without an explicit answer yet is asked **concurrently**, each
+        // request capped at `PEER_REQUEST_CAP` and at what is left of the wait. Asked one after
+        // another, a peer that accepted the connection and never answered took the whole wait
+        // and left the peers after it a 100 ms floor (review finding 7).
+        let left = deadline
+            .saturating_duration_since(time::Instant::now())
+            .max(Duration::from_millis(100));
+        let cap = left.min(PEER_REQUEST_CAP);
+        let mut round = tokio::task::JoinSet::new();
         for (id, node) in &peers {
             if fresh.contains(id) {
                 continue;
@@ -235,55 +244,41 @@ pub(crate) async fn peer_init_evidence(
                 raft_type.as_str()
             );
             debug!("checking membership via {}", url);
-
-            // Each request is bounded by what is left of the wait, so a peer that accepts the
-            // connection and never answers cannot hold the decision past its bound.
-            let left = deadline
-                .saturating_duration_since(time::Instant::now())
-                .max(Duration::from_millis(100));
             let req = client
                 .get(url)
                 .header(HEADER_NAME_SECRET, secret_api)
                 .send();
-            let reason = match time::timeout(left, req).await {
-                Err(_) => format!("no answer within {left:?}"),
-                Ok(Err(err)) => format!("unreachable: {err}"),
-                Ok(Ok(resp)) if resp.status().is_success() => {
-                    match time::timeout(left, resp.bytes()).await {
-                        Ok(Ok(body)) => match deserialize::<Membership<NodeId, Node>>(&body) {
-                            Ok(m) if m.nodes().count() > 0 => {
-                                info!(
-                                    "node {id} answered with an initialized {} group",
-                                    raft_type.as_str()
-                                );
-                                return Ok(PeerInitEvidence::Initialized { peer: *id });
-                            }
-                            Ok(_) => {
-                                fresh.insert(*id);
-                                silent.remove(id);
-                                continue;
-                            }
-                            Err(err) => {
-                                format!("answered 200 with a body that is not a membership: {err}")
-                            }
-                        },
-                        Ok(Err(err)) => format!("answered 200 and the body failed: {err}"),
-                        Err(_) => format!("answered 200 and sent no body within {left:?}"),
-                    }
-                }
-                Ok(Ok(resp)) => {
-                    let status = resp.status();
-                    let body = time::timeout(Duration::from_millis(500), resp.bytes())
-                        .await
-                        .ok()
-                        .and_then(|r| r.ok())
-                        .map(|b| String::from_utf8_lossy(&b).chars().take(200).collect::<String>())
-                        .unwrap_or_default();
-                    format!("answered {status}, which is not an explicit answer: {body}")
-                }
+            let id = *id;
+            round.spawn(async move { (id, ask_peer(req, cap).await) });
+        }
+
+        let mut initialized = None;
+        while let Some(joined) = round.join_next().await {
+            let Ok((id, answer)) = joined else {
+                continue;
             };
-            debug!("node {id} did not answer explicitly: {reason}");
-            silent.insert(*id, reason);
+            match answer {
+                PeerAnswer::Initialized => {
+                    initialized.get_or_insert(id);
+                }
+                PeerAnswer::NotInitialized => {
+                    fresh.insert(id);
+                    silent.remove(&id);
+                }
+                PeerAnswer::Silent(reason) => {
+                    debug!("node {id} did not answer explicitly: {reason}");
+                    silent.insert(id, reason);
+                }
+            }
+        }
+        // An initialized group ends the decision whatever else the round heard, so an
+        // initialized peer that answers is never outvoted by fresh ones in the same round.
+        if let Some(peer) = initialized {
+            info!(
+                "node {peer} answered with an initialized {} group",
+                raft_type.as_str()
+            );
+            return Ok(PeerInitEvidence::Initialized { peer });
         }
 
         if fresh.len() >= quorum {
@@ -321,6 +316,54 @@ pub(crate) async fn peer_init_evidence(
             raft_type.as_str()
         );
         time::sleep(Duration::from_secs(1).min(deadline - now)).await;
+    }
+}
+
+/// The most a single peer is waited for in one round of `peer_init_evidence`.
+const PEER_REQUEST_CAP: Duration = Duration::from_secs(5);
+
+/// One peer's answer to "is your group initialized?".
+enum PeerAnswer {
+    Initialized,
+    NotInitialized,
+    /// Not an explicit answer, and why.
+    Silent(String),
+}
+
+async fn ask_peer(
+    req: impl std::future::Future<Output = Result<reqwest::Response, reqwest::Error>>,
+    cap: Duration,
+) -> PeerAnswer {
+    let started = time::Instant::now();
+    let resp = match time::timeout(cap, req).await {
+        Err(_) => return PeerAnswer::Silent(format!("no answer within {cap:?}")),
+        Ok(Err(err)) => return PeerAnswer::Silent(format!("unreachable: {err}")),
+        Ok(Ok(resp)) => resp,
+    };
+    let rest = cap
+        .saturating_sub(started.elapsed())
+        .max(Duration::from_millis(100));
+    let status = resp.status();
+    let body = match time::timeout(rest, resp.bytes()).await {
+        Ok(Ok(body)) => body,
+        Ok(Err(err)) => return PeerAnswer::Silent(format!("answered {status}, body failed: {err}")),
+        Err(_) => return PeerAnswer::Silent(format!("answered {status}, no body within {rest:?}")),
+    };
+    if !status.is_success() {
+        let text = String::from_utf8_lossy(&body)
+            .chars()
+            .take(200)
+            .collect::<String>();
+        return PeerAnswer::Silent(format!(
+            "answered {status}, which is not an explicit answer: {text}"
+        ));
+    }
+    match deserialize::<Membership<NodeId, Node>>(&body) {
+        Ok(m) if m.nodes().count() > 0 => PeerAnswer::Initialized,
+        Ok(_) => PeerAnswer::NotInitialized,
+        Err(err) => {
+            PeerAnswer::Silent(format!("answered 200 with a body that is not a membership: {err}"))
+        }
     }
 }
 
@@ -1173,6 +1216,41 @@ mod tests {
             .unwrap()
         );
         assert!(started.elapsed() < Duration::from_secs(1), "no wait at N=1");
+    }
+
+    /// Review finding 7: a black-holed peer does not hold the decision. The peers are asked
+    /// concurrently, each request capped, so a peer that answers is heard within the cap even
+    /// when the peer listed before it never answers. Asked one after another, the first request
+    /// took the whole wait and every later peer got a 100 ms floor.
+    #[tokio::test]
+    async fn f118_a_black_holed_peer_does_not_hold_the_decision() {
+        let hung = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let hung_addr = hung.local_addr().unwrap().to_string();
+        let p3 = stub_peer(Answer::NotInitialized).await;
+        let nodes = vec![peer(1, &closed_addr()), peer(2, &hung_addr), peer(3, &p3)];
+
+        let started = std::time::Instant::now();
+        let skip = time::timeout(
+            Duration::from_secs(30),
+            should_node_1_skip_init(
+                &some_raft_type(),
+                &nodes,
+                SECRET,
+                false,
+                false,
+                Duration::from_secs(20),
+            ),
+        )
+        .await
+        .expect("bounded")
+        .expect("node 3 answered");
+        assert!(!skip);
+        assert!(
+            started.elapsed() < Duration::from_secs(10),
+            "decided within the per-request cap, not the whole wait: {:?}",
+            started.elapsed()
+        );
+        drop(hung);
     }
 
     /// A peer that accepts the connection and never answers is bounded by the wait as well.

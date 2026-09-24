@@ -3080,7 +3080,12 @@ initialized but stopped peer count for nothing. The wait is bounded by
 peers; both groups take the decision; N=1 is unchanged. Observed: three unit
 tests against stub peers returned "initialize" on the unrepaired tree and a
 bounded error after. Not observed: the scenario on real nodes (`033` A-1, A-6),
-which needs the harness.
+which needs the harness. **Limits found by review (`033` D-10):** bootstrap, and a
+full restart when the cache group is in memory, need the peers started with node
+1 (`podManagementPolicy: Parallel`); and with an in-memory cache, a simultaneous
+restart of node 1 and node 2 while node 3 is silent still forms a second cache
+cluster, because node 2's cache group is truly pristine and its answer is enough
+at N=3. Not repaired.
 
 ### F-119 `limit`, confidence `high`
 
@@ -3112,6 +3117,9 @@ unrepaired behavior; once each after. The interruptions are simulated by
 constructing the on-disk state each crash point leaves, not by killing a
 process. What the record compares is the instruction, not the image's digest,
 which it records; an object replaced under the same name is treated as applied.
+After review (`034` D-9) the record also has a `committed` state, so an image in
+place whose post-restore sequence never completed is finished by the next start
+even when the instruction has been removed.
 
 ### F-120 `defect`, confidence `medium`
 
