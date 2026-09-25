@@ -84,6 +84,10 @@ mod start;
 pub mod lifecycle;
 #[cfg(any(feature = "sqlite", feature = "cache"))]
 mod membership_gate;
+#[cfg(any(feature = "sqlite", feature = "cache"))]
+mod recovery;
+#[cfg(any(feature = "sqlite", feature = "cache"))]
+pub use recovery::{RecoveryProgress, RecoveryState};
 
 /// Entry points for the abort-profile probe binary.
 ///

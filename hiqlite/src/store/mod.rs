@@ -87,10 +87,24 @@ pub(crate) async fn start_raft_db(
         let log_state = log_store.get_log_state().await.map_err(|err| {
             Error::Error(format!("cannot read the WAL log state at startup: {err}").into())
         })?;
-        crate::store::state_machine::sqlite::state_machine::SnapshotRecoveryBounds {
-            last_purged_index: log_state.last_purged_log_id.map(|id| id.index),
-        }
+        (
+            crate::store::state_machine::sqlite::state_machine::SnapshotRecoveryBounds {
+                last_purged_index: log_state.last_purged_log_id.map(|id| id.index),
+            },
+            log_state.last_log_id.map(|id| id.index),
+        )
     };
+    let (recovery_bounds, recovery_target) = recovery_bounds;
+
+    // `037`: the unclean-stop marker is read before the state machine's constructor acts on it
+    // (under `auto-heal` it deletes the database), so the recovery can say why it is rebuilding.
+    let unclean_stop = tokio::fs::try_exists(format!(
+        "{}/lock",
+        StateMachineSqlite::path_base(&node_config.data_dir)
+    ))
+    .await
+    .unwrap_or(false);
+    let recovery = crate::recovery::StartupRecovery::new("db", recovery_target, unclean_stop);
 
     let state_machine_store = StateMachineSqlite::new(
         &node_config.data_dir,
@@ -179,6 +193,8 @@ pub(crate) async fn start_raft_db(
         return Err(err);
     }
 
+    recovery.watch(raft.metrics());
+
     Ok(StateRaftDB {
         raft,
         shutdown_handle,
@@ -187,6 +203,7 @@ pub(crate) async fn start_raft_db(
         log_statements: node_config.log_statements,
         is_raft_stopped,
         is_startup_finished,
+        recovery,
     })
 }
 
@@ -234,13 +251,25 @@ where
     #[cfg(feature = "dlock")]
     let tx_dlock = state_machine_store.tx_dlock.clone();
 
+    // `037`: a disk-backed cache keeps its state machine in memory, so every start replays the
+    // log it holds. An in-memory log starts empty and has nothing of its own to recover.
+    let mut recovery_target = None;
+
     let (raft, shutdown_handle) = if node_config.cache_storage_disk {
-        let log_store = start_log_store::<TypeConfigKV>(
+        let mut log_store = start_log_store::<TypeConfigKV>(
             logs::logs_dir_cache(&node_config.data_dir),
             node_config,
             wal_lock,
         )
         .await?;
+        recovery_target = log_store
+            .get_log_state()
+            .await
+            .map_err(|err| {
+                Error::Error(format!("cannot read the cache WAL log state at startup: {err}").into())
+            })?
+            .last_log_id
+            .map(|id| id.index);
         let shutdown_handle = log_store.shutdown_handle();
         crate::lifecycle::watch_wal_writer(
             lifecycle.clone(),
@@ -307,7 +336,11 @@ where
         return Err(err);
     }
 
+    let recovery = crate::recovery::StartupRecovery::new("cache", recovery_target, false);
+    recovery.watch(raft.metrics());
+
     Ok(StateRaftCache {
+        recovery,
         raft,
         tx_caches,
         cache_incompatible,

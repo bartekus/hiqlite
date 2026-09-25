@@ -1,13 +1,10 @@
 {
   "mapping": {
-    "amends": [
-      "002-snapshot-publication-and-recovery"
-    ],
     "dependsOn": [
       "000-hiqlite-ownership-bootstrap",
-      "002-snapshot-publication-and-recovery",
+      "003-client-consistency-and-retry-outcomes",
       "010-node-lifecycle-and-split-brain",
-      "013-backup-retention-and-object-storage"
+      "027-node-lifecycle-and-startup-errors"
     ],
     "implementingPaths": [
       {
@@ -15,27 +12,23 @@
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite/src/backup.rs",
-        "source": "spec-edge"
-      },
-      {
         "path": "hiqlite/src/client/",
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite/src/start.rs",
+        "path": "hiqlite/src/network/",
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite/src/storage_lock.rs",
+        "path": "hiqlite/src/recovery.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/tests/recovery_readiness.rs",
         "source": "spec-edge"
       },
       {
         "path": "spec-spine.toml",
-        "source": "spec-edge"
-      },
-      {
-        "path": "standards/spec/adoption-plan.md",
         "source": "spec-edge"
       },
       {
@@ -47,14 +40,27 @@
       {
         "locations": [
           {
-            "file": "hiqlite/src/storage_lock.rs"
+            "file": "hiqlite/src/recovery.rs"
           }
         ],
         "ownership": true,
         "sourceField": "establishes",
         "unit": {
           "kind": "file",
-          "path": "hiqlite/src/storage_lock.rs"
+          "path": "hiqlite/src/recovery.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/tests/recovery_readiness.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/tests/recovery_readiness.rs"
         }
       },
       {
@@ -73,6 +79,19 @@
       {
         "locations": [
           {
+            "file": "hiqlite/src/network/"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/network/"
+        }
+      },
+      {
+        "locations": [
+          {
             "file": "hiqlite/src/app_state.rs"
           }
         ],
@@ -81,32 +100,6 @@
         "unit": {
           "kind": "file",
           "path": "hiqlite/src/app_state.rs"
-        }
-      },
-      {
-        "locations": [
-          {
-            "file": "hiqlite/src/backup.rs"
-          }
-        ],
-        "ownership": true,
-        "sourceField": "extends",
-        "unit": {
-          "kind": "file",
-          "path": "hiqlite/src/backup.rs"
-        }
-      },
-      {
-        "locations": [
-          {
-            "file": "hiqlite/src/start.rs"
-          }
-        ],
-        "ownership": true,
-        "sourceField": "extends",
-        "unit": {
-          "kind": "file",
-          "path": "hiqlite/src/start.rs"
         }
       },
       {
@@ -125,19 +118,6 @@
       {
         "locations": [
           {
-            "file": "standards/spec/adoption-plan.md"
-          }
-        ],
-        "ownership": true,
-        "sourceField": "extends",
-        "unit": {
-          "kind": "file",
-          "path": "standards/spec/adoption-plan.md"
-        }
-      },
-      {
-        "locations": [
-          {
             "file": "standards/spec/findings-register.md"
           }
         ],
@@ -147,11 +127,63 @@
           "kind": "file",
           "path": "standards/spec/findings-register.md"
         }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/error.rs"
+          }
+        ],
+        "ownership": false,
+        "sourceField": "references",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/error.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/lib.rs"
+          }
+        ],
+        "ownership": false,
+        "sourceField": "references",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/lib.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/store/mod.rs"
+          }
+        ],
+        "ownership": false,
+        "sourceField": "references",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/store/mod.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/store/state_machine/sqlite/state_machine.rs"
+          }
+        ],
+        "ownership": false,
+        "sourceField": "references",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/store/state_machine/sqlite/state_machine.rs"
+        }
       }
     ],
-    "specId": "024-exclusive-storage-ownership",
+    "specId": "037-startup-recovery-readiness",
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "6900610b25dd142d416a15b1a0f86ed76dc87092196498ebdc9bef8ebe60f888"
+  "shardHash": "4a6b1897682fa9a17d12f3cd5b66d7f887b172d14ab3db62bcbbc6e6b9248119"
 }

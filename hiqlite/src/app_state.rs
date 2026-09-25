@@ -147,6 +147,29 @@ impl AppState {
 }
 
 impl AppState {
+    /// `037`: where this node's startup recovery stands, over every Raft group it runs.
+    pub(crate) fn recovery_state(&self) -> crate::RecoveryState {
+        let mut recovering = Vec::new();
+        #[cfg(feature = "sqlite")]
+        recovering.extend(self.raft_db.recovery.progress());
+        #[cfg(feature = "cache")]
+        recovering.extend(self.raft_cache.recovery.progress());
+        if recovering.is_empty() {
+            crate::RecoveryState::Complete
+        } else {
+            crate::RecoveryState::Recovering(recovering)
+        }
+    }
+
+    /// `037`: `Err(Error::Recovering)` until every Raft group of this node has recovered.
+    pub(crate) fn ensure_recovered(&self) -> Result<(), crate::Error> {
+        #[cfg(feature = "sqlite")]
+        self.raft_db.recovery.ensure_complete()?;
+        #[cfg(feature = "cache")]
+        self.raft_cache.recovery.ensure_complete()?;
+        Ok(())
+    }
+
     /// Give up exclusive ownership of the data directory.
     ///
     /// Called at the end of shutdown, **after** the raft groups, the WAL writer and the SQLite
@@ -176,6 +199,8 @@ pub struct StateRaftDB {
     pub log_statements: bool,
     pub is_raft_stopped: Arc<AtomicBool>,
     pub is_startup_finished: Arc<AtomicBool>,
+    /// `037`: whether the state machine has applied the log this node held at start.
+    pub(crate) recovery: crate::recovery::StartupRecovery,
 }
 
 #[cfg(feature = "cache")]
@@ -198,6 +223,8 @@ pub struct StateRaftCache {
     pub shutdown_handle: Option<hiqlite_wal::ShutdownHandle>,
     #[cfg(feature = "cache")]
     pub cache_storage_disk: bool,
+    /// `037`: whether the state machine has applied the log this node held at start.
+    pub(crate) recovery: crate::recovery::StartupRecovery,
 }
 
 #[cfg(feature = "cache")]
