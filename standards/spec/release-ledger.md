@@ -121,3 +121,30 @@ alone; its identity and evidence are `036` section 4.
 
 **Not established by this release:** the Rauthy image, a Rahi cell, N>1. Each
 consumer's re-pin, rebuild and release is its owner's act.
+
+## 0.15.0-patched.3 (published 2026-09-25)
+
+Added by `038-recovery-readiness-release`. The rows above are not edited. This
+release carries one repair, `037` (F-134), alone; its identity and evidence are
+`038` section 4.
+
+| | |
+|---|---|
+| version | `0.15.0-patched.3`, all three packages; `hiqlite-patched` requires the other two at `=0.15.0-patched.3` |
+| release commit | `6c8db22014bafd79ec1cff2ec91526e816d5f75c` on `spec-spine` (squash of #42), tree `713f4a6b` |
+| supported topology | `N = 1`, unchanged |
+
+| id | subject | state | evidence |
+|---|---|---|---|
+| R-35 | `037`: not healthy, not ready and serving nothing until startup recovery completes; `Error::Recovering`, `Client::recovery_state` | published | `037`'s regression observed failing on the published `0.15.0-patched.2` library and passing on this tree, on macOS arm64, native Linux arm64 and native Linux amd64, under both applications' feature sets |
+| R-36 | `036` B-5 on this tree | qualified | X-1 to X-5 30 of 30 and the failed-start regression 3 of 3 on native Linux arm64 and amd64, release builds |
+| R-37 | exact internal requirements (`=0.15.0-patched.3`) | published | the registry's `hiqlite-patched` manifest; a registry-only consumer resolved all three at `0.15.0-patched.3` |
+| R-38 | AI review | reviewed | run 36089797652 on `6c8db22`; its findings predate this release and are F-135 to F-137 (`038` D-5), not repaired here |
+| R-39 | publication to crates.io | published | signed tag `v0.15.0-patched.3`; publish run 36118177148; checksums in the handoff's section 13 |
+| R-40 | external consumer verification | consumer-verified | a consumer outside this checkout, registry only, both applications' feature sets: built, exercised the alias and both derives, started, restarted and wrote an N=1 node |
+| R-41 | the fork release | published | https://github.com/bartekus/hiqlite/releases/tag/v0.15.0-patched.3 |
+| R-42 | the consumer handoff | published | `standards/spec/consumer-handoff.md` section 13 |
+
+**Not established by this release:** the Rauthy image, a Rahi cell, N>1, a
+real `SIGKILL` leg. Each consumer's re-pin, rebuild and release is its owner's
+act.

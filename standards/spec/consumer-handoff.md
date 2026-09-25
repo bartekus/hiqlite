@@ -406,9 +406,24 @@ is done by this repository.
 
 ## 13. 0.15.0-patched.3: readiness after startup recovery
 
-Added by `038-recovery-readiness-release`. The registry coordinates are
-recorded by the change that records the publication, from the registry's and
-the forge's own responses, as section 12's were.
+Added by `038-recovery-readiness-release`. The registry coordinates below are
+recorded from the registry's and the forge's own responses (`038` section 4).
+
+| | |
+|---|---|
+| tag | `v0.15.0-patched.3` (signed), on `6c8db22014bafd79ec1cff2ec91526e816d5f75c` |
+| GitHub release | https://github.com/bartekus/hiqlite/releases/tag/v0.15.0-patched.3 |
+| publish run | https://github.com/bartekus/hiqlite/actions/runs/36118177148 |
+| `hiqlite-patched` | `0.15.0-patched.3`, sha256 `9d3586f7db4e971836ffc5982086bcfa1de0c0293492a194efd7d4ac21ff5ebf` |
+| `hiqlite-wal-patched` | `0.15.0-patched.3`, sha256 `df82af141317c61b135d600a93c0ec2283c40f2761ab956b20568b2c23bc2746` |
+| `hiqlite-derive-patched` | `0.15.0-patched.3`, sha256 `c024ff5b7f4accf1de88d02d478e9ed740a03e9a0bd2d582e87948dc1d58ceae` |
+
+**Known and not changed by this release** (F-135 to F-137, `038` D-5): a new
+WAL file's directory entry is not synced at rollover, so under
+`LogSync::Immediate` an append acknowledged just after a rollover is not
+guaranteed to survive power loss (a missing file fails closed at start); the
+`hiqlite::tls` changes against `0.14.0` in section 3 are not in `027` B-7's
+text; the publish job is not bracketed by a lockfile check.
 
 **What 0.15.0-patched.3 changes** (`037`, F-134): after a start, each Raft
 group's state machine applies the log the node held, and until it has, the node

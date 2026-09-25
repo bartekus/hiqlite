@@ -3483,3 +3483,44 @@ recovery. A consumer that does not wait at all was exposed before and after.
 its log holds, and the node is not healthy, not ready, and refuses every client
 operation and client stream with the new `Error::Recovering` until its state
 machine has applied it. `Client::recovery_state` reports the progress.
+
+## Found by the AI review of the 0.15.0-patched.3 release commit (2026-09-25)
+
+Recorded by `038-recovery-readiness-release` (D-5), from run 36089797652 on
+`6c8db22`. Each was read at source here; none was executed. All three are in
+the published `0.15.0-patched.1`, `.2` and `.3`, and none is repaired by `038`.
+
+### F-135 `defect`, confidence `high`
+
+**A new WAL file's directory entry is never synced.** `WalFile::create_file`
+(`hiqlite-wal/src/wal.rs`) creates the file with `File::create_new`, sets its
+length, writes the header through a mapping and calls only `flush_async`; there
+is no `sync_all` of the file and no sync of the directory that holds it. It
+runs on every rollover (`WalFileSet::add_file`). Under `LogSync::Immediate` the
+writer syncs the new file's data before it acknowledges an append, but a data
+sync does not make the new name durable, so after a power loss an append
+acknowledged just after a rollover can be in a file the directory no longer
+lists. `WalFileSet::check_integrity` then refuses the start (fails closed)
+rather than serving a shorter log; on an N=1 node that is an acknowledged write
+that cannot be recovered. `001`'s durability statement is about data syncs and
+does not cover the name. The metadata write's best-effort directory sync
+(`metadata.rs`) is the same class and is already `001`'s stated limit.
+
+### F-136 `limit`, confidence `high`
+
+**`027` B-7 does not name the `hiqlite::tls` changes against 0.14.0.**
+`ServerTlsConfig::from_env` returns `Result<Option<Self>, Error>` instead of
+`Option<Self>`, `build_tls_config` takes a second parameter, and
+`ServerTlsConfigCerts` has a new public field `ca`, which breaks struct-literal
+construction. The consumer handoff's section 3 and the release ledger disclose
+them; B-7's text, which describes the rest of the API as 0.14.0's, and
+`CHANGELOG.md` do not.
+
+### F-137 `limit`, confidence `high`
+
+**Two builds are outside the lockfile bracket of `031` B-8.** The `publish`
+job of `publish.yaml`, which runs `cargo publish` in its own checkout, has no
+`cargo metadata --locked` or trailing lockfile check (the `build` job before it
+does), and the `Dockerfile`'s `cargo build --features server --release` has no
+`--locked` and is built by no workflow. Exact internal requirements limit what
+the first can resolve differently; nothing in CI verifies either.
