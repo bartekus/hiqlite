@@ -82,13 +82,13 @@
     "owner": "hiqlite maintainers",
     "risk": "critical",
     "sectionDigests": {
-      "031-qualify-and-publish-the-downstream-release-under-distinct-package-names": "e73dc21f278d38bc404400f9dd014e692400ca55365281b25c19f31c72d0119b",
+      "031-qualify-and-publish-the-downstream-release-under-distinct-package-names": "6c393ce19dab6fa25525bb8db7e6f60a41daadec028f9001334770bd282a2450",
       "1-purpose": "a334c2149ab5bfb1b7cb992427be9c1f0c1f3c3cb3743e830afb2350eb999981",
       "2-territory": "06f9e65af94b1891e55dbb8f0eb5dcaa4b2ebb11a86bb453c4837e8d762b76c3",
       "3-behavior": "287b4522f09deb7468f44581a63d3807c2c1bf90d46ac0c80dac2df79f051c55",
       "4-evidence-and-its-limits": "7492fcf479c373776af9903fe95c42cca34985b3ecfca50f4c5ec6b5bbf80a91",
       "5-known-defects": "07ae31611927ac5f26d5e009222dd43430bfefae375a83b0e75ad61e6f69abd9",
-      "6-resolved-decisions": "3fe4ce459498206bde09c359ca5f3cfcf83f1c080313d8d863dec647b8b91ce9",
+      "6-resolved-decisions": "4143232bebbf32f02c6c8abbea82c1b2314d73583f23d212b99cee0a9a2a2059",
       "7-out-of-scope": "fd5660be97101080497995430e078f29e4e0c0d394ec2329569f827949d2b9be",
       "b-1-one-version-and-it-says-what-it-is": "5c9570d45f83c2cde08167643577498bae8800e6a86642f5af16389f43260337",
       "b-2-the-packages-are-renamed-and-the-libraries-are-not": "36f83bd90f65ddb72a31746e7369c198234e3436c1f823bd2d2a8d29a7d5cd25",
@@ -124,6 +124,6 @@
     "summary": "Renames the three packages so nothing resolves under an upstream name, versions them at 0.15.0-patched.1 because the public API changed, keeps the library names and the internal dependency keys so consumers and the feature table need no rewriting, and adds a publication workflow and an independent review workflow with separate triggers and separate credentials. Records the release work ledger, and the acceptance corrections the rename forced.\n",
     "title": "Qualify and publish the downstream release under distinct package names"
   },
-  "shardHash": "cc0ad88640f82ccaad24657b1dde2d71afbdbff4432241203b33440bd6a96faa",
+  "shardHash": "65d988dc6edc59809da1d47a3004f250081cbd560acd45342e82b3206159c1fe",
   "specVersion": "1.8.0"
 }

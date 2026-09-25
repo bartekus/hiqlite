@@ -111,13 +111,13 @@
     "owner": "hiqlite maintainers",
     "risk": "critical",
     "sectionDigests": {
-      "027-return-startup-failures-as-errors-observe-background-failures-and-define-the-node-lifecycle-api": "b29e4e4242a070f6f71f568da22c5cbd9f10e6f08a01ead2d69f9ceeade50eee",
+      "027-return-startup-failures-as-errors-observe-background-failures-and-define-the-node-lifecycle-api": "c6084cf94449703cdffc829d3a7c30af291d5d42bc7a2b145f12c97ad27ef545",
       "1-purpose": "980c95220563faf56d547dab8a58c84de6399e192c6252e29184ace2ae1b0dde",
       "2-territory": "e9cd2590a3aa8382a24f00dfa142e428d67d9a79cbd3d2da1a0aa7062b05fa17",
       "3-behavior": "d86fd5ddbdb5ba7b5d20560e2676a9d637b0f3d3ba8256edc63d8a9a6edd2a30",
       "4-evidence-and-its-limits": "a53d145475b90e649344c4d614dc8fd2579d0e0f9dc801885916d9cec7eee17d",
       "5-known-defects": "22b77a9e0255bdedf5964cef6837a3188e147779b8882865de4e18cb26c35733",
-      "6-resolved-decisions": "22376fa93ca757e9922bc7f2120a293e121a5c58c49550c857c7875752344192",
+      "6-resolved-decisions": "efdd7042a59127c6b6d81c4529ca76cd6bde0a9cb4b3a9608ceeab7b29aea114",
       "7-out-of-scope": "0ec79945ba814e7de2cc558d43e8dd5fc6f38eb8a0f55701bd1eec809d718652",
       "b-1-expected-failures-are-returned-not-panicked": "8673d73b6c6ad1bcfc19901d0e074f9cf98c2b47fe484fb00fe161a3a2cbfc7f",
       "b-10-an-upgrade-from-hiqlite-0-14-x-carries-the-database-and-not-the-cache": "9c6291641324755bbc2ad23f30c004082977aa528a9af73144a1faf22b2dea20",
@@ -157,6 +157,6 @@
     "summary": "Repairs F-009, F-014, F-025, F-039 and F-040 as one policy. Expected configuration and startup failures are returned as named errors instead of depending on a panic profile that belongs to the consumer; both listeners are bound before a node is reported started and shut down gracefully on both the TLS and plaintext paths; a partial startup tears down what it started; and a WAL writer that ends, for any reason including a panic inside it, takes the node out of service instead of leaving it answering as though it were healthy. Defines the minimum public error and lifecycle API and runs the expected failure paths under an abort profile no test can use.\n",
     "title": "Return startup failures as errors, observe background failures, and define the node lifecycle API"
   },
-  "shardHash": "b9cc9c7ca3afe80faaf6aec1637ea50343b7fdaec766aec717bfa1aae2db9d38",
+  "shardHash": "1441f637ad1dab09e0bf5f6b0e87650454688d5fcdd1062f20c6fc4225513eda",
   "specVersion": "1.8.0"
 }

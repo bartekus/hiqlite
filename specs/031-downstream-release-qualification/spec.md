@@ -420,6 +420,16 @@ their own graph. Pinning every dependency exactly was declined as well; it would
 make the crate hard to combine with anything, and the evidence that a patch
 release changes behavior exists only for `openraft`.
 
+**D-8 (2026-09-25, the publish job and the `Dockerfile` join B-8's
+bracket; F-137).** B-8 brackets every CI build between a `cargo metadata
+--locked` check and a trailing `git diff --exit-code -- Cargo.lock`. The
+`publish` job of `publish.yaml` builds in its own checkout and had neither, and
+the `Dockerfile` built without `--locked`. The `publish` job now runs the same
+opening check, passes `--locked` to each `cargo publish`, and ends with the same
+lockfile check; the `Dockerfile` builds with `--locked`. The `Dockerfile` is
+still built by no workflow, so that half is a correction of the recipe, not CI
+evidence.
+
 ## 7. Out of scope
 
 - **Ratification.** `028` B-5, and it is not an agent's act.

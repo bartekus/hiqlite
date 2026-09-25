@@ -616,6 +616,17 @@ returns an error rather than stopping anyway, because stopping under a running
 change is exactly the unsynchronized shutdown, and a caller that needs the
 process gone can end it, which Raft already treats as a crash.
 
+**D-9 (2026-09-25, B-7's "the rest of the API" misses three `hiqlite::tls`
+changes; F-136).** B-7 says the API outside its four frozen items is whatever
+`0.14.0` had plus this release's error variants. That is not so for
+`hiqlite::tls`: `ServerTlsConfig::from_env` returns `Result<Option<Self>, Error>`
+instead of `Option<Self>`, `build_tls_config` takes a second parameter
+(`ca_path`), and `ServerTlsConfigCerts` has a new public field `ca`, which
+breaks struct-literal construction. B-7's text is left as written; this entry
+is the correction a reader needs, and `CHANGELOG.md` now lists the three under a
+`0.15.0-patched` section. The release ledger and the consumer handoffs already
+disclosed them.
+
 ## 7. Out of scope
 
 - **A general panic audit of the crate.** KD-1.

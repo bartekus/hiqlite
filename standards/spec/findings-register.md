@@ -3522,6 +3522,9 @@ construction. The consumer handoff's section 3 and the release ledger disclose
 them; B-7's text, which describes the rest of the API as 0.14.0's, and
 `CHANGELOG.md` do not.
 
+**Repair** (2026-09-25, `027` D-9): `CHANGELOG.md` lists the three changes
+under a `0.15.0-patched` section; `027` D-9 corrects B-7's reading.
+
 ### F-137 `limit`, confidence `high`
 
 **Two builds are outside the lockfile bracket of `031` B-8.** The `publish`
@@ -3530,6 +3533,11 @@ job of `publish.yaml`, which runs `cargo publish` in its own checkout, has no
 does), and the `Dockerfile`'s `cargo build --features server --release` has no
 `--locked` and is built by no workflow. Exact internal requirements limit what
 the first can resolve differently; nothing in CI verifies either.
+
+**Repair** (2026-09-25, `031` D-8): the `publish` job opens with
+`cargo metadata --locked`, publishes with `--locked` and ends with the lockfile
+check; the `Dockerfile` builds with `--locked`. The `Dockerfile` is still built
+by no workflow.
 
 ### F-138 `defect`, confidence `high`
 
@@ -3549,4 +3557,3 @@ granted 12.0 s after asking and three queued callers are all served within
 woken only by a release, and its wait was bounded only by the request
 timeout), which has shipped since `0.15.0-patched.1`. `039` records the
 evidence; nothing in the fork changes.
-
