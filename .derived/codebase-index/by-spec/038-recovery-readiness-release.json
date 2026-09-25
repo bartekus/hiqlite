@@ -1,15 +1,13 @@
 {
   "mapping": {
     "amends": [
-      "031-downstream-release-qualification",
-      "032-listen-notify-subscription-readiness"
+      "036-n1-repair-release"
     ],
     "dependsOn": [
       "000-hiqlite-ownership-bootstrap",
-      "016-derive-macros",
       "031-downstream-release-qualification",
-      "032-listen-notify-subscription-readiness",
-      "035-n1-upgrade-exclusion"
+      "036-n1-repair-release",
+      "037-startup-recovery-readiness"
     ],
     "implementingPaths": [
       {
@@ -26,10 +24,6 @@
       },
       {
         "path": "standards/spec/consumer-handoff.md",
-        "source": "spec-edge"
-      },
-      {
-        "path": "standards/spec/release-ledger.md",
         "source": "spec-edge"
       }
     ],
@@ -89,19 +83,6 @@
       {
         "locations": [
           {
-            "file": "standards/spec/release-ledger.md"
-          }
-        ],
-        "ownership": true,
-        "sourceField": "extends",
-        "unit": {
-          "kind": "file",
-          "path": "standards/spec/release-ledger.md"
-        }
-      },
-      {
-        "locations": [
-          {
             "file": "Cargo.lock"
           }
         ],
@@ -150,24 +131,11 @@
           "kind": "file",
           "path": "hiqlite/README.md"
         }
-      },
-      {
-        "locations": [
-          {
-            "file": "standards/spec/n3-topology-proposal.md"
-          }
-        ],
-        "ownership": false,
-        "sourceField": "references",
-        "unit": {
-          "kind": "file",
-          "path": "standards/spec/n3-topology-proposal.md"
-        }
       }
     ],
-    "specId": "036-n1-repair-release",
+    "specId": "038-recovery-readiness-release",
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "53951d1d1692b5063d90247f957be398491b04f6b0345e8ac7a987fadb3230af"
+  "shardHash": "f47962293069ce7e6aa8ae2a3201ee9f611e38de5d30ed329baca0f6786fcc24"
 }

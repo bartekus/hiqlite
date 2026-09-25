@@ -3,8 +3,8 @@
     "kind": "rust-lib",
     "name": "hiqlite-wal-patched",
     "path": "hiqlite-wal",
-    "version": "0.15.0-patched.2"
+    "version": "0.15.0-patched.3"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "4bb68bed282d9ae2d0c4acbeb590c54863411f46099bc610d97e5c4e3ee1e426"
+  "shardHash": "d65eaaa863c37ad8d09f4fc7ee687e3999823d37cc2c00776c8c5494bd1f8ad6"
 }
