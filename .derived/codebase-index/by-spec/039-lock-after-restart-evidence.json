@@ -2,25 +2,16 @@
   "mapping": {
     "dependsOn": [
       "000-hiqlite-ownership-bootstrap",
-      "002-snapshot-publication-and-recovery",
-      "009-configuration-contract",
-      "012-cluster-integration-evidence"
+      "006-cache-state-machine",
+      "023-distributed-lock-lease-liveness"
     ],
     "implementingPaths": [
       {
-        "path": "hiqlite/src/backup.rs",
-        "source": "spec-edge"
-      },
-      {
-        "path": "hiqlite/src/s3.rs",
+        "path": "hiqlite/tests/lease_wake.rs",
         "source": "spec-edge"
       },
       {
         "path": "spec-spine.toml",
-        "source": "spec-edge"
-      },
-      {
-        "path": "standards/spec/adoption-plan.md",
         "source": "spec-edge"
       },
       {
@@ -32,27 +23,14 @@
       {
         "locations": [
           {
-            "file": "hiqlite/src/backup.rs"
+            "file": "hiqlite/tests/lease_wake.rs"
           }
         ],
         "ownership": true,
         "sourceField": "establishes",
         "unit": {
           "kind": "file",
-          "path": "hiqlite/src/backup.rs"
-        }
-      },
-      {
-        "locations": [
-          {
-            "file": "hiqlite/src/s3.rs"
-          }
-        ],
-        "ownership": true,
-        "sourceField": "establishes",
-        "unit": {
-          "kind": "file",
-          "path": "hiqlite/src/s3.rs"
+          "path": "hiqlite/tests/lease_wake.rs"
         }
       },
       {
@@ -71,19 +49,6 @@
       {
         "locations": [
           {
-            "file": "standards/spec/adoption-plan.md"
-          }
-        ],
-        "ownership": true,
-        "sourceField": "extends",
-        "unit": {
-          "kind": "file",
-          "path": "standards/spec/adoption-plan.md"
-        }
-      },
-      {
-        "locations": [
-          {
             "file": "standards/spec/findings-register.md"
           }
         ],
@@ -95,9 +60,9 @@
         }
       }
     ],
-    "specId": "013-backup-retention-and-object-storage",
+    "specId": "039-lock-after-restart-evidence",
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "cacf38a4d589047f463210230c9cd6d0796706f0e00b2da36e40ff0f417cff0e"
+  "shardHash": "619ea3e63fbe20a9ddefc39c1212176246e4eeac5cc7b880ff948dd087ceceeb"
 }

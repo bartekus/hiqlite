@@ -3524,3 +3524,23 @@ job of `publish.yaml`, which runs `cargo publish` in its own checkout, has no
 does), and the `Dockerfile`'s `cargo build --features server --release` has no
 `--locked` and is built by no workflow. Exact internal requirements limit what
 the first can resolve differently; nothing in CI verifies either.
+
+### F-138 `defect`, confidence `high`
+
+**A lock left held by a restart strands the next caller for a request
+timeout, on the upstream build rahi runs.** Reported by rahi (`045` D-22,
+2026-09-25): lock state is rebuilt from the cache log on every start, so a lock
+whose holder never released it, or whose release was not committed before the
+stop, reads as held after the restart; a `lock()` made before that lease runs
+out was never woken and failed after about 60 seconds. Severity high for rahi:
+it stalls work claims after every restart. Measured with the public API
+(`hiqlite/tests/lease_wake.rs`, N=1, `cache_storage_disk: true`, a held lock
+leaked and the node stopped and restarted): on upstream `sebadob/hiqlite`
+`8f3b9bde` (0.14.0, the revision rahi's `Cargo.lock` resolves) both cases fail
+their bound of one lease plus five seconds; on this fork's trunk the caller is
+granted 12.0 s after asking and three queued callers are all served within
+12.6 s. The cause is the one `023` B-6 repaired as F-102 (a parked waiter is
+woken only by a release, and its wait was bounded only by the request
+timeout), which has shipped since `0.15.0-patched.1`. `039` records the
+evidence; nothing in the fork changes.
+
