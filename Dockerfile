@@ -12,7 +12,7 @@ COPY . .
 # TODO create a builder base image
 RUN apt update && apt install -y clang
 
-RUN cargo build --features server --release
+RUN cargo build --locked --features server --release
 
 
 FROM gcr.io/distroless/cc-debian12:nonroot

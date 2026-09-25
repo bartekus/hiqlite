@@ -68,6 +68,8 @@ extra_hashed_inputs = [
   # and the tests directory again.
   "hiqlite/src/recovery.rs",
   "hiqlite/tests/recovery_readiness.rs",
+  # The end-to-end lock-after-restart evidence, claimed by 039.
+  "hiqlite/tests/lease_wake.rs",
   # Transport security material and its REST client, claimed by 011, plus that
   # spec's own environment-route test target, which sits outside the
   # hiqlite/tests/cluster glob below.

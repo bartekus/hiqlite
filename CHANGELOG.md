@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.15.0-patched (bartekus fork)
+
+### Breaking: `hiqlite::tls` against 0.14.0
+
+- `ServerTlsConfig::from_env` returns `Result<Option<Self>, Error>` instead of `Option<Self>`.
+- `build_tls_config` takes a second parameter, `ca_path: Option<&str>`.
+- `ServerTlsConfigCerts` has a new public field `ca: Option<Cow<'static, str>>`, so constructing it with a struct
+  literal needs the field (or `..` from a value that has it).
+
+The release ledger and each release's consumer handoff list every other change of the `0.15.0-patched.*` releases.
+
 ## v0.14.0
 
 ### Breaking

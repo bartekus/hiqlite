@@ -3506,6 +3506,12 @@ that cannot be recovered. `001`'s durability statement is about data syncs and
 does not cover the name. The metadata write's best-effort directory sync
 (`metadata.rs`) is the same class and is already `001`'s stated limit.
 
+**Repair** (`040` B-1, B-2, 2026-09-25): `WalFile::create_file` flushes the
+header synchronously, `sync_all`s the file and syncs its directory, returning
+any failure, at the first file and at every rollover. Observed failing first on
+`3d6f582` through a test-only record of directory syncs; the metadata write's
+directory sync is unchanged.
+
 ### F-136 `limit`, confidence `high`
 
 **`027` B-7 does not name the `hiqlite::tls` changes against 0.14.0.**
@@ -3516,6 +3522,9 @@ construction. The consumer handoff's section 3 and the release ledger disclose
 them; B-7's text, which describes the rest of the API as 0.14.0's, and
 `CHANGELOG.md` do not.
 
+**Repair** (2026-09-25, `027` D-9): `CHANGELOG.md` lists the three changes
+under a `0.15.0-patched` section; `027` D-9 corrects B-7's reading.
+
 ### F-137 `limit`, confidence `high`
 
 **Two builds are outside the lockfile bracket of `031` B-8.** The `publish`
@@ -3524,3 +3533,27 @@ job of `publish.yaml`, which runs `cargo publish` in its own checkout, has no
 does), and the `Dockerfile`'s `cargo build --features server --release` has no
 `--locked` and is built by no workflow. Exact internal requirements limit what
 the first can resolve differently; nothing in CI verifies either.
+
+**Repair** (2026-09-25, `031` D-8): the `publish` job opens with
+`cargo metadata --locked`, publishes with `--locked` and ends with the lockfile
+check; the `Dockerfile` builds with `--locked`. The `Dockerfile` is still built
+by no workflow.
+
+### F-138 `defect`, confidence `high`
+
+**A lock left held by a restart strands the next caller for a request
+timeout, on the upstream build rahi runs.** Reported by rahi (`045` D-22,
+2026-09-25): lock state is rebuilt from the cache log on every start, so a lock
+whose holder never released it, or whose release was not committed before the
+stop, reads as held after the restart; a `lock()` made before that lease runs
+out was never woken and failed after about 60 seconds. Severity high for rahi:
+it stalls work claims after every restart. Measured with the public API
+(`hiqlite/tests/lease_wake.rs`, N=1, `cache_storage_disk: true`, a held lock
+leaked and the node stopped and restarted): on upstream `sebadob/hiqlite`
+`8f3b9bde` (0.14.0, the revision rahi's `Cargo.lock` resolves) both cases fail
+their bound of one lease plus five seconds; on this fork's trunk the caller is
+granted 12.0 s after asking and three queued callers are all served within
+12.6 s. The cause is the one `023` B-6 repaired as F-102 (a parked waiter is
+woken only by a release, and its wait was bounded only by the request
+timeout), which has shipped since `0.15.0-patched.1`. `039` records the
+evidence; nothing in the fork changes.

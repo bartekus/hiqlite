@@ -1,7 +1,12 @@
 {
   "mapping": {
+    "amends": [
+      "001-wal-durability-and-completion"
+    ],
     "dependsOn": [
-      "000-hiqlite-ownership-bootstrap"
+      "000-hiqlite-ownership-bootstrap",
+      "001-wal-durability-and-completion",
+      "008-wal-append-completion-notification"
     ],
     "implementingPaths": [
       {
@@ -9,7 +14,7 @@
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite/src/config.rs",
+        "path": "standards/spec/findings-register.md",
         "source": "spec-edge"
       }
     ],
@@ -21,7 +26,7 @@
           }
         ],
         "ownership": true,
-        "sourceField": "establishes",
+        "sourceField": "extends",
         "unit": {
           "kind": "directory",
           "path": "hiqlite-wal/src/"
@@ -30,33 +35,20 @@
       {
         "locations": [
           {
-            "file": "hiqlite/src/config.rs"
+            "file": "standards/spec/findings-register.md"
           }
         ],
         "ownership": true,
-        "sourceField": "establishes",
+        "sourceField": "extends",
         "unit": {
           "kind": "file",
-          "path": "hiqlite/src/config.rs"
-        }
-      },
-      {
-        "locations": [
-          {
-            "file": "hiqlite-wal/Cargo.toml"
-          }
-        ],
-        "ownership": false,
-        "sourceField": "references",
-        "unit": {
-          "kind": "file",
-          "path": "hiqlite-wal/Cargo.toml"
+          "path": "standards/spec/findings-register.md"
         }
       }
     ],
-    "specId": "001-wal-durability-and-completion",
+    "specId": "040-wal-file-creation-durability",
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "b6665d682e0f0a80cc1cfe4728f869ff3fa53cbf2b0519efcd5aa318af21f3ff"
+  "shardHash": "ccbc1fd29dfde076c50ecd292336f40ffc9aed24b8cace5f3270a551e372fad3"
 }
