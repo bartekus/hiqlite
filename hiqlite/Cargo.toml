@@ -1,6 +1,6 @@
 [package]
 name = "hiqlite-patched"
-version = "0.15.0-patched.2"
+version = "0.15.0-patched.3"
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
@@ -166,8 +166,8 @@ __abort-probe = ["sqlite", "cache", "tokio/rt", "tokio/macros"]
 # against, and publication is verified without the paths (`031` section 4). The requirement is
 # exact (`=`): a caret requirement on a `-patched.N` prerelease also accepts every later `N`, so
 # a published `hiqlite-patched` could otherwise resolve against a newer WAL crate (`036` B-2).
-hiqlite-derive = { package = "hiqlite-derive-patched", version = "=0.15.0-patched.2", path = "../hiqlite-derive", optional = true }
-hiqlite-wal = { package = "hiqlite-wal-patched", version = "=0.15.0-patched.2", path = "../hiqlite-wal", optional = true }
+hiqlite-derive = { package = "hiqlite-derive-patched", version = "=0.15.0-patched.3", path = "../hiqlite-derive", optional = true }
+hiqlite-wal = { package = "hiqlite-wal-patched", version = "=0.15.0-patched.3", path = "../hiqlite-wal", optional = true }
 
 argon2 = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
