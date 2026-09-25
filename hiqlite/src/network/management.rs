@@ -8,6 +8,7 @@ use axum::body::Body;
 use axum::extract::Path;
 use axum::http::HeaderMap;
 use axum::response::Response;
+use openraft::Membership;
 use openraft::error::{CheckIsLeaderError, ForwardToLeader, RaftError};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -269,6 +270,21 @@ pub(crate) async fn admit_membership_change(
     state: &Arc<AppState>,
     raft_type: &RaftType,
 ) -> Result<MembershipHeld, Error> {
+    // `034` B-4: node 1 serves its listeners before it has finished a restore it applied, and a
+    // learner added before the post-restore snapshot and purge would catch up from a log that
+    // does not contain the restored data. A joining node retries this refusal.
+    #[cfg(all(feature = "backup", feature = "sqlite"))]
+    if *raft_type == RaftType::Sqlite
+        && state
+            .restore_hold
+            .load(std::sync::atomic::Ordering::Acquire)
+    {
+        return Err(Error::Error(
+            "this node is finishing a database restore; membership changes of the SQLite group \
+             are held until its snapshot holds the restored data. Retry"
+                .into(),
+        ));
+    }
     state
         .membership
         .admit(ADMISSION_WAIT, || {
@@ -322,10 +338,19 @@ pub(crate) async fn get_membership(
     // answered it with a panic about a build configuration.
     raft_type.selected()?;
 
-    if helpers::is_raft_stopped(&state, &raft_type)
-        || !helpers::is_raft_initialized(&state, &raft_type).await?
-    {
-        return Err(Error::Config("Raft node has not been initialized".into()));
+    // `033` B-3: the explicit answer a pristine node 1 counts as evidence that a group is fresh
+    // is an authenticated `200` with an **empty** membership, and only a group that is not
+    // initialized gives it. This used to share one `400` with "initialized but stopped", which
+    // is what a peer answers while its start has not reached `set_raft_running` or while it
+    // shuts down, so the two could not be told apart and neither could safely be counted.
+    if !helpers::is_raft_initialized(&state, &raft_type).await? {
+        return fmt_ok(headers, Membership::<NodeId, Node>::default());
+    }
+    if helpers::is_raft_stopped(&state, &raft_type) {
+        return Err(Error::Config(
+            "Raft node is initialized but not running; it cannot answer for its membership now"
+                .into(),
+        ));
     }
 
     let metrics = helpers::get_raft_metrics(&state, &raft_type).await;

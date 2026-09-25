@@ -124,6 +124,9 @@ pub enum Error {
     Recovering(Cow<'static, str>),
 }
 
+/// The prefix that marks an unconfirmed shutdown; see [`Error::is_shutdown_unconfirmed`].
+pub(crate) const SHUTDOWN_UNCONFIRMED: &str = "shutdown unconfirmed: ";
+
 impl Error {
     pub fn new<E: Into<Cow<'static, str>>>(error: E) -> Self {
         Self::Error(error.into())
@@ -133,6 +136,17 @@ impl Error {
     /// held at start, which a consumer reports as "recovering" rather than "down".
     pub fn is_recovering(&self) -> bool {
         matches!(self, Self::Recovering(_))
+    }
+
+    /// `true` for the error `Client::shutdown` and `ShutdownHandle::wait` return when their wait
+    /// ran out while the shutdown sequence was still running (`033` B-4).
+    ///
+    /// That outcome is neither a success nor a failure of the shutdown: the sequence goes on in
+    /// the background and nothing reports whether it completed. Every other shutdown error,
+    /// including a membership drain that timed out and therefore stopped nothing, is `false`.
+    /// Only `Ok(())` is a confirmed completion.
+    pub fn is_shutdown_unconfirmed(&self) -> bool {
+        matches!(self, Self::Timeout(msg) if msg.starts_with(SHUTDOWN_UNCONFIRMED))
     }
 
     /// Checks if the inner wrapped error is a `ForwardToLeader` error

@@ -1,5 +1,8 @@
 {
   "record": {
+    "amends": [
+      "026-backup-and-restore-integrity"
+    ],
     "created": "2026-09-23",
     "dependsOn": [
       "000-hiqlite-ownership-bootstrap",
@@ -15,27 +18,71 @@
         "planned": true
       }
     ],
-    "id": "034-fresh-cell-restore",
-    "implementation": "pending",
-    "origin": {
-      "retroactive": false
-    },
-    "owner": "hiqlite maintainers",
-    "references": [
+    "extends": [
       {
-        "role": "context",
+        "nature": "superseding",
+        "spec": "013-backup-retention-and-object-storage",
         "unit": {
           "kind": "file",
           "path": "hiqlite/src/backup.rs"
         }
       },
       {
-        "role": "context",
+        "nature": "superseding",
+        "spec": "010-node-lifecycle-and-split-brain",
         "unit": {
           "kind": "file",
           "path": "hiqlite/src/start.rs"
         }
       },
+      {
+        "nature": "additive",
+        "spec": "010-node-lifecycle-and-split-brain",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/app_state.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "003-client-consistency-and-retry-outcomes",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/network/"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "018-dashboard-service-and-ui",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/dashboard/query.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "012-cluster-integration-evidence",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/tests/cluster/backup_restore.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "005-adoption-assessment-and-plan",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/findings-register.md"
+        }
+      }
+    ],
+    "id": "034-fresh-cell-restore",
+    "implementation": "in-progress",
+    "origin": {
+      "retroactive": false
+    },
+    "owner": "hiqlite maintainers",
+    "references": [
       {
         "role": "context",
         "unit": {
@@ -72,9 +119,9 @@
     ],
     "specPath": "specs/034-fresh-cell-restore/spec.md",
     "status": "draft",
-    "summary": "Proposes the hiqlite half of the migration and disaster-recovery procedure in 033's proposal: a backup image that carries its own identity and digest, an offline export from a stopped data directory, a callable restore that is applied at most once and refuses the wrong image before it destroys anything, and a node-1 restore into an empty cell that either initializes or fails with an error, never waits forever. Addresses F-119, F-120, 026 KD-5 and KD-8 for that procedure. The export's currency rule is a proposal whose safety argument and alternatives are in the topology proposal's section 13; the committed index it first relied on is not persisted (F-124). In-place multi-node restore (F-058) stays unsupported. Changes no code until an implementing change lands.\n",
+    "summary": "Proposes the hiqlite half of the migration and disaster-recovery procedure in 033's proposal: a backup image that carries its own identity and digest, an offline export from a stopped data directory, a callable restore that is applied at most once and refuses the wrong image before it destroys anything, and a node-1 restore into an empty cell that either initializes or fails with an error, never waits forever. Addresses F-119, F-120, 026 KD-5 and KD-8 for that procedure. The export's currency rule is a proposal whose safety argument and alternatives are in the topology proposal's section 13; the committed index it first relied on is not persisted (F-124). In-place multi-node restore (F-058) stays unsupported. Lane B (2026-09-23) implements B-4 on a branch, each repair with a test observed failing without it; B-1 to B-3 and B-5 to B-7 are not implemented.\n",
     "title": "Restore a backup into a fresh three-voter cell, once, from an image that proves whose it is"
   },
-  "shardHash": "811f07bc6d45712d21996c37e744ebb6baaa4b28630cc6c3a61b4400de516836",
+  "shardHash": "151141fd026c8c37a913fb029e77314a719fb6a470bbf0dfa4c7d162b2f5f972",
   "specVersion": "1.3.0"
 }

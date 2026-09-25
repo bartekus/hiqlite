@@ -23,8 +23,7 @@
       },
       {
         "kind": "directory",
-        "path": "qualification/n3/",
-        "planned": true
+        "path": "qualification/n3/"
       }
     ],
     "extends": [
@@ -35,10 +34,90 @@
           "kind": "file",
           "path": "standards/spec/findings-register.md"
         }
+      },
+      {
+        "nature": "superseding",
+        "spec": "010-node-lifecycle-and-split-brain",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/init.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "010-node-lifecycle-and-split-brain",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/start.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "010-node-lifecycle-and-split-brain",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/app_state.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "003-client-consistency-and-retry-outcomes",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/network/"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "003-client-consistency-and-retry-outcomes",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/client/"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "001-wal-durability-and-completion",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/config.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "009-configuration-contract",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/config_toml.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "009-configuration-contract",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite.toml"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "009-configuration-contract",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite.env"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "015-server-binary-and-proxy",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/server/config.rs"
+        }
       }
     ],
     "id": "033-n3-topology-qualification",
-    "implementation": "pending",
+    "implementation": "in-progress",
     "origin": {
       "retroactive": false
     },
@@ -48,21 +127,21 @@
         "role": "context",
         "unit": {
           "kind": "file",
-          "path": "hiqlite/src/init.rs"
-        }
-      },
-      {
-        "role": "context",
-        "unit": {
-          "kind": "file",
-          "path": "hiqlite/src/client/mgmt.rs"
-        }
-      },
-      {
-        "role": "context",
-        "unit": {
-          "kind": "file",
           "path": "hiqlite/src/membership_gate.rs"
+        }
+      },
+      {
+        "role": "context",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/store/mod.rs"
+        }
+      },
+      {
+        "role": "context",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/error.rs"
         }
       },
       {
@@ -100,9 +179,9 @@
     ],
     "specPath": "specs/033-n3-topology-qualification/spec.md",
     "status": "draft",
-    "summary": "Proposes, for owner decision, how this fork would qualify a three-voter topology for the Statecraft cell on Kubernetes while N=1 stays supported and stays the Aicortex local profile. Owns the architecture and migration proposal, the reconciliation handoff to Rahi and the request to Rauthy's maintainer, records nine findings (F-118 to F-125 from source, and F-132, a barrier's limit, by a bounded probe), and specifies the hiqlite-side repairs, the real-node harness and the deterministic acceptance that stand between today and any claim of N=3 support. Records the owner's decision D-14: at N=3 the cell is two StatefulSets, one hiqlite node per pod, and the single-container composition stays the N=1 profile. It changes no code, supports nothing, and claims no consumer territory.\n",
+    "summary": "Proposes, for owner decision, how this fork would qualify a three-voter topology for the Statecraft cell on Kubernetes while N=1 stays supported and stays the Aicortex local profile. Owns the architecture and migration proposal, the reconciliation handoff to Rahi and the request to Rauthy's maintainer, records nine findings (F-118 to F-125 from source, and F-132, a barrier's limit, by a bounded probe), and specifies the hiqlite-side repairs, the real-node harness and the deterministic acceptance that stand between today and any claim of N=3 support. Records the owner's decision D-14: at N=3 the cell is two StatefulSets, one hiqlite node per pod, and the single-container composition stays the N=1 profile. It changes no code, supports nothing, and claims no consumer territory. Lane B (2026-09-23) implements B-3 and B-4 on a branch, each with a test observed failing without it; nothing of it is merged, released or run in a harness.\n",
     "title": "Qualify a three-voter topology on Kubernetes before anyone calls it supported"
   },
-  "shardHash": "05a0905b1fcf263de14e1a2dea71077f0106486ea48535c508e77c426db5a1b6",
+  "shardHash": "f69f07d9f7980c1a5309b2b5ef620608161899e27694e53f1d232e75811bcbcf",
   "specVersion": "1.3.0"
 }

@@ -3070,6 +3070,23 @@ Rahi 032 starts pods with `podManagementPolicy: Parallel`, which makes a
 simultaneous restart of node 1 and node 2 an ordinary event. Not reachable at
 N=1, where `nodes.len() < 2` returns before the loop.
 
+**Repair implemented 2026-09-23 on the lane B branch (`033` B-3, D-8); not
+merged, not released.** Node 1 no longer counts itself: it initializes only
+after `N / 2` (rounded down) distinct peers answered, authenticated, `200` with
+an empty membership, which a peer now gives only when its group is not
+initialized; a connection error, a timeout, a `401`, and the `400` of an
+initialized but stopped peer count for nothing. The wait is bounded by
+`init_peer_wait_secs` (120 s) and ends in a startup error naming the silent
+peers; both groups take the decision; N=1 is unchanged. Observed: three unit
+tests against stub peers returned "initialize" on the unrepaired tree and a
+bounded error after. Not observed: the scenario on real nodes (`033` A-1, A-6),
+which needs the harness. **Limits found by review (`033` D-10):** bootstrap, and a
+full restart when the cache group is in memory, need the peers started with node
+1 (`podManagementPolicy: Parallel`); and with an in-memory cache, a simultaneous
+restart of node 1 and node 2 while node 3 is silent still forms a second cache
+cluster, because node 2's cache group is truly pristine and its answer is enough
+at N=3. Not repaired.
+
 ### F-119 `limit`, confidence `high`
 
 **`HQL_BACKUP_RESTORE` restores again on every start for as long as it is set.**
@@ -3089,6 +3106,21 @@ answers. Rahi already refuses to start its own node while the variable is set
 and hands it to Rauthy once behind a marker (Rahi 030 D-2, 031); that is a
 consumer mitigation, not a hiqlite property.
 
+**Repair implemented 2026-09-23 on the lane B branch (`034` B-4, D-6); not
+merged, not released.** The instruction is recorded durably, `pending`, before
+node 1 moves anything, and `applied` only when the start that applied it
+completed; a later start with the same instruction skips it, and one
+interrupted before completion applies it again. A follower does not quarantine
+again for an instruction it honoured. Observed: two starts with one instruction
+restored twice, and a follower moved its rejoined state aside twice, on the
+unrepaired behavior; once each after. The interruptions are simulated by
+constructing the on-disk state each crash point leaves, not by killing a
+process. What the record compares is the instruction, not the image's digest,
+which it records; an object replaced under the same name is treated as applied.
+After review (`034` D-9) the record also has a `committed` state, so an image in
+place whose post-restore sequence never completed is finished by the next start
+even when the instruction has been removed.
+
 ### F-120 `defect`, confidence `medium`
 
 **A node-1 restore that skipped its own initialization waits forever before it
@@ -3106,6 +3138,21 @@ start never returns, no listener is bound, `/ready` is never served, and an
 orchestrator's liveness probe restarts the pod into the same wait, restoring
 again each time because of F-119. In a release build the `debug_assert!` is
 absent; in a debug build a restored node 1 that is not leader panics.
+
+**Repair implemented 2026-09-23 on the lane B branch (`034` B-4, D-7, D-8);
+not merged, not released.** `restore_backup_finish` runs after the listeners
+serve and after `become_cluster_member`; every wait in it is bounded, and
+expiry, a leader other than node 1 (the former `debug_assert!`), and a snapshot
+or purge that does not complete are startup errors, after which the start stops
+what it started and releases storage ownership only once every component
+stopped. A node-1 restore whose peer holds an initialized group is refused
+before anything moves. Membership changes of the SQLite group are held while
+node 1 finishes the restore, since serving the listeners first would otherwise
+let a learner catch up from a log without the restored data. Observed: against a
+stand-in raft the unrepaired sequence was still waiting at the test's bound (or
+panicked on the leader); after, each case is an error within its bound. The
+reordering and the hold themselves are exercised only by the in-process cluster
+suite.
 
 ### F-121 `decision`, confidence `high`
 

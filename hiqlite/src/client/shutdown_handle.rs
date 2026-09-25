@@ -25,8 +25,9 @@ impl ShutdownHandle {
         let _ = self.rx_shutdown.changed().await;
         info!("ShutdownHandle received shutdown signal - shutting down the Raft node now");
 
+        let bound = crate::client::mgmt::shutdown_wait(self.state.pre_shutdown_delay);
         match time::timeout(
-            crate::client::mgmt::SHUTDOWN_WAIT,
+            bound,
             Client::shutdown_execute(
                 &self.state,
                 #[cfg(feature = "cache")]
@@ -47,7 +48,7 @@ impl ShutdownHandle {
             Ok(res) => res,
             Err(_) => {
                 debug!("Timeout reached while waiting for Client::shutdown_execute");
-                Err(crate::client::mgmt::shutdown_wait_elapsed())
+                Err(crate::client::mgmt::shutdown_wait_elapsed(bound))
             }
         }
     }
