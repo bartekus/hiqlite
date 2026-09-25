@@ -23,7 +23,8 @@
       },
       {
         "kind": "directory",
-        "path": "qualification/n3/"
+        "path": "qualification/n3/",
+        "planned": true
       }
     ],
     "extends": [
@@ -117,7 +118,7 @@
       }
     ],
     "id": "033-n3-topology-qualification",
-    "implementation": "in-progress",
+    "implementation": "pending",
     "origin": {
       "retroactive": false
     },
@@ -127,21 +128,21 @@
         "role": "context",
         "unit": {
           "kind": "file",
+          "path": "hiqlite/src/init.rs"
+        }
+      },
+      {
+        "role": "context",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/client/mgmt.rs"
+        }
+      },
+      {
+        "role": "context",
+        "unit": {
+          "kind": "file",
           "path": "hiqlite/src/membership_gate.rs"
-        }
-      },
-      {
-        "role": "context",
-        "unit": {
-          "kind": "file",
-          "path": "hiqlite/src/store/mod.rs"
-        }
-      },
-      {
-        "role": "context",
-        "unit": {
-          "kind": "file",
-          "path": "hiqlite/src/error.rs"
         }
       },
       {
@@ -161,13 +162,13 @@
     ],
     "risk": "high",
     "sectionDigests": {
-      "033-qualify-a-three-voter-topology-on-kubernetes-before-anyone-calls-it-supported": "c3bb4d8ff360d3f627f7f7a61e05496574b5edac9fd53f922d8590d031b785bc",
+      "033-qualify-a-three-voter-topology-on-kubernetes-before-anyone-calls-it-supported": "38c8d87d8b2236c52bb2d9ae4e0ea05a3ee3204a120d1cde1b9a716c61a05474",
       "1-purpose": "31522ae0b3904df71329344d06f38194d84bc340e8f3c4c8cfa19e70a1695a31",
-      "2-territory": "bcafc8cac0ec06f652ecc81b3c913c87b064e2eeda04b9aa5f6bd25300f733be",
+      "2-territory": "c95b544a372fa7cca45271b6d6780dfb3099de98c6f2b26fd07c8ba249eeb735",
       "3-behavior": "3e41226e9b76d7b593afdaa33055e51dc91bcd354b329c7776122e6eadafeab7",
-      "4-evidence-and-its-limits": "63b1b8c98d6ada3607c8ca3c79eb16e25da1fea468013d2d4d3e4e57b388fdc4",
+      "4-evidence-and-its-limits": "4a357936284845070bf3810c47567eebe50bf88202fe38b0d0b68c4474feae1b",
       "5-known-defects": "8634ba965127e4e69ad9b6bf40ecbf4c8e0694d63a04310f2a8070f75c780310",
-      "6-resolved-decisions": "494781af031db3b8972f4325fa7088ca08421240dcfbe1357e33230730e57291",
+      "6-resolved-decisions": "352552657e280e278bdd4fc691a2bbef85ff5685cf97912c482376d04b363643",
       "7-out-of-scope": "1c582d419150aa1c1b307cc8c484999c6efdc5d18e66f23413d4fa43f59dab53",
       "b-1-n-3-stays-unsupported-until-its-evidence-exists": "5b023b97384036dba7042e5ced9408313bf033a2041439506329fbf88b9cc929",
       "b-2-a-real-node-harness-separate-from-the-in-process-suite": "3cb4bc0eeadcaf4459b78e89acb351707ba3683962ed127797f7d8767469288f",
@@ -175,7 +176,7 @@
       "b-4-the-pre-shutdown-delay-is-a-node-option": "c75220bebe6c753649c9571a7702097d63f70fbd48d0dd099a25b306949e30e2",
       "b-5-the-log-revert-relaxation-is-a-recorded-decision": "bd6d35e12a88719c4352df215b4a2eca8dcecc9369cd5b54226b8d54108f3133",
       "b-6-the-acceptance-is-deterministic-and-named-by-scenario": "a1cfd551dbfa4d4ba9f8a658570eaade9c49904ffd368dadc01263d17e969249",
-      "verification": "5c0abf81456ff98b717e727072e30d1e26dc5354a656d39807f7701948ab5317"
+      "verification": "1e29ae56eef9c3e6daf15ce5ebbe80732bb9a15ad928fea429314d7ed344c121"
     },
     "sectionHeadings": [
       "033: Qualify a three-voter topology on Kubernetes before anyone calls it supported",
@@ -196,9 +197,9 @@
     ],
     "specPath": "specs/033-n3-topology-qualification/spec.md",
     "status": "draft",
-    "summary": "Proposes, for owner decision, how this fork would qualify a three-voter topology for the Statecraft cell on Kubernetes while N=1 stays supported and stays the Aicortex local profile. Owns the architecture and migration proposal, the reconciliation handoff to Rahi and the request to Rauthy's maintainer, records nine findings (F-118 to F-125 from source, and F-132, a barrier's limit, by a bounded probe), and specifies the hiqlite-side repairs, the real-node harness and the deterministic acceptance that stand between today and any claim of N=3 support. Records the owner's decision D-14: at N=3 the cell is two StatefulSets, one hiqlite node per pod, and the single-container composition stays the N=1 profile. It changes no code, supports nothing, and claims no consumer territory. Lane B (2026-09-23) implements B-3 and B-4 on a branch, each with a test observed failing without it; nothing of it is merged, released or run in a harness.\n",
+    "summary": "Proposes, for owner decision, how this fork would qualify a three-voter topology for the Statecraft cell on Kubernetes while N=1 stays supported and stays the Aicortex local profile. Owns the architecture and migration proposal, the reconciliation handoff to Rahi and the request to Rauthy's maintainer, records nine findings (F-118 to F-125 from source, and F-132, a barrier's limit, by a bounded probe), and specifies the hiqlite-side repairs, the real-node harness and the deterministic acceptance that stand between today and any claim of N=3 support. Records the owner's decision D-14: at N=3 the cell is two StatefulSets, one hiqlite node per pod, and the single-container composition stays the N=1 profile. It changes no code, supports nothing, and claims no consumer territory.\n",
     "title": "Qualify a three-voter topology on Kubernetes before anyone calls it supported"
   },
-  "shardHash": "f69f07d9f7980c1a5309b2b5ef620608161899e27694e53f1d232e75811bcbcf",
+  "shardHash": "c8ce1ebb48010f2f8a8262e87a5a3e4c716d61afdbc6f094dc0cf15b7d4fba74",
   "specVersion": "1.8.0"
 }

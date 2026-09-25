@@ -1,8 +1,5 @@
 {
   "mapping": {
-    "amends": [
-      "026-backup-and-restore-integrity"
-    ],
     "dependsOn": [
       "000-hiqlite-ownership-bootstrap",
       "013-backup-retention-and-object-storage",
@@ -144,6 +141,19 @@
       {
         "locations": [
           {
+            "file": "hiqlite/src/backup.rs"
+          }
+        ],
+        "ownership": false,
+        "sourceField": "references",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/backup.rs"
+        }
+      },
+      {
+        "locations": [
+          {
             "file": "hiqlite/src/init.rs"
           }
         ],
@@ -152,6 +162,19 @@
         "unit": {
           "kind": "file",
           "path": "hiqlite/src/init.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/start.rs"
+          }
+        ],
+        "ownership": false,
+        "sourceField": "references",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/start.rs"
         }
       },
       {
@@ -172,5 +195,5 @@
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "ccf1f4751d023d28b56b9552bfadd52d3cc18e50b14cd7266c0fbc0e42eae0e0"
+  "shardHash": "8544bc0812f10983e6b37f42106f5c738a242e8d14ff3ef9c194212d7003d60b"
 }

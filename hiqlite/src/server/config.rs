@@ -289,21 +289,6 @@ secret_api = "{secret_api}"
 # overwritten by: HQL_LEARNER_ONLY
 #learner_only = false
 
-# How long, in milliseconds, a node that is one of several members waits
-# before it starts to shut down. Skipped when the node is the only member.
-#
-# default: 9500
-# overwritten by: HQL_PRE_SHUTDOWN_DELAY_MS
-#pre_shutdown_delay_ms = 9500
-
-# How long, in seconds, a pristine node 1 with peers waits for at least half
-# of them to answer that their Raft group is not initialized before it
-# initializes one. On expiry the start fails naming the silent peers.
-#
-# default: 120
-# overwritten by: HQL_INIT_PEER_WAIT_SECS
-#init_peer_wait_secs = 120
-
 # When the auto-backup task should run.
 # Accepts cron syntax:
 # "sec min hour day_of_month month day_of_week year"
