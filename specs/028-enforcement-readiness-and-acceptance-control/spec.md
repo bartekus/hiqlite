@@ -324,6 +324,12 @@ executing a proposed tree's commands to get.
 carried forward unchanged and this spec's are added; nothing in `004`'s block
 asserted anything this spec removes.
 
+**D-6 (2026-09-25, the post-merge job installs the new pin).** The acceptance
+workflow installs `spec-spine` at the revision `000` section 14 names. That
+revision moved to `8f2a8f7` (`0.26.0`), so the job's `SPEC_SPINE_REV` follows
+it; the job is otherwise unchanged. A job left on the old revision would be
+refused by `required_version = "=0.26.0"` before it ran anything.
+
 ## 7. Out of scope
 
 - **Enabling any enforcement rung.** D-3.

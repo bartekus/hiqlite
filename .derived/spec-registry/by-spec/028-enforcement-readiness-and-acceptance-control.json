@@ -57,13 +57,13 @@
     "owner": "hiqlite maintainers",
     "risk": "medium",
     "sectionDigests": {
-      "028-correct-the-coverage-denominator-measure-the-enforcement-rungs-and-run-acceptance-on-trusted-commits": "52831dec1d4feb141e7aacfa6a4ac52ef28fa8e7da874f7d805e4ad6818e1367",
+      "028-correct-the-coverage-denominator-measure-the-enforcement-rungs-and-run-acceptance-on-trusted-commits": "665831b73a0233380d034d83a2ec37b170e24741fe119113721ec913267bc9fa",
       "1-purpose": "14317ad188af49e573e42b9b3b4290f5630fb9c52e9db57bd98fb241b6c41051",
       "2-territory": "e6fc7f165d03094d74ea1687ee66aef417a6b88863f8502cafeef5f3bd5bec1e",
       "3-behavior": "0e03749e28a7efdf98c43a8c780afb90fd34cb41ca7015dfa90144bd1b7535ed",
       "4-evidence-and-its-limits": "027235de7da691a642485bfac29e391e7b250aca065247c3cc73524929902132",
       "5-known-defects": "c353a993e733309d98cc917757f545d5503932193056058e9d76499e0c630f66",
-      "6-resolved-decisions": "28f35b28e23f0cd45a1158d0f2b810281973ad856b96055fe712d4a262f68bbe",
+      "6-resolved-decisions": "53a77a5316e95aa0a843b90d2a85db2683d8cc872ea28c754b8022a1015724c7",
       "7-out-of-scope": "f41a6359958c3332e938d70221dfef895ae054a3cd5c45e29ed91e5979a9a1e0",
       "b-1-the-denominator-excludes-generated-and-vendored-files-by-component": "dc2a63bb44766258d80e3b02f62d12c822471492a6ea6b070fb8ff47e01deb5f",
       "b-2-no-ownership-check-on-authored-source-is-weakened-and-that-was-measured": "28abe67e8dd1ea53350a61c31fd976a227b4d4ac27c4e077cb5349418c8ee409",
@@ -95,6 +95,6 @@
     "summary": "Resolves W-14 against the pinned tool rather than a pin upgrade: the earlier probe read `resolver_exclusions` as path prefixes where the tool matches path components, so the key that was recorded as having no effect does exactly what rung 0 asked. Measures rungs 1 and 2 and refuses to enable either, because both are global refusals and the corpus is not ready for one. Adds W-24's restricted post-merge acceptance job, which runs on trusted commits only and references no secret. Reassesses OD-4 with an accurate account of what the per-document transition does and does not reach.\n",
     "title": "Correct the coverage denominator, measure the enforcement rungs, and run acceptance on trusted commits"
   },
-  "shardHash": "52685cff2a96b189e038dc7bed85409912ebcab9091688ae880e6baae9a4ddfe",
+  "shardHash": "e9e8fb8316638c451cf762b0cefa23082ccedbdb4a4f2749563fe5d9a6c768f0",
   "specVersion": "1.8.0"
 }

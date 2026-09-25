@@ -57,14 +57,14 @@
     ],
     "risk": "medium",
     "sectionDigests": {
-      "004-operate-the-governance-corpus": "b088877708de7f4feaa1592942af6e3ef87703fcf24e566228c73dba49120778",
+      "004-operate-the-governance-corpus": "475433f29ea2f09f1a610783c5af81fd38e848fd8eb6181ccf4f21f863887cee",
       "1-purpose": "33fc092b3ad0aa1727bdafe4b3dc039c8c42845dc2c221cce9304f0ef130b07a",
       "2-territory": "9f494cecb05c37efe2168e9256571598c602545359b84be43469248ea3768617",
       "3-behavior": "f87cf6c0b1a2c464df3d6ee8e18004e4282628fe57f1562941ab9ec6046f528c",
       "4-evidence-and-its-limits": "b861fcdbddd9bca7c7009e79dc7ff4d73e662c897ef78419bff1e409f835b862",
       "5-known-defects": "70da12626a3b35766eddd91a88a458dab59e07039847e9375ae91b188269f781",
       "6-out-of-scope": "f6d97e792bfdd4af25157785fcb636a583037b870e1bd2051f9115d15d9c7018",
-      "7-resolved-decisions": "bfd33e9a17b3f19c5bdf355f2b3664b4fed7618c9735005b21b8e21a4d44263d",
+      "7-resolved-decisions": "4fd8a5723e85e6e367ac811ca0277b9ad2832c9679795d8b1f300fdcdf9f4dda",
       "b-1-agents-md-is-the-protocol-and-the-only-place-it-lives": "ee555d020bbd73f9f0ab74897c7d717221a49db8a615fa20868c8b778e1263ac",
       "b-2-the-justfile-recipes-are-the-sanctioned-entry-points": "812e1dd78fcfce406cca4fd8cedbdff425d7f128632466d5e0d287ffd16cb064",
       "b-3-the-local-default-base-is-this-fork-s-integration-branch": "e2d636403d24ec98392ae2e0662619ad5aa969d21b171fbd9cdb7e423b3e3948",
@@ -95,6 +95,6 @@
     "summary": "The loop that operates the hiqlite governance corpus: AGENTS.md as the single cross-agent protocol authority, the justfile recipes that are the only sanctioned entry points to spec-spine, the read-only pull-request CI job, and the policy any future session hook must satisfy. Relates to the bootstrap by depends_on and by extends edges on the two units the bootstrap established; it does not re-establish them and does not replace the bootstrap's ownership.\n",
     "title": "Operate the governance corpus: agent protocol, commands, hooks, and CI"
   },
-  "shardHash": "2d2ba72d6b26bb1863672c8f577971075d3ac9325e45b7b1df660947f1e3556e",
+  "shardHash": "658b4e0f35527c07f9d06664c05bc426215442a460b66342fffb164a2449ba45",
   "specVersion": "1.8.0"
 }
