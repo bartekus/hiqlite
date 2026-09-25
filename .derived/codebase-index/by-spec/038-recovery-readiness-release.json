@@ -25,6 +25,14 @@
       {
         "path": "standards/spec/consumer-handoff.md",
         "source": "spec-edge"
+      },
+      {
+        "path": "standards/spec/findings-register.md",
+        "source": "spec-edge"
+      },
+      {
+        "path": "standards/spec/release-ledger.md",
+        "source": "spec-edge"
       }
     ],
     "resolvedUnits": [
@@ -78,6 +86,32 @@
         "unit": {
           "kind": "file",
           "path": "standards/spec/consumer-handoff.md"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "standards/spec/findings-register.md"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/findings-register.md"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "standards/spec/release-ledger.md"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/release-ledger.md"
         }
       },
       {
@@ -137,5 +171,5 @@
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "f47962293069ce7e6aa8ae2a3201ee9f611e38de5d30ed329baca0f6786fcc24"
+  "shardHash": "1e1d67fa6d8e7826bccb501062e072f092baabc1264991ee7f70f3fc9e4bc9ce"
 }
