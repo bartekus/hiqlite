@@ -1,0 +1,48 @@
+# `037`'s regression on native Linux amd64, against one frozen candidate. Lives only on a
+# `qualify/recovery-*` branch, never on `spec-spine`: the candidate's own tree is checked out by
+# commit and its tree hash verified, so this file is not part of it.
+name: Recovery readiness qualification (native amd64)
+
+on:
+  push:
+    branches:
+      - "qualify/recovery-*"
+
+permissions:
+  contents: read
+
+env:
+  CANDIDATE: 56ce51a8636180c277b6854c39bcba46dd5a4e15
+  CANDIDATE_TREE: 9dd0782755aa2a7ce31eef490030ce2b78ad94e3
+  EXPECT: pass
+
+jobs:
+  amd64:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: The candidate, frozen
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse "$CANDIDATE^{tree}")" = "$CANDIDATE_TREE"
+          mkdir -p "$RUNNER_TEMP/cand"
+          git archive "$CANDIDATE" | tar -x -C "$RUNNER_TEMP/cand"
+          chmod -R a-w "$RUNNER_TEMP/cand"
+          uname -m; nproc; free -g; docker version --format '{{.Server.Arch}}'
+
+      - name: The regression, both feature sets
+        timeout-minutes: 80
+        run: |
+          set -euo pipefail
+          bash .github/recovery-qualify/recovery-regress.sh "$RUNNER_TEMP/cand" amd64 "$EXPECT" 2>&1 | tee "$RUNNER_TEMP/linux-amd64-$EXPECT.log"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: recovery-amd64-evidence
+          path: ${{ runner.temp }}/linux-amd64-*.log
+          retention-days: 90
