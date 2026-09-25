@@ -1,8 +1,7 @@
 {
   "mapping": {
     "amends": [
-      "001-wal-durability-and-completion",
-      "008-wal-append-completion-notification"
+      "001-wal-durability-and-completion"
     ],
     "dependsOn": [
       "000-hiqlite-ownership-bootstrap",
@@ -12,10 +11,6 @@
     "implementingPaths": [
       {
         "path": "hiqlite-wal/src/",
-        "source": "spec-edge"
-      },
-      {
-        "path": "standards/spec/adoption-plan.md",
         "source": "spec-edge"
       },
       {
@@ -40,19 +35,6 @@
       {
         "locations": [
           {
-            "file": "standards/spec/adoption-plan.md"
-          }
-        ],
-        "ownership": true,
-        "sourceField": "extends",
-        "unit": {
-          "kind": "file",
-          "path": "standards/spec/adoption-plan.md"
-        }
-      },
-      {
-        "locations": [
-          {
             "file": "standards/spec/findings-register.md"
           }
         ],
@@ -64,9 +46,9 @@
         }
       }
     ],
-    "specId": "021-wal-append-stream-integrity",
+    "specId": "040-wal-file-creation-durability",
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "9d33b0705eeca646b85f7c6a9ccfc60c41e07f4b1278f9fcd7460cfe396c3f23"
+  "shardHash": "008283bdde0ed8b9d619eedc764ed2f6cd97aeae071535d49a66d4fc1f055ce7"
 }

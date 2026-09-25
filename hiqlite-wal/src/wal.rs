@@ -667,7 +667,15 @@ impl WalFile {
 
         let mut mmap = unsafe { MmapOptions::new().map_mut(&file)? };
         (&mut mmap[..buf.len()]).write_all(buf)?;
-        mmap.flush_async()?;
+        // F-135: the header, the length and the name must all be durable before anything is
+        // appended here. A data sync of later appends covers none of them: after a power cut the
+        // directory could list no such file, or a file without its header.
+        mmap.flush()?;
+        file.sync_all()?;
+        let dir = std::path::Path::new(&self.path)
+            .parent()
+            .ok_or(Error::InvalidPath("WAL file path has no parent directory"))?;
+        sync_dir(dir)?;
 
         Ok(())
     }
@@ -1098,6 +1106,40 @@ impl WalFileSet {
     }
 }
 
+/// Makes the entries of `dir` durable, so a file just created in it survives a power cut
+/// (F-135). A failure is returned, not ignored: the new file would otherwise be acknowledged
+/// into without a durable name.
+fn sync_dir(dir: &std::path::Path) -> Result<(), Error> {
+    #[cfg(unix)]
+    File::open(dir)?.sync_all()?;
+    #[cfg(test)]
+    synced_dirs::record(dir);
+    Ok(())
+}
+
+/// Test-only record of every directory whose entries were synced (F-135), so a test can tell
+/// whether creating a WAL file made its name durable without a power cut.
+#[cfg(test)]
+pub(crate) mod synced_dirs {
+    use std::path::{Path, PathBuf};
+    use std::sync::Mutex;
+
+    static SYNCED: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
+
+    pub(crate) fn record(dir: &Path) {
+        SYNCED.lock().unwrap().push(dir.to_path_buf());
+    }
+
+    pub(crate) fn count(dir: &Path) -> usize {
+        SYNCED
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|d| d.as_path() == dir)
+            .count()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1105,6 +1147,37 @@ mod tests {
 
     static PATH: &str = "test_data";
     static MB2: u32 = 2 * 1024 * 1024;
+
+    /// F-135: a WAL file's name is durable only once its directory is synced, and nothing did
+    /// that, at the first file or at a rollover. Asserted through the test-only record of
+    /// directory syncs, since the missing sync is only observable across a power cut.
+    #[test]
+    fn creating_a_wal_file_syncs_its_directory() -> Result<(), Error> {
+        let base_path = format!("{}/dir_sync", PATH);
+        let _ = fs::remove_dir_all(&base_path);
+        fs::create_dir_all(&base_path)?;
+        let dir = std::path::Path::new(&base_path);
+
+        // First creation: an empty directory gets its first WAL file.
+        let mut set = WalFileSet::read(base_path.clone(), MB2)?;
+        assert_eq!(set.files.len(), 1);
+        assert!(
+            synced_dirs::count(dir) >= 1,
+            "the first WAL file was created without syncing its directory"
+        );
+
+        // Rollover: every new file is another entry in the same directory.
+        let before = synced_dirs::count(dir);
+        let mut buf = Vec::with_capacity(28);
+        set.add_file(MB2, &mut buf)?;
+        assert_eq!(set.files.len(), 2);
+        assert!(
+            synced_dirs::count(dir) > before,
+            "a rollover created a WAL file without syncing its directory"
+        );
+
+        Ok(())
+    }
 
     #[test]
     fn append_read_logs() -> Result<(), Error> {
