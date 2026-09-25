@@ -31,6 +31,14 @@ extends:
   - spec: "031-downstream-release-qualification"
     unit: { kind: file, path: "standards/spec/consumer-handoff.md" }
     nature: additive
+  # The ledger's section for this release, added by the change that recorded the publication.
+  - spec: "031-downstream-release-qualification"
+    unit: { kind: file, path: "standards/spec/release-ledger.md" }
+    nature: additive
+  # D-5: the release review's findings, recorded as F-135 to F-137.
+  - spec: "005-adoption-assessment-and-plan"
+    unit: { kind: file, path: "standards/spec/findings-register.md" }
+    nature: additive
   - spec: "017-examples-as-documentation"
     unit: { kind: directory, path: "examples/" }
     nature: additive
@@ -77,6 +85,9 @@ on the qualification bar of `0.15.0-patched.2` (`036` B-5).
 - **Extends** `016`'s derive crate (its version line), `035`'s harness
   directory (its lockfile), `017`'s examples (their lockfiles) and `031`'s
   consumer handoff (section 13, additive).
+- **Extends** `031`'s release ledger with this release's section and `005`'s
+  findings register with F-135 to F-137, both written by the change that
+  recorded the publication (D-5).
 - **References**, without claiming, the unowned manifests, the root lockfile
   and the packaged README.
 
@@ -122,9 +133,30 @@ and handoff are updated on that evidence by a separate change.
 
 ## 4. Evidence and its limits
 
-Recorded after the tag (`036` D-3), under
+Recorded after the tag (`036` D-3). The raw logs, digests, package
+inventories and consumer builds are outside the repository under
 `~/DevDep/hiqlite-release-artifacts/0.15.0-patched.3/` (`CANDIDATE.md` is the
-index), and in this section by the change that records the publication.
+index), as `036`'s were.
+
+**Trees.** The runs used the frozen candidate `bfdfc63` (tree `713f4a6b`). The
+release commit is `6c8db22` on `spec-spine`, the squash of #42, with the same
+tree `713f4a6b`, so every package and harness input is the one qualified.
+
+| item (B-4, B-5) | where | result |
+|---|---|---|
+| gates and acceptance | macOS arm64, pinned `spec-spine` 0.20.0 | `spine-check` 0; `couple` OK; `spine-verify` 038, 037 and 035 pass |
+| `036` B-5 harness | native Linux arm64 (Docker Desktop, 4 CPU, 8 GB) and native Linux amd64 (run 36086987603) | X-1 to X-5: 30 of 30 pass on each; X-7 recorded; release builds |
+| failed-start regression (`035` D-11) | same two | 3 of 3 pass on each |
+| `037` regression, release build | same two, Rauthy's and Rahi's feature sets | passes; it failed on the published `0.15.0-patched.2` library on macOS arm64, Linux arm64 and Linux amd64 (runs 36084685834, 36085716425) |
+| post-merge acceptance | run 36089780204 on `6c8db22` | success |
+| AI review of the release commit | run 36089797652 on `6c8db22` (rerun after the review credential's session limit cut the first attempt) | a report; its findings predate this release and are F-135 to F-137 (D-5) |
+| publication | signed tag `v0.15.0-patched.3`; publish run 36118177148 | the three packages published; checksums in the handoff's section 13 |
+| registry read-back | anonymous, crates.io API, 2026-09-25 | all three served at `0.15.0-patched.3`, not yanked |
+| fresh consumer | macOS arm64, registry only (no path, Git or patch) | built, exercised the alias and both derives; an N=1 node under Rauthy's and Rahi's feature sets started, restarted and wrote immediately after the restart; both resolved all three at `0.15.0-patched.3` and `openraft 0.9.25` |
+| fork release | https://github.com/bartekus/hiqlite/releases/tag/v0.15.0-patched.3 | pre-release |
+
+**Not run:** a Rauthy image, a Rahi cell, N>1 recovery, a real `SIGKILL` leg
+(Rauthy's own crash leg is that evidence for the defect).
 
 ## 5. Known defects
 
@@ -157,6 +189,18 @@ exact-pin and `--locked` instruction and to consider yanking guidance for
 repaired and unrepaired bootstrap depends on (`033` D-8), and the N=3 harness
 has not qualified it. Releasing it under a recovery fix would ship an
 unqualified N=3 change to consumers that asked for the recovery fix.
+
+**D-5 (2026-09-25, the release review's findings do not block this release).**
+The AI review of `6c8db22` reported defects in code this release does not
+change: a new WAL file's directory entry is not synced at rollover, the
+`hiqlite::tls` signatures differ from `0.14.0` without `027` B-7 saying so, and
+the `cargo publish` job and the Dockerfile build are not bracketed by a
+lockfile check. All three are in the published `0.15.0-patched.1` and `.2`.
+B-2 releases `037` alone, and holding the recovery fix would not remove them
+from any consumer, so the release proceeded and they are recorded as F-135 to
+F-137, each for a separate change. The review's metadata directory-sync item is
+`001`'s stated limit and its bounded-membership timeout item is marked
+plausible by the review itself; neither is a new finding.
 
 ## 7. Out of scope
 

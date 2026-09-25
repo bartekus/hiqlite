@@ -40,6 +40,22 @@
       },
       {
         "nature": "additive",
+        "spec": "031-downstream-release-qualification",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/release-ledger.md"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "005-adoption-assessment-and-plan",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/findings-register.md"
+        }
+      },
+      {
+        "nature": "additive",
         "spec": "017-examples-as-documentation",
         "unit": {
           "kind": "directory",
@@ -85,13 +101,13 @@
     ],
     "risk": "critical",
     "sectionDigests": {
-      "038-release-the-startup-recovery-readiness-repair-alone-as-0-15-0-patched-3": "680579959d0a7700334bdd69d19a5c6048c3bdabb22112ceebad83cfc5e6ab11",
+      "038-release-the-startup-recovery-readiness-repair-alone-as-0-15-0-patched-3": "2b79e1f4debde8b7643c8694f56bd2d63b2f3432e9f65d5b3681f746dcd237dc",
       "1-purpose": "438a1774f7cc3c1405f07c80660de4b2d05d18265883b7af20ebdef25acdef56",
-      "2-territory": "f681f51f6cf43674c14c0590d47399f28d4778b6ad4440161dda02ea9cd7e2e3",
+      "2-territory": "4513667cd588ca59e283e51369319b530c9d6d24f1fb28c25008eb9e69aa607b",
       "3-behavior": "eda2137d826bb2a927c26d6dd02bc5af9ae5e7531270f67b2212925e9d810300",
-      "4-evidence-and-its-limits": "022db1535d6fd7ec2969035e9fd5e9a9bb1b836c1f8f084a82351793212981c6",
+      "4-evidence-and-its-limits": "d6730877535c053799fe602e0ce23a89b0a433e6fe32fd29881c76a251b62d14",
       "5-known-defects": "c7b1c80951c0a072fdad0b2d935b803a8d9b8d9d965d2cc9f1dc5025ff7377f7",
-      "6-resolved-decisions": "7b21ab9f6aee252492b86358bd378d0edf05bcbe5d3c75e523635ab407a803f8",
+      "6-resolved-decisions": "bbe28aff209f683b0124a9e1042fb002cbbfb0eb8e6ec97d2053fa933fb36b4d",
       "7-out-of-scope": "5c9f474ecf40fddbb0663f80fb01925ac29f43077cddbb0f5a8e6b58a63cbc3a",
       "b-1-one-version-three-packages-in-lockstep-exact": "c95b18a9fdc5e2ad62e20ce9153b0644a2bf570f30dfba2eac18054be12b74b0",
       "b-2-this-release-carries-037-and-nothing-else": "7c8afbf6e1f2523efda87b7b0291eea85cd2e186c646618cc3b6f5053d28abb2",
@@ -121,6 +137,6 @@
     "summary": "The release identity of `037`'s repair (F-134): all three packages at 0.15.0-patched.3, in lockstep, with exact internal requirements and no other change to the dependency graph (openraft stays =0.9.25). Nothing else ships with it: the N=3 lane B change (#39) is left for a later release. States the consumer guidance (wait for each group before first use, report recovering rather than down, size liveness probes, pin exactly or build --locked), the qualification the release tree carries, which is 036's bar, and what stays separate: ratification, publication and each consumer's adoption. Carries 036's acceptance forward with its version commands moved.\n",
     "title": "Release the startup recovery readiness repair alone, as 0.15.0-patched.3"
   },
-  "shardHash": "21cea3d5795a36a6930ee75499ffe818ef50e98d594908bb465b65487f0aa922",
+  "shardHash": "d8122cd3e77bc114ad2c9399e0d833ad166d4891588dfb1911755767000dde11",
   "specVersion": "1.8.0"
 }
