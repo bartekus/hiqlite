@@ -1,0 +1,78 @@
+# `038` B-4: the native Linux amd64 leg of `036` B-5 item 4 and `037`'s regression, on one frozen
+# candidate. Lives only on a `qualify/n1-*` branch, never on `spec-spine`: the candidate's own
+# tree is checked out by commit and its tree hash verified, so this file is not part of it.
+#
+# Bounds: X-1 to X-5 and X-7, both feature sets, three runs each (36 runs, 330 node launches),
+# 60 s per run, 30 minutes for the sequence, stop at the first failure, no retry; plus the
+# three approved launches of `035` D-11's regression. Compile time is separate.
+name: 0.15.0-patched.3 qualification (native amd64)
+
+on:
+  push:
+    branches:
+      - "qualify/p3-*"
+
+permissions:
+  contents: read
+
+env:
+  CANDIDATE: bfdfc6304c9baf72de938634d81f89c124a93451
+  CANDIDATE_TREE: 713f4a6bbe0839faf4b25d54dedfd254531936fe
+
+jobs:
+  amd64:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: The candidate, frozen
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse "$CANDIDATE^{tree}")" = "$CANDIDATE_TREE"
+          mkdir -p "$RUNNER_TEMP/cand"
+          git archive "$CANDIDATE" | tar -x -C "$RUNNER_TEMP/cand"
+          chmod -R a-w "$RUNNER_TEMP/cand"
+          uname -m; nproc; free -g; df -h "$RUNNER_TEMP"; docker version --format '{{.Server.Arch}}'
+
+      - name: Build the harness binaries (not part of the run budget)
+        timeout-minutes: 60
+        run: |
+          set -euo pipefail
+          N1_PLATFORM=linux/amd64 "$RUNNER_TEMP/cand/qualification/n1-upgrade/container.sh" build 2>&1 | tee "$RUNNER_TEMP/linux-amd64-build.log"
+
+      - name: Run X-1 to X-5 and X-7 (bounded, stops at the first failure)
+        timeout-minutes: 35
+        run: |
+          set -euo pipefail
+          N1_PLATFORM=linux/amd64 "$RUNNER_TEMP/cand/qualification/n1-upgrade/container.sh" run "x1 x2 x3 x4 x5 x7" 2>&1 | tee "$RUNNER_TEMP/linux-amd64-run.log"
+          grep -q "^TOTAL_SECONDS=" "$RUNNER_TEMP/linux-amd64-run.log"
+          ! grep -q "^FAIL" "$RUNNER_TEMP/linux-amd64-run.log"
+
+      - name: The failed-start shared-descriptor regression (three launches)
+        timeout-minutes: 60
+        run: |
+          set -euo pipefail
+          bash .github/n1-qualify/n1-regress.sh "$RUNNER_TEMP/cand" amd64 2>&1 | tee "$RUNNER_TEMP/linux-amd64-regress.log"
+
+      - name: The recovery readiness regression (037), both feature sets
+        timeout-minutes: 60
+        run: |
+          set -euo pipefail
+          bash .github/recovery-qualify/recovery-regress.sh "$RUNNER_TEMP/cand" amd64 pass 2>&1 | tee "$RUNNER_TEMP/linux-amd64-recovery.log"
+
+      - name: Collect the run directories
+        if: always()
+        run: |
+          mkdir -p "$RUNNER_TEMP/runs"
+          N1_PLATFORM=linux/amd64 "$RUNNER_TEMP/cand/qualification/n1-upgrade/container.sh" fetch "$RUNNER_TEMP/runs" || true
+          tar -C "$RUNNER_TEMP" -czf "$RUNNER_TEMP/p3-amd64-evidence.tgz" runs $(cd "$RUNNER_TEMP" && ls linux-amd64-*.log 2>/dev/null)
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: p3-amd64-evidence
+          path: ${{ runner.temp }}/p3-amd64-evidence.tgz
+          retention-days: 90
