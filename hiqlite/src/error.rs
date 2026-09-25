@@ -116,11 +116,23 @@ pub enum Error {
     WAL(String),
     #[error("WebSocket: {0}")]
     WebSocket(String),
+    /// The node has not finished its startup recovery: a state machine has not yet applied the
+    /// log this node held when it started (`037`). Transient, unlike [`Error::NodeFailed`]: the
+    /// node is up and catching up, so a caller waits and retries rather than treating it as down.
+    /// Added last, so the position of every earlier variant is unchanged.
+    #[error("Recovering: {0}")]
+    Recovering(Cow<'static, str>),
 }
 
 impl Error {
     pub fn new<E: Into<Cow<'static, str>>>(error: E) -> Self {
         Self::Error(error.into())
+    }
+
+    /// `true` for [`Error::Recovering`]: the node is up but has not finished applying the log it
+    /// held at start, which a consumer reports as "recovering" rather than "down".
+    pub fn is_recovering(&self) -> bool {
+        matches!(self, Self::Recovering(_))
     }
 
     /// Checks if the inner wrapped error is a `ForwardToLeader` error
@@ -198,6 +210,7 @@ impl IntoResponse for Error {
             Error::Unauthorized(_) => StatusCode::UNAUTHORIZED,
             Error::WAL(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Error::WebSocket(_) => StatusCode::BAD_REQUEST,
+            Error::Recovering(_) => StatusCode::SERVICE_UNAVAILABLE,
         };
 
         (status, Json(self)).into_response()

@@ -115,10 +115,43 @@ impl Client {
         }
     }
 
+    /// Where this node's startup recovery stands (`037`).
+    ///
+    /// After a start, each Raft group's state machine applies the log the node held, and until it
+    /// has, the node is up but does not serve: health checks, `/health`, `/ready` and every
+    /// operation of this client refuse with [`Error::Recovering`]. A consumer uses this to report
+    /// "recovering" rather than "down". `None` for a remote client, which has no local node; the
+    /// node it talks to refuses with the same error.
+    pub fn recovery_state(&self) -> Option<crate::RecoveryState> {
+        self.inner.state.as_ref().map(|state| state.recovery_state())
+    }
+
+    /// `Err(Error::Recovering)` until the database group has finished its startup recovery.
+    #[cfg(feature = "sqlite")]
+    pub(crate) fn ensure_db_recovered(&self) -> Result<(), Error> {
+        match &self.inner.state {
+            Some(state) => state.raft_db.recovery.ensure_complete(),
+            None => Ok(()),
+        }
+    }
+
+    /// `Err(Error::Recovering)` until the cache group has finished its startup recovery.
+    #[cfg(feature = "cache")]
+    pub(crate) fn ensure_cache_recovered(&self) -> Result<(), Error> {
+        match &self.inner.state {
+            Some(state) => state.raft_cache.recovery.ensure_complete(),
+            None => Ok(()),
+        }
+    }
+
     /// Check the cluster health state for the database Raft.
+    ///
+    /// Not healthy until the database group has finished its startup recovery (`037`): the error
+    /// is then [`Error::Recovering`].
     #[cfg(feature = "sqlite")]
     pub async fn is_healthy_db(&self) -> Result<(), Error> {
         self.ensure_node_available()?;
+        self.ensure_db_recovered()?;
         let metrics = self.metrics_db().await?;
         metrics.running_state?;
         if metrics.current_leader.is_some() {
@@ -142,9 +175,12 @@ impl Client {
     }
 
     /// Check the cluster health state for the cache Raft.
+    ///
+    /// Not healthy until the cache group has finished its startup recovery (`037`).
     #[cfg(feature = "cache")]
     pub async fn is_healthy_cache(&self) -> Result<(), Error> {
         self.ensure_node_available()?;
+        self.ensure_cache_recovered()?;
         let metrics = self.metrics_cache().await?;
         metrics.running_state?;
         if metrics.current_leader.is_some() {

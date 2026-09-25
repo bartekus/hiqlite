@@ -3385,3 +3385,54 @@ SQLite writer had finished. The WAL locks now live with the owner lock until
 every writer of the node has stopped; each `lock.hql` is then unlinked while held
 and released, and the owner lock last. `LogStore::start` callers that own their
 lock get unlink-while-held at the writer's stop. Tested by U-6 in both crates.
+
+## Found by a consumer's crash qualification (2026-09-24)
+
+Recorded by `037-startup-recovery-readiness`, against `spec-spine` revision
+`aa559f5dcaa59bd9f27b0622b51ae5b57dc2185f` and tree `71ccc0e`, whose `hiqlite/`
+and `hiqlite-wal/` equal the published `0.15.0-patched.2` source (`5c2cdef`).
+Escalated by the owner as a defect of severity **high**. The consequence was
+observed by Rauthy; the mechanism was then executed here.
+
+### F-134 `defect`, confidence `high`
+
+**A node reports healthy and ready before its startup recovery has applied
+anything.** hiqlite persists no committed index, so after every start a Raft
+group's state machine trails its own log until a leader commits an entry of
+the new term, and only then does OpenRaft apply the log. `/health`,
+`Client::is_healthy_db` and `Client::is_healthy_cache` asked only whether a
+leader was known (`network/api.rs` `check_health`, `client/mgmt.rs`), and
+`/ready` asked the same plus membership, all of which are true before the first
+entry is applied. The window is widest after an unclean stop: under `auto-heal`
+(hiqlite's default features) the unclean-stop marker makes the SQLite state
+machine delete its database and rebuild it from the log
+(`state_machine.rs` `check_set_lock_file`), so it starts **empty**. The
+in-memory cache state machine replays its log on every start, clean or not.
+Every client operation was served meanwhile.
+
+**Observed consequence** (Rauthy, `bartekus/rauthy` #7 and #8, released as
+Rauthy `0.36.2-patched.3`): after a `SIGKILL` and restart, the node reported
+healthy as soon as it was leader, with `last_applied = None` and 191 log
+entries. Rauthy's startup read the database 7 ms after the election, found
+`jwks` empty, reset the initial admin from the bootstrap values and generated a
+second signing-key set; the replay then restored the old rows beside the new
+ones. Rauthy shipped a consumer-side wait (its F22) in that release.
+
+**Observed by execution** (`hiqlite/tests/recovery_readiness.rs`, public API
+only, on the published source): after 3000 acknowledged single-row writes, a
+clean stop and a recreated unclean-stop marker, the first moment the client
+and `/health` both said healthy, a read saw 48 of 3000 rows (37 and 18 in other
+runs); a disk-backed cache, restarted cleanly after 3000 puts, was healthy while
+its last key read as absent. Failing on macOS arm64 (debug) and native Linux
+arm64 (release, Docker Desktop) under Rauthy's and Rahi's feature sets; the
+native Linux amd64 run is recorded by `037` section 4.
+
+**Consumer triage.** Reaches every consumer that waits for health and then
+reads: Rauthy (observed), Rahi and everything on a Rahi cell (receipts, claims),
+whose crash-recovery contract assumes a store that does not accept work before
+recovery. A consumer that does not wait at all was exposed before and after.
+
+**Repair** (`037` B-1 to B-4): each group records, at start, the last log index
+its log holds, and the node is not healthy, not ready, and refuses every client
+operation and client stream with the new `Error::Recovering` until its state
+machine has applied it. `Client::recovery_state` reports the progress.

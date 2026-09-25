@@ -52,6 +52,9 @@ pub async fn health(state: AppStateExt) -> Result<(), Error> {
         state.lifecycle.ensure_available()?;
         #[cfg(feature = "cache")]
         state.raft_cache.ensure_cache_compatible()?;
+        // `037`: before the grace period below, which answers healthy unconditionally. A node
+        // that has not applied the log it started with is up, and says so, but is not healthy.
+        state.ensure_recovered()?;
 
         if check_health(&state).await.is_err() {
             // after at least 3 seconds, we should have a new leader
@@ -112,6 +115,9 @@ pub async fn ready(state: AppStateExt) -> Result<(), Error> {
     if state.is_shutting_down.load(Ordering::Relaxed) {
         return Err(Error::Error("Node is shutting down".into()));
     }
+
+    // `037`: ready means able to serve, and a node still applying the log it started with is not.
+    state.ensure_recovered()?;
 
     let secs_since_start = Utc::now().sub(state.app_start).num_seconds();
 
@@ -351,6 +357,8 @@ pub async fn listen(
     headers: HeaderMap,
 ) -> Result<sse::Sse<impl Stream<Item = Result<sse::Event, Error>>>, Error> {
     validate_secret(&state, &headers)?;
+    // `037`: an event stream is not opened before recovery; the remote listener reconnects.
+    state.ensure_recovered()?;
 
     let (tx, rx) = flume::bounded(1);
     let (ack, ack_rx) = tokio::sync::oneshot::channel();
@@ -387,6 +395,12 @@ pub async fn stream(
     raft_type.selected()?;
     let (response, socket) = ws.upgrade()?;
     debug!("New Raft Stream for {:?}", raft_type);
+
+    // `037`: a client stream carries reads and writes; none is served before recovery.
+    if let Err(err) = state.ensure_recovered() {
+        warn!("Rejecting client streaming connection: {err}");
+        return Err(err);
+    }
 
     #[cfg(feature = "cache")]
     {

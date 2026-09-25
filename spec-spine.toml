@@ -64,6 +64,10 @@ extra_hashed_inputs = [
   # the tests directory, which no other glob here reaches.
   "hiqlite/src/upgrade_exclusion.rs",
   "hiqlite/tests/upgrade_exclusion.rs",
+  # Readiness after startup recovery and its regression tests, claimed by 037. The crate root
+  # and the tests directory again.
+  "hiqlite/src/recovery.rs",
+  "hiqlite/tests/recovery_readiness.rs",
   # Transport security material and its REST client, claimed by 011, plus that
   # spec's own environment-route test target, which sits outside the
   # hiqlite/tests/cluster glob below.

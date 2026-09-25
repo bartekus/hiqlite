@@ -88,6 +88,8 @@ impl Client {
         // W-22: a node that is out of service refuses every operation, with the account the
         // health endpoint gives, rather than failing later inside openraft.
         self.ensure_node_available()?;
+        // `037`: and so does one that has not recovered, with `Error::Recovering`.
+        self.ensure_cache_recovered()?;
         match self.try_rate_limit_cache() {
             Ok(_) => Ok(()),
             Err(err) => {
@@ -118,6 +120,8 @@ impl Client {
         // W-22: a node that is out of service refuses every operation, with the account the
         // health endpoint gives, rather than failing later inside openraft.
         self.ensure_node_available()?;
+        // `037`: and so does one that has not recovered, with `Error::Recovering`.
+        self.ensure_db_recovered()?;
         match self.try_rate_limit_db() {
             Ok(_) => Ok(()),
             Err(err) => {

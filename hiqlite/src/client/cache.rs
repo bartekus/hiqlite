@@ -118,6 +118,7 @@ impl Client {
         K: Into<String>,
     {
         self.ensure_node_available()?;
+        self.ensure_cache_recovered()?;
         if let Some(state) = &self.inner.state {
             state.raft_cache.ensure_cache_compatible()?;
 
@@ -159,6 +160,7 @@ impl Client {
         V: for<'a> Deserialize<'a>,
     {
         self.ensure_node_available()?;
+        self.ensure_cache_recovered()?;
         if let Some(state) = &self.inner.state {
             state.raft_cache.ensure_cache_compatible()?;
 
@@ -388,6 +390,7 @@ impl Client {
         K: Into<Cow<'static, str>>,
     {
         self.ensure_node_available()?;
+        self.ensure_cache_recovered()?;
         if let Some(state) = &self.inner.state {
             state.raft_cache.ensure_cache_compatible()?;
 
