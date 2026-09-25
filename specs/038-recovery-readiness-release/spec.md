@@ -1,7 +1,7 @@
 ---
 id: "038-recovery-readiness-release"
 title: "Release the startup recovery readiness repair alone, as 0.15.0-patched.3"
-status: draft
+status: approved
 created: "2026-09-24"
 owner: "hiqlite maintainers"
 risk: critical

@@ -133,10 +133,10 @@
       "Verification"
     ],
     "specPath": "specs/038-recovery-readiness-release/spec.md",
-    "status": "draft",
+    "status": "approved",
     "summary": "The release identity of `037`'s repair (F-134): all three packages at 0.15.0-patched.3, in lockstep, with exact internal requirements and no other change to the dependency graph (openraft stays =0.9.25). Nothing else ships with it: the N=3 lane B change (#39) is left for a later release. States the consumer guidance (wait for each group before first use, report recovering rather than down, size liveness probes, pin exactly or build --locked), the qualification the release tree carries, which is 036's bar, and what stays separate: ratification, publication and each consumer's adoption. Carries 036's acceptance forward with its version commands moved.\n",
     "title": "Release the startup recovery readiness repair alone, as 0.15.0-patched.3"
   },
-  "shardHash": "d8122cd3e77bc114ad2c9399e0d833ad166d4891588dfb1911755767000dde11",
+  "shardHash": "07e2fa84da26391c8e6d6b95965e098d557810b75ac2bc0e2c29663eca15a6a0",
   "specVersion": "1.8.0"
 }

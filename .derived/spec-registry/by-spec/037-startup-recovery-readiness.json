@@ -129,10 +129,10 @@
       "Verification"
     ],
     "specPath": "specs/037-startup-recovery-readiness/spec.md",
-    "status": "draft",
+    "status": "approved",
     "summary": "Repairs F-134. hiqlite persists no committed index, so after every start a Raft group's state machine trails its own log until a leader of the new term commits, and after an unclean stop under auto-heal the SQLite state machine starts empty. Health and readiness only asked whether a leader was known, so a node reported healthy with nothing applied and Rauthy, reading at once, found its database empty and bootstrapped it again. Each group now records the last log index its log held at start; until its state machine has applied it, /health, /ready and the client health checks are false, every client operation and client stream is refused with the new, distinguishable Error::Recovering, and Client::recovery_state reports the progress.\n",
     "title": "Neither healthy nor ready, and serving nothing, until startup recovery has applied the log"
   },
-  "shardHash": "07b24102c7ab3677a882fd9fcca839f14370f9f4478865f6ee6864b8a28cb98b",
+  "shardHash": "465c2f92246cf30c10208943b30ccc0ae3d084f22c0502533e82414d9b120828",
   "specVersion": "1.8.0"
 }

@@ -168,8 +168,8 @@
       }
     ],
     "specId": "038-recovery-readiness-release",
-    "specStatus": "draft"
+    "specStatus": "approved"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "4b88470591128e77c97d74c0a4df77c22d34780de572729674c61d6bf1f09a89"
+  "shardHash": "4d016e9c65bb243f6620fbfcde0b5cf7b84f7dbd2e5180ffcfd64aab49c370b9"
 }
