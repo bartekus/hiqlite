@@ -37,6 +37,23 @@
       }
     ],
     "risk": "high",
+    "sectionDigests": {
+      "006-define-the-in-memory-cache-state-machine-and-its-handlers": "fadb11f91ea939d33814562f574bf8024ccb0d399f3f44524def177420b20981",
+      "1-purpose": "a8b1b129bef3a60a80a9db4626c62c7b40151309dfb584ed3647abe39e7ad06d",
+      "2-territory": "5c03bf0596274d9b9f1d5905fab8900ec4c03acabb33b7bdaf3aea69d6ef6a24",
+      "3-behavior": "19642b85ea0aa351f1a9decdbdc6a7c573a505985b540fe61907c3c1433d0575",
+      "4-evidence-and-its-limits": "be2b47198db31ce1844cc87a54d401cf42aa4083b5d15db2f42207dfd5307b64",
+      "5-known-defects": "54aaebe01a5eb9a99fc0ca24a43d556040e802726a38fcf18f4acbc2160d2e04",
+      "6-out-of-scope": "6b6dd132e64c460cdfaf62a804a8390bb709f281bdd58842029958cc028aa856",
+      "7-resolved-decisions": "d68e07db073fee9abb4ac7ccfddc472646c486ede415731fb2e2333d8e2d73b2",
+      "b-1-the-request-and-response-contract": "5a2f92e1b2dd5d5017fd8aabb013aacb5bebd7a7df2261c42d6bd9194fa1fb90",
+      "b-2-apply-is-deterministic-and-delegates-to-per-cache-handler-threads": "4f3cf618a0d4dc018727e265ea946247be1b113c611fd1a0e4554579a970665a",
+      "b-3-ttl-expiry-is-a-registration-and-a-re-put-without-a-ttl-clears-it": "5b0788464e1d8d525d018c31740f1c702b4250ae80ba931b4c81b1f10c6c0f64",
+      "b-4-distributed-locks-described-as-found": "fd1cf8c91abde13562dfdebb158602414a6c7ec62b9c92a01456ccf06431cf55",
+      "b-5-snapshots-under-both-snapshot-strategies": "507e14f04086930fa9780da76a9cdcc72252298a0c45bfdde84aad5fcc2f5fa1",
+      "b-6-handler-channel-failures-panic": "4278011ec10113fac226a288d60685e987dc94b8baa711c304e457b0fe119b37",
+      "verification": "ee9619ad43fb4aa9e383506667c0925a496e434401b10b8ddf4480c13f4a84d7"
+    },
     "sectionHeadings": [
       "006: Define the in-memory cache state machine and its handlers",
       "1. Purpose",
@@ -60,5 +77,5 @@
     "title": "Define the in-memory cache state machine and its handlers"
   },
   "shardHash": "448605767dd94ca6d3c4301a488cd65e8a62ef9d10d857f4f4b472e9c3dcd02a",
-  "specVersion": "1.3.0"
+  "specVersion": "1.8.0"
 }

@@ -7,10 +7,10 @@ authoritative; where this summary is terser, they govern.
 
 ## Tool pin
 
-`spec-spine`, source revision `aa559f5dcaa59bd9f27b0622b51ae5b57dc2185f`. The
-binary reports `0.20.0`, and `spec-spine.toml` `[meta] required_version` is
-`"=0.20.0"`: exact equality, not a floor, so a binary reporting any other
-version is refused. Equality on a reported version still admits every revision
+`spec-spine`, source revision `8f2a8f75000af8f8c7348d87928891306b8d65a6` (the
+`v0.26.0` tag). The binary reports `0.26.0`, and `spec-spine.toml`
+`[meta] required_version` is `"=0.26.0"`: exact equality, not a floor, so a
+binary reporting any other version is refused. Equality on a reported version still admits every revision
 that reports it, so the **revision** pinned in the `justfile` and in CI is the
 reproducibility boundary and the version requirement is the coarser of the two.
 Install it with `just spine-install`.

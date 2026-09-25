@@ -160,6 +160,23 @@
       }
     ],
     "risk": "high",
+    "sectionDigests": {
+      "033-qualify-a-three-voter-topology-on-kubernetes-before-anyone-calls-it-supported": "c3bb4d8ff360d3f627f7f7a61e05496574b5edac9fd53f922d8590d031b785bc",
+      "1-purpose": "31522ae0b3904df71329344d06f38194d84bc340e8f3c4c8cfa19e70a1695a31",
+      "2-territory": "bcafc8cac0ec06f652ecc81b3c913c87b064e2eeda04b9aa5f6bd25300f733be",
+      "3-behavior": "3e41226e9b76d7b593afdaa33055e51dc91bcd354b329c7776122e6eadafeab7",
+      "4-evidence-and-its-limits": "63b1b8c98d6ada3607c8ca3c79eb16e25da1fea468013d2d4d3e4e57b388fdc4",
+      "5-known-defects": "8634ba965127e4e69ad9b6bf40ecbf4c8e0694d63a04310f2a8070f75c780310",
+      "6-resolved-decisions": "494781af031db3b8972f4325fa7088ca08421240dcfbe1357e33230730e57291",
+      "7-out-of-scope": "1c582d419150aa1c1b307cc8c484999c6efdc5d18e66f23413d4fa43f59dab53",
+      "b-1-n-3-stays-unsupported-until-its-evidence-exists": "5b023b97384036dba7042e5ced9408313bf033a2041439506329fbf88b9cc929",
+      "b-2-a-real-node-harness-separate-from-the-in-process-suite": "3cb4bc0eeadcaf4459b78e89acb351707ba3683962ed127797f7d8767469288f",
+      "b-3-node-1-initializes-only-on-positive-evidence-that-the-cluster-is-fresh": "f4039eca6980549b559a6ea368844405ab1f6794d7a56dcd62c28ace33527b17",
+      "b-4-the-pre-shutdown-delay-is-a-node-option": "c75220bebe6c753649c9571a7702097d63f70fbd48d0dd099a25b306949e30e2",
+      "b-5-the-log-revert-relaxation-is-a-recorded-decision": "bd6d35e12a88719c4352df215b4a2eca8dcecc9369cd5b54226b8d54108f3133",
+      "b-6-the-acceptance-is-deterministic-and-named-by-scenario": "a1cfd551dbfa4d4ba9f8a658570eaade9c49904ffd368dadc01263d17e969249",
+      "verification": "5c0abf81456ff98b717e727072e30d1e26dc5354a656d39807f7701948ab5317"
+    },
     "sectionHeadings": [
       "033: Qualify a three-voter topology on Kubernetes before anyone calls it supported",
       "1. Purpose",
@@ -183,5 +200,5 @@
     "title": "Qualify a three-voter topology on Kubernetes before anyone calls it supported"
   },
   "shardHash": "f69f07d9f7980c1a5309b2b5ef620608161899e27694e53f1d232e75811bcbcf",
-  "specVersion": "1.3.0"
+  "specVersion": "1.8.0"
 }

@@ -154,6 +154,24 @@
     "implementation": "complete",
     "owner": "hiqlite maintainers",
     "risk": "critical",
+    "sectionDigests": {
+      "029-repair-the-defects-that-reach-a-consumer-of-this-release-and-say-which-ones-do-not": "74fa3b1103437e844be291e0791e6723413b387edaecbba051cad323003b63bb",
+      "1-purpose": "c26588f68a535f8354fc31f9ce13b5bda654491a7e6cc121171a47aa57caff33",
+      "2-territory": "93b3333c5c0686b93faa1eda261c43bfe14b0ceb8317a2742903cff561fdab79",
+      "3-behavior": "f3013c1edf45cb9e8e5be133cb181ef66ad766182097852a022816cc4e9437d4",
+      "4-what-is-excluded-and-why": "c2a04db3d5dda3e8a467c213fe26cea601d711dc288449a0ba99319b0413cc25",
+      "5-known-defects": "53f737f06ce24fcf0bd70866c4de768899a4f51d6d81f366d7743a0d5796a6aa",
+      "6-resolved-decisions": "cf3cf1b5a49879324408eba2486d523718dd82f82470333988f1bdb9ebcefa0d",
+      "7-out-of-scope": "096f7eac8d0271be4c39bbaaa41246cf67c269a2dd78fd32247906a9b8fb33c9",
+      "b-1-an-entry-larger-than-the-wal-is-a-rejected-append-not-a-dead-writer": "e319dc56c6c5927c2b7689466342a5483d5af5844f0c6501138ee43c897a4a17",
+      "b-2-an-unknown-raft-type-is-a-bad-request": "f6455a9d8f1f8ebb2d75454c3266c9b2280c74b1690527562a339e777ecee2c9",
+      "b-3-migration-validation-returns-named-errors": "7c7277d051bd109d76644bf8d94cbb7cd46d225e5b367ee31e89958a48c0e8da",
+      "b-4-the-proxy-s-router-can-be-built-and-its-secret-is-compared-in-constant-time": "18d81857f137db81c6438e27a10a8b81d84d4b58bfab7699ffba279679d39b96",
+      "b-5-four-configuration-keys-mean-what-they-say": "8cd087e0c2d16df6dff53775a7cb0d299f21367cdc619a84c821bb929fc20956",
+      "b-6-the-derive-accepts-what-it-claims-to": "5fbf87a3d3cd40e5339c404efb2b0c5118c2f31c33f3a5b7070997056e70d1bf",
+      "b-7-two-things-a-caller-can-now-bound": "8d38c360981677ddfaded969d86b2a9cb2896aabb4f47d8da67b0dbafdc63b34",
+      "verification": "582ca32cfbefdeeb6d88fc19c142f29708085272036928166771b335e316c31e"
+    },
     "sectionHeadings": [
       "029: Repair the defects that reach a consumer of this release, and say which ones do not",
       "1. Purpose",
@@ -178,5 +196,5 @@
     "title": "Repair the defects that reach a consumer of this release, and say which ones do not"
   },
   "shardHash": "2eb473820f7f14efe6fcd36a0c1018f200cc81175966c0c6eaba32f5f26469a8",
-  "specVersion": "1.3.0"
+  "specVersion": "1.8.0"
 }

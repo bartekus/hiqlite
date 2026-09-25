@@ -495,11 +495,17 @@ floor at all and are enforced normally.
 ## 14. Governance workflow
 
 The exact `spec-spine` source revision is
-`aa559f5dcaa59bd9f27b0622b51ae5b57dc2185f`. The binary reports version `0.20.0`,
+`8f2a8f75000af8f8c7348d87928891306b8d65a6` (the `v0.26.0` tag). The binary reports version `0.26.0`,
 so the revision named in `justfile` and in CI is the reproducibility boundary;
 `spec-spine.toml` `[meta] required_version` additionally refuses a binary whose
-reported semantic version differs from `0.20.0`. Install it with
+reported semantic version differs from `0.26.0`. Install it with
 `just spine-install`.
+
+The pin moved from revision `aa559f5dcaa59bd9f27b0622b51ae5b57dc2185f`
+(`0.20.0`) on 2026-09-25, at the owner's direction to pin the latest published
+release exactly. `0.26.0` compiled and indexed this corpus with no `check` or
+`lint` finding; the committed shards were regenerated with it. Records written
+before that date name the revision they were produced with.
 
 After a trusted edit to a spec, a governed source file, or a governance input,
 `just spine-regenerate` MUST regenerate the committed registry and

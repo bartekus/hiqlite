@@ -8,7 +8,7 @@ permissions:
   contents: read
 
 env:
-  SPEC_SPINE_REV: aa559f5dcaa59bd9f27b0622b51ae5b57dc2185f
+  SPEC_SPINE_REV: 8f2a8f75000af8f8c7348d87928891306b8d65a6
 
 jobs:
   govern:

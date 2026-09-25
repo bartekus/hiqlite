@@ -99,6 +99,24 @@
       }
     ],
     "risk": "critical",
+    "sectionDigests": {
+      "034-restore-a-backup-into-a-fresh-three-voter-cell-once-from-an-image-that-proves-whose-it-is": "38963d60ba99d48dae969b64f5203c21182d7bad5d5975b041ddc72f46fcde70",
+      "1-purpose": "d73a340d4210749e206b89b69595ef514b064b959db1127b8472de77f024fe77",
+      "2-territory": "30b6ce53dfef72cdd6d80ce6203041b851f3206ffc36ba4da82acfdbec757e36",
+      "3-behavior": "f31e23a43cffd9d6516c278b87e241a22b573152acb3e8b9b9acfa37b46a7aa6",
+      "4-acceptance-to-be-implemented": "43e16146246ad6dcd7f9edb7f23000facc766c0f270d3af41a538ef6d1907008",
+      "5-evidence-and-its-limits": "e79c165c0525564211e96a09778bc97356b54dfba665d8d49eeab42ea5cda579",
+      "6-known-defects": "21e0d337638a86dadd7069a6e64d56e9f38ded191bc570b268cecf95b6fc1c36",
+      "7-resolved-decisions": "1b0cf661db99bcf45fa34c5e266948accb360a0b16a8a4464982f55d0ca51dec",
+      "b-1-an-image-carries-its-manifest": "a8fa89432ac2e1672d9ab95b6069ae3a6a9ef04a69abc142c0d110fdd1f926b9",
+      "b-2-an-offline-export-from-a-stopped-data-directory": "ab9bbc9663c2ed0c7b84334cf46f7f003097ff9e28dcd1398c564c5740ae52c4",
+      "b-3-restore-is-callable-checked-and-applied-at-most-once": "af4c368a6526dddc6ee14140a52771f5ca78b5d991e59f60c6e0f17878612beb",
+      "b-4-a-fresh-cell-restore-either-forms-a-single-voter-cluster-or-fails": "f2b2d5120dc371c71e97e088a07c8693a581391bd286d9c7d1fd4368c225f6c6",
+      "b-5-an-upload-s-outcome-can-be-observed": "60e7eb0c43615d02167c7895ee86d272c11842c79957e1d07bf11951ce486d66",
+      "b-6-a-committed-barrier-if-the-owner-adopts-it": "1f1520ddcda0926ebb06d6dcb4cb40ea60fe998d856e6c313deb582f27a62a49",
+      "b-7-a-clean-stop-is-recorded-where-an-export-can-read-it": "0d410d41d34a4b0a7819fb25963f5a15303fa708360bb529e3fe9a098e5eed28",
+      "verification": "82b65f5e3e1e2d9334f0b782583d38eda43bb9d8206a147b786bac2898730c15"
+    },
     "sectionHeadings": [
       "034: Restore a backup into a fresh three-voter cell, once, from an image that proves whose it is",
       "1. Purpose",
@@ -123,5 +141,5 @@
     "title": "Restore a backup into a fresh three-voter cell, once, from an image that proves whose it is"
   },
   "shardHash": "151141fd026c8c37a913fb029e77314a719fb6a470bbf0dfa4c7d162b2f5f972",
-  "specVersion": "1.3.0"
+  "specVersion": "1.8.0"
 }

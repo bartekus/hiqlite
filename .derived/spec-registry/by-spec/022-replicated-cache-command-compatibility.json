@@ -70,6 +70,23 @@
     "implementation": "complete",
     "owner": "hiqlite maintainers",
     "risk": "critical",
+    "sectionDigests": {
+      "022-refuse-replicated-cache-commands-this-build-cannot-apply": "36686b00ca5e0c0e24f2cb0bf01bcd57d0315774fe7b24a7e93aa0944bbf4c72",
+      "1-purpose": "54719798537b82537a6e4eec4bf3be6676697aa170af6eb053beb9d311aebf24",
+      "2-territory": "4243d70432cdc1b1c4a7c13ac0f1ee89c34f00b712dd3e80da7d7c4f6b775ae2",
+      "3-behavior": "1c00208de29428ccf4cf0d482ed90054dfe1f2d0a3f6c4ba7e745584ac7566e6",
+      "4-evidence-and-its-limits": "19c98c34af74ffca67f335b401807a6b194860da2e38cc657144a1d80412ac35",
+      "5-known-defects": "25052b7d4d58736b6ed79016d1375bf0afd4298042f1c64bdf3c6aeaa155e07d",
+      "6-resolved-decisions": "53b8636de871e57e3d8ca176a67195fa6f736ec5e2d0085a02a3053382469f15",
+      "7-out-of-scope": "861703e2bb51b15fa98baa7a33bb3ca01169487ab13495b1cd2b3255a313bc22",
+      "b-1-every-entry-is-classified-before-anything-is-done-for-it": "7d84c82df410388a0e6c8d38f1c32eb19ff10925b4ddceaa44b1c8b25d84a8b5",
+      "b-2-application-stops-at-the-offending-entry-and-does-not-claim-it": "95b53a5d1511baf40d10bc899707b11dee3731cdf5306a632f85cbf3c6e8f688",
+      "b-3-it-is-terminal-and-a-later-batch-does-not-resume": "a8f7fe34769fb7349846b32eebdc3dd052e74795017e04412f7494f8153ae771",
+      "b-4-reads-and-writes-are-refused-not-answered": "6771dee4b0bdc87b9e87fb05f7049194c33cde24b3fe9931624851da7804174c",
+      "b-5-the-failure-is-named-and-says-what-to-do": "0ef23c77dc9835a98c735f55aeafa7f3b3a0770040d24c84d08a9be1f1ca3cdc",
+      "b-6-what-this-does-not-change": "c2068ad2dcae87c60249e3172da200df9c5fdff59b8274147242b83827d028b3",
+      "verification": "acee830ba80b544b1a7120b9622633f92e7166d3b5ef2ad8cea95aa83828c6f4"
+    },
     "sectionHeadings": [
       "022: Refuse replicated cache commands this build cannot apply",
       "1. Purpose",
@@ -93,5 +110,5 @@
     "title": "Refuse replicated cache commands this build cannot apply, instead of panicking or skipping"
   },
   "shardHash": "c58af832fb4db08080c7781adc52cdf849d89482f171993ec6b399f99308eb44",
-  "specVersion": "1.3.0"
+  "specVersion": "1.8.0"
 }

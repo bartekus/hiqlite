@@ -66,6 +66,26 @@
     },
     "owner": "hiqlite maintainers",
     "risk": "critical",
+    "sectionDigests": {
+      "011-adopt-the-transport-security-material-and-its-consumers": "fba905b7f381ec724370927a6b5f50e3a8cf1dbb43ffff29cfdd809573de6bf5",
+      "1-purpose": "0eaaf96de8ca27bfb7482082e6a1fe803dfb832f6b3cf442b2b77cf03db413fc",
+      "2-territory": "47435309e6094979baed9bee8ffa5a8638fb63118eba35266e107a78d6ca5301",
+      "3-behavior": "4ba3d38db0280615be6797157313bd36ef437496d71053fe6df74d1a94a034cd",
+      "4-evidence-and-its-limits": "3e5a65e212e66f0ba68e81f87ade6b5f3d0676c4a26c62ddd68366c42136862e",
+      "5-documenting-hql-tls-auto-certs-and-what-the-entry-deliberately-omits": "34163dc90fe263e0677894f1f77b69b76035cd4a4dbc8fd5ad4c7309323aab97",
+      "6-known-defects": "930f96dc4158ded0decf81df180adcc307acc7eae840e0fec93dadf1fa15d93d",
+      "7-resolved-decisions": "51c7a7274f92074f0237abafdc6dc8dcf4c4f207700174dee1a4120292d98970",
+      "8-the-inventory-declarations-this-spec-requires": "9edf9dfcaf656ef1c79d3d43148747ed9448664b6481a82fa36ca2ad455c2583",
+      "9-out-of-scope": "5306988818937c8a1ea10c20299b008bd29e6f99e32eb9baa5cf5e32fbb158d7",
+      "b-1-two-endpoints-three-ways-to-end-up-without-verification": "58e421e4288c85136f8ab0d40cf0378f604a97fd209a892050a9480915fa6b20",
+      "b-2-client-config-and-build-http-client-are-two-different-clients": "cbcf137dd2c1d8822443ea3a7684ee7c34aee921febef2c08f5440ed06b0e54e",
+      "b-3-from-env-reads-three-variables-per-endpoint-and-one-shared-switch": "229db88bb668b7d54db2b60e2876b47e7b27ef0f158e4769c203809e32e38f39",
+      "b-4-a-verifying-client-has-no-configurable-trust-anchor": "bfe9f4af3c1c0a1a9be56b5f12c36ec8c3ed8dd7bdf3b8a100e364af46e8c15d",
+      "b-5-four-consumers-three-different-pairings-of-scheme-and-verification": "d8cae0374139dc80eec73bc7cea1ce07e68a51ca298512b0e7c5c8183ed7c8a0",
+      "b-6-the-self-signed-path-names-the-listen-address-and-lives-for-three-years": "12c3cf2a8d51edcbd47d17cd8bd23e4f907ea127b12109625ddb96f466dd5650",
+      "b-7-every-failure-in-this-module-is-a-panic-and-one-of-them-is-silent": "fdb494328667555d39bfc3a7cdeeddd93828738e43eac9c383044dfabf960d5a",
+      "verification": "d07e2d3b11715a0d42d70f719e6709f6e74d5c49a1218c36dac08a0a65f6239f"
+    },
     "sectionHeadings": [
       "011: Adopt the transport security material and its consumers",
       "1. Purpose",
@@ -92,5 +112,5 @@
     "title": "Adopt the transport security material and its consumers"
   },
   "shardHash": "dc7e8461f19a18368cc85b29f2af2183a5debf23b5928d83d7a8b4814d9e337f",
-  "specVersion": "1.3.0"
+  "specVersion": "1.8.0"
 }

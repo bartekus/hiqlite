@@ -1,5 +1,5 @@
 [meta]
-required_version = "=0.20.0"
+required_version = "=0.26.0"
 
 [manifest]
 metadata_namespace = "spec-spine"

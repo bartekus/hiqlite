@@ -63,6 +63,27 @@
     "implementation": "complete",
     "owner": "hiqlite maintainers",
     "risk": "critical",
+    "sectionDigests": {
+      "026-repair-backup-retention-restore-ordering-validation-and-configuration-failure": "acc0ae4377e8039362e0a57c8539032ef9870e04466a0f5372d65e27cf11cfb1",
+      "1-purpose": "ac34e95a859f4779e8475999798a74ef75d4f51b704235699da7d71fb90691e1",
+      "2-territory": "8e2d85f077ba8c136af69dbeb696de9a83e73ff58d3ca2c3e2fd22940282dd6e",
+      "3-behavior": "fb62814426978ccfebb84ad1254643c94a313fb20c71d30493b63f125505e0d8",
+      "4-evidence-and-its-limits": "2cb4c91a2d459bd0c8a58853c1fb3fd707490db96d081bcbd366cf174f9e7920",
+      "5-known-defects": "4e1974a242b8a322cc0f45b73ff20e7346d9a35e6f97d7d986c29c5eec8184e1",
+      "6-resolved-decisions": "c6d649cf4af29dfe48c8e2e8947d6acf73af803824f058642b5933181e4cc943",
+      "7-out-of-scope": "13dc46d63f9daa82f267abb48a8f1e3627a0f64463b6577fe5a2570cb99451b5",
+      "b-1-one-predicate-decides-what-a-backup-file-is": "9dd1db8bcb1f5033d999f8d16940c0689539b0c3d1589a7f058ba6d7ef2410f9",
+      "b-10-retention-never-deletes-the-newest-backup": "b7658eb5c181e9be2cb9ebe5b55fe7afed950ad535906513bdcb940c83725ea8",
+      "b-2-the-retention-floor-is-stated-in-the-zone-it-is-compared-in": "e21934e589a91b1251d82ee391126afc32db17f7282789b2a2a7bafce324e67a",
+      "b-3-a-restore-stages-the-replacement-before-destroying-anything": "71c02a19032efd93738a5ce88a276d771f10119761c267b66e785b6984a7d2c0",
+      "b-4-a-follower-moves-its-state-aside-rather-than-deleting-it": "1e75ea73384e764ba11315528f52fc1f6e0ed4e79fb3ff59fd681295e867c15d",
+      "b-5-validation-checks-the-image-and-returns-errors": "aeeacd949a48e737da6878f5a1e9ee706bc09520b1f5648ab434eaa6a14c2523",
+      "b-6-the-purge-is-bounded-the-retry-count-is-counted-and-the-s3-configuration-names-what-is-wrong": "7acfad8c8cc532465d62ef16a00ef234a73b625e99723c19a1b63370bfeb25bf",
+      "b-7-the-supported-restore-topology-is-n-1-and-this-says-why": "31a394ce5a1a915f71e5ee3affc80d14bbe2ff6b59ca62d95383326f47384930",
+      "b-8-an-interrupted-restore-is-rolled-forward-never-onto-a-database-without-its-wal": "e101d396afa7b4efab38cc69eb108709882dafc5950edb7747cdaf76cf2c43ce",
+      "b-9-a-backup-is-finished-and-durable-before-it-has-its-name": "2b013878a4599eb1219539c5c26e4fedb57ab9918dfaa75d4bd236ab131a840b",
+      "verification": "5f72902c16cea24dd22a9a7bbced43187226ceb08889d2956280df30b61c10c3"
+    },
     "sectionHeadings": [
       "026: Repair backup retention, restore ordering, validation and configuration failure",
       "1. Purpose",
@@ -90,5 +111,5 @@
     "title": "Repair backup retention, restore ordering, validation and configuration failure"
   },
   "shardHash": "1bdddb7fe0ae86710a9e6aef932daba3ad41e9b50bf4d08bc20b152bc9aae960",
-  "specVersion": "1.3.0"
+  "specVersion": "1.8.0"
 }

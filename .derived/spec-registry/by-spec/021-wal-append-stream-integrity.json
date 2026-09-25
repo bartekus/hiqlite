@@ -47,6 +47,26 @@
     "implementation": "complete",
     "owner": "hiqlite maintainers",
     "risk": "critical",
+    "sectionDigests": {
+      "021-repair-the-truncated-wal-append-stream-and-the-terminal-writer-call-paths": "cd5cd33b9c5debe6a062b24557aa321a60ce71cdbf370a06706d134cf350000d",
+      "1-purpose": "448bdcec5886eac5503d481555c0fbf2f1aec5f078cb75af4b0db474e30b9278",
+      "2-territory": "839b690bc11011aa97331d68ec9c7e0cdfe66795864a19d15f76fbf70f82e852",
+      "3-behavior": "44dc01e9ec0e4d85cecdddce53fc9c03b76a6a6c0049d23e7c08ca7004c5741c",
+      "4-evidence-and-its-limits": "3659b97bbefb7ddac47280929ff74421957f37668584d9ed2325d6dbdf37ea24",
+      "5-known-defects": "bed7b3d35747bd0d2dc050d442fb9c7c825efbcf6a9d88c6496d7e8aa71a1c98",
+      "6-resolved-decisions": "2ebca2836caae15cc5a19a60d160390e394383bc850d4da80d93060249296466",
+      "7-out-of-scope": "202e2268d1a5188bba84bb8767ac116fcff78b18c0013f63bf63d01c99588e3d",
+      "b-1-the-entry-stream-has-three-endings-not-two": "1ea1564e99e937f7c53a40b3a33bf466e617d7928add77e10dc205a6ac01bb3b",
+      "b-2-a-truncated-append-fails-on-both-channels-exactly-once-each": "894c6c634300b3ffded407fc5726654308c355eca3f3ac209b5a1dcdd64caab1",
+      "b-3-a-truncated-append-is-terminal-for-the-writer": "ee0b2a61111bdfabc9c6575193e18e1c6577479d9f856f6f563118bee38744f2",
+      "b-4-a-clean-empty-batch-is-a-success-and-writes-nothing": "b480cbac057ca3af3d4d76f06e83c6407d0877831a4bc33e1134350db3f383e2",
+      "b-5-a-terminal-writer-fails-its-callers-rather-than-panicking-them": "cecdcf9901c35d647f0f5eaa812efecb018ecc1264d5ccf68355dcce45183a63",
+      "b-6-what-the-persisted-prefix-is-and-what-it-is-not": "9170d26c3c7ce66e191240c2f65d9391186a597603312506eb9d20fb62fce396",
+      "b-7-a-rejected-append-reports-why-not-that-a-channel-closed": "bb46e000b12a60cb902fbe973c525a9167df9bdf457d2551e779d20334727ae7",
+      "b-8-a-torn-trailing-record-is-recovered-differently-from-a-prefix-and-tested": "f19ce6e2985c0a88862a3b0ae948e3d7a2e4fefd3e36c288d297dee667ec2578",
+      "b-9-no-acknowledgement-in-the-wal-crate-ends-a-thread-and-a-stalled-test-fails": "6b2a2397d05011e628cb56a47fbf32b7ce84489f5de19744fae4fbb7a64be6c0",
+      "verification": "2bf141c53ecd74eb5d18eb718efef147a1369aa01d8a46baabfa0df57adc4094"
+    },
     "sectionHeadings": [
       "021: Repair the truncated WAL append stream and the terminal-writer call paths",
       "1. Purpose",
@@ -73,5 +93,5 @@
     "title": "Repair the truncated WAL append stream and the terminal-writer call paths"
   },
   "shardHash": "644447f49889b741f9409e589f350fc37008248534d576490536a8afbad2f993",
-  "specVersion": "1.3.0"
+  "specVersion": "1.8.0"
 }

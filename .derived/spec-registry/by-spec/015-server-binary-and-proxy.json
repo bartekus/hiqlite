@@ -96,6 +96,24 @@
     },
     "owner": "hiqlite maintainers",
     "risk": "critical",
+    "sectionDigests": {
+      "015-adopt-the-server-binary-and-the-proxy": "8aef2f375982fe3774db04738f0606a11d2cea1d75e04394f09fb444faa8c752",
+      "1-purpose": "69b4bfe6f899212aae6ffa577835acad1f367bd153ec818dc9d4e81c6a57ce0e",
+      "2-territory": "41a324e49c55d9b442a1739dd98f91c243e3131af17cf6c0269d035ad3841ddc",
+      "3-behavior": "f0cbbf8bbacafe7540b158eac8b8966515128e1bdfb3646610a3772a249af330",
+      "4-evidence-and-its-limits": "352def02658e93499198541dcf033445286f72b811d06e10f4445f202587ac8c",
+      "5-known-defects": "81f5f55d855588ba2001dea21b13f5eaaf3bdbb5ad8730d47c7e65174f58e7e1",
+      "6-resolved-decisions": "d21c3cd7ed863b6ebf7964ef1d1bdf6067fc2b77d2e7f86bcc808d2532c0a521",
+      "7-the-inventory-declarations-this-spec-requires": "f13c3c9df4196f730a244d4ad7b512218ac50ce815561187a4c973bdb8452cd5",
+      "8-out-of-scope": "42f1dd424ffb30de6ee677701684cb2af0de621329e43d7b57778114a0c6749d",
+      "b-1-three-subcommands-and-what-each-one-does": "a04ac9dd8f0095d7ac89eb44b63e70039d58e6e1e263e1328d1d65f5984522e3",
+      "b-2-the-home-default-is-a-sentinel-string-expanded-on-one-of-two-paths": "be1c2d7840c13cc62ffc8068290cfcc4f1df265e9278a143193fc6949fcee759",
+      "b-3-generate-config-writes-a-second-copy-of-the-reference-configuration": "c1f4d92bbadc730ec9798e7f5aa2bad12dc048dbae297329b7c85f5bb8fd0ca3",
+      "b-4-the-proxy-is-a-remote-client-behind-four-routes": "a742e1031372b30309cd22a49e35372bfb819fd2a257644a990c91b81d028f50",
+      "b-5-logging-is-set-once-from-the-flag-and-ignores-the-environment": "0662936a2b4eaca8e791154fc68ed2ec7ae9914a4ad4cc837ae51f7901ee7205",
+      "b-6-the-proxy-s-validation-is-two-fields-and-one-of-them-is-misnamed": "3a718e1558dfbc77938a01cf14a03b5a7df817c6d8dffc31b2e0171a86d610fd",
+      "verification": "b3117773992214a43d9ca33eab9d11c6f382b0f10c1eee17774998716a5839f9"
+    },
     "sectionHeadings": [
       "015: Adopt the server binary and the proxy",
       "1. Purpose",
@@ -120,5 +138,5 @@
     "title": "Adopt the server binary and the proxy"
   },
   "shardHash": "63055127931a95b8931bdefee29a5bbb2588a9b1328bf2dce5fc3d6ea6fbffaa",
-  "specVersion": "1.3.0"
+  "specVersion": "1.8.0"
 }

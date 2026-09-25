@@ -57,6 +57,20 @@
       }
     ],
     "risk": "critical",
+    "sectionDigests": {
+      "003-define-client-consistency-and-retry-outcomes": "a1ec5f3782bcfd2eacdc1a55b5725a01c257ed0578b632a9f3228404de47ac52",
+      "1-purpose": "a6b5e02301eccf2b3cf15af9584db888956a4e5d95333421fd70078bb08d6793",
+      "10-resolved-decisions": "3bbd5aae4e5a10f906f536277304590cd1420678743c3c93f65d83c2e3606955",
+      "2-reads": "704bb9c1b049f87a5a385ddcfe82764164d848d4ff3fbdb660d91041c3a797eb",
+      "3-write-outcomes": "22e481502684b1bccdc38414d76b2ab7726b8f01336758303782808a975e9529",
+      "4-leadership-retries": "9af76f51f62491a59d62579469527e3ee32b6920016acf8c86d270ee648ff915",
+      "5-reconnect-response-buffering": "1764c5661da8c45ff262c6b09c95b942bd2b72066a2c857e78a37f96ae0e422c",
+      "6-external-mode-receipts": "b6cab7f7fc95b3e7397f10b15f80746c71a12484bd1de21a2d95c89a619337e8",
+      "7-known-defects": "04e346e857a1c2342eb74a50967293d4dd50bf1d1afe5da337311ab21c2013fd",
+      "8-intentional-limits-evidence-gaps-and-follow-up": "844234e70bdc1d1a5c1f5e8d7365e5ed06b21f0e8880298cde3b9d19f928867a",
+      "9-provenance": "3514a732573912bf3a7201e76a90d48815105d358a15a3af7498a1afd3f27998",
+      "verification": "83eefd98bdd87f91fc757143bf8ba7a09a33193bbaf0adc127c8ec586b259e24"
+    },
     "sectionHeadings": [
       "003: Define client consistency and retry outcomes",
       "1. Purpose",
@@ -77,5 +91,5 @@
     "title": "Define client consistency and retry outcomes"
   },
   "shardHash": "5cab15902c438d3895ed1a301e520fbe57291d5a88179a32c6f559858a228dc9",
-  "specVersion": "1.3.0"
+  "specVersion": "1.8.0"
 }

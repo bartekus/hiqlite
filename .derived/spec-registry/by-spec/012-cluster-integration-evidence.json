@@ -97,6 +97,24 @@
     },
     "owner": "hiqlite maintainers",
     "risk": "high",
+    "sectionDigests": {
+      "012-adopt-the-cluster-integration-evidence-surface": "0ed1a81e823a45a73f6aa9d6aa31919d5674fc2978dc19c32c043692c3b8e547",
+      "1-purpose": "d4f70f1a06899f817c71ac91414d4cb28dc5964c153ee7016e609d8fb83a0060",
+      "2-territory": "7d3731452314c3cb02aae273e09e963ea8925ff2a1fc51dbc661a179c3dec2b6",
+      "3-behavior": "a4a82bcdf559e313a1b8ae936c3b1826e1a23125e2aa4028eb054a44d348412c",
+      "4-evidence-and-its-limits": "bf294c8960661340c9177930992a0067e650a90186b739806b742a67a41f458f",
+      "5-the-stall-diagnosed": "39b4d69eeabe95cf035caf0d372ffde8efb462214baaf897450c1791ecd40d3e",
+      "6-known-defects": "26a85edb8a4907e653585d8a0d0681807b98c666a5946906c1019d72d463cdfa",
+      "7-resolved-decisions": "c33a6214017690f6fdc7a746d1a635a9ef6f99e87503df9d3a0d5087ca28a045",
+      "8-out-of-scope": "5608e6e83a491b735c19c79f4a4ab3b50128c580a7f64bbdeaa56a0b6e767334",
+      "b-1-the-suite-is-one-test-and-the-phase-order-is-the-contract": "37f909857fef97c6ad4c4d705322d17e346eb9153375773ae1194c1cc176d114",
+      "b-2-learner-only-is-a-second-independent-test-in-the-same-process": "594051fca738eecb4dde4d8ef16536f95781f39c08fd78565f605b577d4c9f6a",
+      "b-3-every-cluster-test-runs-with-tls-off-deliberately": "1174ad3ea69c6e9b428f6eb1eab2848620fc5dcba157669fe62bf985095133d1",
+      "b-4-the-fixture-configuration-and-the-two-variables-that-change-it": "bc4060f0c3eceb3d2f775d6b946fa426220f3df3a8e3c9c6a96a6295c10d1cf0",
+      "b-5-success-ends-the-process-any-panic-ends-the-process": "38fbc51872121fd5d4172370ed429c649f989650b8f3f16e33ff1fae500aa6e4",
+      "b-6-a-remote-client-s-event-subscription-is-asynchronous-and-unsignalled": "6dede8fa7b8b16aeefc0e3051bfeca127733fa08290861d7956a949bcbec8ffc",
+      "verification": "69feb55c90fd57bf36034e6f4343906524065fa2f303ddbe8cb308eadaec1199"
+    },
     "sectionHeadings": [
       "012: Adopt the cluster integration evidence surface",
       "1. Purpose",
@@ -121,5 +139,5 @@
     "title": "Adopt the cluster integration evidence surface"
   },
   "shardHash": "63352c7f06ccf6347decd725b94945ff041b4515a11dc26bd7b46e6642a8f5c8",
-  "specVersion": "1.3.0"
+  "specVersion": "1.8.0"
 }

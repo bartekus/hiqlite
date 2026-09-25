@@ -62,6 +62,28 @@
     "implementation": "complete",
     "owner": "hiqlite maintainers",
     "risk": "critical",
+    "sectionDigests": {
+      "008-repair-the-wal-append-completion-notification-contract": "836bcc4fc56f90926ab2e7e483d44aea8c8597df392934459cfd98d42cc94bab",
+      "1-purpose": "773edd3a4d48ac9dfc2ee5d10a36961785f9467ac7ab1ecc5699256b6f6b670f",
+      "2-territory": "b1dae7296d114660c27f6351e04fda2d96f3bd9710def36bf81945b4f0a6b423",
+      "3-1-the-three-notified-outcomes": "0d7557ce8b900e05f4731541d68acee9e080bbf7daf743884bc62a17c0199944",
+      "3-2-ordering-unchanged": "f81fea747b28769fe6e8b95c2e4671b6c63e71b5df58910ac9e60165c522490e",
+      "3-3-notification-cardinality": "cbae7097af5e6bcc742ffc2830bf6beb4f4434444cc403af79c6b874d670f8b4",
+      "3-4-per-mode-statements": "544df627b85381663482bd2a607a4b298e73330d97a6ce84b90d9c9c04fb26ba",
+      "3-5-the-adapter-boundary": "af8b11f4c5205e8993d088b19a8e7d4b1fdb3d89cc7f3d4b2263b0d58ca40a33",
+      "3-6-writer-termination-and-its-report": "d82a6dffdcc2f060ac16c4207195151fb8c3b748f26736a716445e711c55ed11",
+      "3-7-public-api-surface": "39705ea319b6d34d26552cf1eeb77be136a6fc5b95f1be5be4e70e4a1f450534",
+      "3-behavior": "c8920a61fd3b0b32ed5b3a153b69a106709a59e33a68eb25b7516788115c8ca6",
+      "4-1-what-the-writer-level-tests-establish": "9935e0b9a9416997a3712443553beeba47e8f7a3187ba17a53f25cb9749d6ebe",
+      "4-2-what-the-adapter-boundary-test-establishes-and-why-that-boundary": "f3c5c45d199cbc1caf827ee5fd52f5622fc97d2c24ac28a9386ace0854b70363",
+      "4-3-scheduling-dependent-outcomes-on-the-rejection-path": "01a3cb22453d0defe4bfd310795921de52d74965302395677678c6b222b5f097",
+      "4-4-the-before-state-demonstration": "5fa7fa443abbdc5c169ac3f51413a837188f0af0dd181fbed620643bf9692cdb",
+      "4-evidence-and-its-limits": "b6feb309ee08cc9148670bb7b511c91734ae6266fd6502f633fa7f535b8ae452",
+      "5-known-defects": "987deb7db56f62b70af593953ea5eea8cc08eeff1f2a76f1fd052da6b6b0ad02",
+      "6-out-of-scope": "dd0d07816a42a633e003e77dd38f1a5065fa2753860f7e33d3dc00896968c92d",
+      "7-resolved-decisions": "68d531f67a26a9c2d64af0697dab321b6f5609a0abc0339f21ef7891c5ae59e8",
+      "verification": "7495eedead28177b87857e0a9854cba495a848a6505353403e76b6389eb53b2a"
+    },
     "sectionHeadings": [
       "008: Repair the WAL append completion notification contract",
       "1. Purpose",
@@ -90,5 +112,5 @@
     "title": "Repair the WAL append completion notification contract"
   },
   "shardHash": "090382389e0a395a58719414792b70b1607eb8dd68ffee720c43cb446639579c",
-  "specVersion": "1.3.0"
+  "specVersion": "1.8.0"
 }

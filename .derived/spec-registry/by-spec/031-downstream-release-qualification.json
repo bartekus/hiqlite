@@ -81,6 +81,25 @@
     "implementation": "complete",
     "owner": "hiqlite maintainers",
     "risk": "critical",
+    "sectionDigests": {
+      "031-qualify-and-publish-the-downstream-release-under-distinct-package-names": "e73dc21f278d38bc404400f9dd014e692400ca55365281b25c19f31c72d0119b",
+      "1-purpose": "a334c2149ab5bfb1b7cb992427be9c1f0c1f3c3cb3743e830afb2350eb999981",
+      "2-territory": "06f9e65af94b1891e55dbb8f0eb5dcaa4b2ebb11a86bb453c4837e8d762b76c3",
+      "3-behavior": "287b4522f09deb7468f44581a63d3807c2c1bf90d46ac0c80dac2df79f051c55",
+      "4-evidence-and-its-limits": "7492fcf479c373776af9903fe95c42cca34985b3ecfca50f4c5ec6b5bbf80a91",
+      "5-known-defects": "07ae31611927ac5f26d5e009222dd43430bfefae375a83b0e75ad61e6f69abd9",
+      "6-resolved-decisions": "3fe4ce459498206bde09c359ca5f3cfcf83f1c080313d8d863dec647b8b91ce9",
+      "7-out-of-scope": "fd5660be97101080497995430e078f29e4e0c0d394ec2329569f827949d2b9be",
+      "b-1-one-version-and-it-says-what-it-is": "5c9570d45f83c2cde08167643577498bae8800e6a86642f5af16389f43260337",
+      "b-2-the-packages-are-renamed-and-the-libraries-are-not": "36f83bd90f65ddb72a31746e7369c198234e3436c1f823bd2d2a8d29a7d5cd25",
+      "b-3-every-manifest-says-it-is-not-upstream": "c55eb555fd01eb3f5a0f8dc10739b22373b73c9a64ce5057de4a77345443fc2d",
+      "b-4-publication-is-dependency-first-staged-and-never-no-verify": "005b0cbef550081cde6812552e88e46e705f0855feae7a164dafc25f5a420451",
+      "b-5-the-registry-token-and-the-review-credential-never-meet": "49497e276d87251bd58e59eab083224ef5231bab0294005d201d8af3488c531a",
+      "b-6-the-tag-and-the-manifests-must-agree": "451ca604ac131a2cff2dad00b6582f36b7ba8507b25602e7cca36369e20c8ef0",
+      "b-7-the-lint-matrix-compiles-the-server-feature": "d7aec33c2cd9fc118a743beb622f517fa91a5d7448153eaa9f7c19d053a383ed",
+      "b-8-the-qualification-graph-is-committed-and-the-consumer-graph-is-qualified-separately": "061167ebfeeb45dec862ced4503c77f13912806a1db947523d840c293e66f560",
+      "verification": "711c39a1411a4f116375f5234e6a9888efc4aa4792252378834180aa9d472e80"
+    },
     "sectionHeadings": [
       "031: Qualify and publish the downstream release under distinct package names",
       "1. Purpose",
@@ -106,5 +125,5 @@
     "title": "Qualify and publish the downstream release under distinct package names"
   },
   "shardHash": "cc0ad88640f82ccaad24657b1dde2d71afbdbff4432241203b33440bd6a96faa",
-  "specVersion": "1.3.0"
+  "specVersion": "1.8.0"
 }

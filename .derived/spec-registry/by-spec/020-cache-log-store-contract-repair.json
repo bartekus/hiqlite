@@ -55,6 +55,23 @@
     "implementation": "complete",
     "owner": "hiqlite maintainers",
     "risk": "high",
+    "sectionDigests": {
+      "020-repair-the-cache-log-store-against-the-locked-openraft-log-storage-contract": "1682094869714588dad8df2e583a4f9009be138dc79474790933630acf0de58f",
+      "1-purpose": "c72b4e7dec0061c0f9be3e1e5333d611780820fed67fb53a5c74b41781b16753",
+      "2-territory": "90a49e85af215f1430e440de95c838b94138d2074d8de00590834de800205724",
+      "3-behavior": "0f1a679cafcbccab5617d5c9b919854dca44da96bb1435907da003cc928daa9d",
+      "4-evidence-and-its-limits": "7e04ba45511c1db12a0a6753affa3797f6a8235232c24720d39c97251d81c63f",
+      "5-known-defects": "4f4f0dbd84e555084c9b0e60ac3ecfbae1a65c538e9890f730e320a21d766cd4",
+      "6-resolved-decisions": "f46aa59d72946853c02ac94e9154c7c3ace2243073f87a712ad232909bec7f2b",
+      "7-out-of-scope": "1d423f0960785b89ac0a54773c806e64d16705b40ab5d172b575d8214e375ad2",
+      "b-1-one-lock-order-data-then-logs": "c1f16f6b995c8937f7912656e9801786e118ae2fb4c84442b1b1c73c84d78ce5",
+      "b-2-get-log-state-reports-the-real-frontier-and-falls-back-to-the-purge-point": "5e697cac023b34221cab7a21db1bb8291e5d1e287969d467763d03581188ae05",
+      "b-3-purge-removes-inclusively-and-records-the-frontier": "c217c7184b13261740fd20b6f5e0fc9b6975c215e618cdd641075a328cd59be3",
+      "b-4-try-get-log-entries-tolerates-a-range-the-store-does-not-hold": "9b217c66ad6d2d10c5751377b5780e7bbd545ded5b63552634633827c727d6a7",
+      "b-5-the-debug-assertions-compare-like-with-like": "812c0a67735b3f0850ceb21fba0ebb932f6f8eeea06c480da5c46f635308f9fe",
+      "b-6-append-is-unchanged": "053e9b97b7496d471d963d936060745bf6b490ecab18dbc314a2caf0fee3e171",
+      "verification": "0fcfbf563c199c4f012fa685ce6cdb16303f784697e8c837beb885cfcb77998f"
+    },
     "sectionHeadings": [
       "020: Repair the cache log store against the locked OpenRaft log-storage contract",
       "1. Purpose",
@@ -78,5 +95,5 @@
     "title": "Repair the cache log store against the locked OpenRaft log-storage contract"
   },
   "shardHash": "367c90a2eb7361d8780bc972ea31067771c73c421ba5a4976248eaa69033299a",
-  "specVersion": "1.3.0"
+  "specVersion": "1.8.0"
 }

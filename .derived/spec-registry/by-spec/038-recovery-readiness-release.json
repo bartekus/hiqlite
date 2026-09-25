@@ -84,6 +84,22 @@
       }
     ],
     "risk": "critical",
+    "sectionDigests": {
+      "038-release-the-startup-recovery-readiness-repair-alone-as-0-15-0-patched-3": "680579959d0a7700334bdd69d19a5c6048c3bdabb22112ceebad83cfc5e6ab11",
+      "1-purpose": "438a1774f7cc3c1405f07c80660de4b2d05d18265883b7af20ebdef25acdef56",
+      "2-territory": "f681f51f6cf43674c14c0590d47399f28d4778b6ad4440161dda02ea9cd7e2e3",
+      "3-behavior": "eda2137d826bb2a927c26d6dd02bc5af9ae5e7531270f67b2212925e9d810300",
+      "4-evidence-and-its-limits": "022db1535d6fd7ec2969035e9fd5e9a9bb1b836c1f8f084a82351793212981c6",
+      "5-known-defects": "c7b1c80951c0a072fdad0b2d935b803a8d9b8d9d965d2cc9f1dc5025ff7377f7",
+      "6-resolved-decisions": "7b21ab9f6aee252492b86358bd378d0edf05bcbe5d3c75e523635ab407a803f8",
+      "7-out-of-scope": "5c9f474ecf40fddbb0663f80fb01925ac29f43077cddbb0f5a8e6b58a63cbc3a",
+      "b-1-one-version-three-packages-in-lockstep-exact": "c95b18a9fdc5e2ad62e20ce9153b0644a2bf570f30dfba2eac18054be12b74b0",
+      "b-2-this-release-carries-037-and-nothing-else": "7c8afbf6e1f2523efda87b7b0291eea85cd2e186c646618cc3b6f5053d28abb2",
+      "b-3-the-consumer-handoff-says-what-changes-for-a-consumer": "a63661ecd1b02584fd5f5a469f0f5c5478f33fd04ec4fb4e3474424238e3afa4",
+      "b-4-the-release-tree-is-qualified-as-itself": "17baffa7887529e8c7689785c89786d8bd42605549035b5257c37c0c66974a93",
+      "b-5-publication-adoption-and-ratification-are-separate-acts": "e503da494937202489f60bef1c842255da41fbe134383fe59a99aac26d9dfaa6",
+      "verification": "38868d5b99dbd6556ebb2bee39486712ad0ad6cc10f830704966190c73bcb1ea"
+    },
     "sectionHeadings": [
       "038: Release the startup recovery readiness repair alone, as 0.15.0-patched.3",
       "1. Purpose",
@@ -106,5 +122,5 @@
     "title": "Release the startup recovery readiness repair alone, as 0.15.0-patched.3"
   },
   "shardHash": "21cea3d5795a36a6930ee75499ffe818ef50e98d594908bb465b65487f0aa922",
-  "specVersion": "1.3.0"
+  "specVersion": "1.8.0"
 }

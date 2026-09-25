@@ -48,6 +48,22 @@
       }
     ],
     "risk": "high",
+    "sectionDigests": {
+      "007-define-the-in-memory-log-store-for-the-cache-raft-group": "125a811e1a78a794b17207c8e063b813ff5840f62ad33df00c8d5e1941f95db8",
+      "1-purpose": "7e7289d40d6cf0dcbdcccc40c815c7815f7888c9e8f98e622d8f82d147fc0e1d",
+      "2-territory": "493d6afd7da634604675888ea3cdb7f728a9475ecadbbf2bd12e698186409b1d",
+      "3-behavior": "b0428e762516a137b6746d76efba9c8c18273bca04036f50134dc74b51b658da",
+      "4-evidence-and-its-limits": "c9c2582cc92974015b015ce0e3b6c6187b72bed85e2e2ce2e6846bd71371cefc",
+      "5-known-defects": "8e5cc16bce6e3d2ede02865f93a0f6f6a2d54fabafb75882d1e348bfa820a07a",
+      "6-out-of-scope": "432e6245783fd0974ec636f033e81b1e5d56ff86821b2a60b17a3b2ed9250727",
+      "7-resolved-decisions": "bef149d58d1f4969dce1c4c5f9e6b4934867f6ed95a15d503d79b7046f7f6424",
+      "b-1-the-store-is-deliberately-non-durable-and-that-is-the-contract": "4a17a8036d698b15df123737b4c26b1bedb0f5ebd2950e3a0b1d2cea91ca3888",
+      "b-2-vote-is-stored-in-memory-and-read-back-unchanged": "2d31882b774183aa8f4dbc50a33b9dda6de8bbe1f8e55ba82a9c07d5eb45d87d",
+      "b-3-append-is-synchronous-and-completes-immediately": "631d82760528cf9235ee91884516d31c20e6580ab551fcab1e005d3d66346d0e",
+      "b-4-truncate-and-purge-are-offset-arithmetic-over-the-deque": "6bb6da3595640d5251d617b7ec44738a4ec5de9f95e9ffae9acd6bf0c64b2b1a",
+      "b-5-several-invariants-are-debug-only": "6eae7e6974f0c1ef404d6aba7846e6bb551a765b145440c4e1c006ae430f1b1d",
+      "verification": "cee7c1dd6afb0e44f7227cab6debab026b64d918a05e1f7d4f3d26ec04715b2c"
+    },
     "sectionHeadings": [
       "007: Define the in-memory log store for the cache Raft group",
       "1. Purpose",
@@ -70,5 +86,5 @@
     "title": "Define the in-memory log store for the cache Raft group"
   },
   "shardHash": "d9a972919f7b664880d7dc02298f0876f83d45db93cec960526221924b894c0d",
-  "specVersion": "1.3.0"
+  "specVersion": "1.8.0"
 }

@@ -130,6 +130,28 @@
       }
     ],
     "risk": "critical",
+    "sectionDigests": {
+      "035-exclude-every-live-node-before-the-legacy-cache-move-and-hand-that-exclusion-to-the-node-that-starts": "846f9f9466bb23483e88d3b67e56eb179af8a5b6fb652faa4ab5b61cc84e3deb",
+      "1-purpose": "e677acb2e584d3ae2153ea2e2a3e7e76a63538421a1b660bba5e990019e9bde8",
+      "2-territory": "1b121ef91c8751f30722e6b3cdde3c784caea493f516da5fa2dd5b437d2169ab",
+      "3-evidence-by-class": "594b1a60dac58dcd96f9eff7c08a3e382e0e9cb8714ccaf801f0d5b21755daea",
+      "4-behavior-the-repair-contract": "af4e96b93296a1f8c8e3391d9e67c7ebb06159066cafb3e37e28006cc901e543",
+      "5-1-results": "10b82138426215899ae346da048cd96e790c7417fbeb36b773baab55fc8cbc62",
+      "5-acceptance": "05526c5f5c071ca7ddfe5d69e7bc62627d933fb1a98c24b4d16d3e9b3b3a16ad",
+      "6-known-defects": "df7335a99455e7e2dae8994d604351fe1c7db52ac9c1a6d16c73a1544d16e663",
+      "7-resolved-decisions": "240c0783d60d76b3741ecf7fa51799b67d2dc8ac3b940757fe43627040e965bd",
+      "b-1-exclusion-precedes-every-mutation-and-covers-both-versions": "0c58831d9bbd7dd37199df399d6eeea25ff87ca53795717f4208fb94f3e9fbc6",
+      "b-2-lock-lifecycle-and-handoff": "3fc25d6ee19ec6aaab9473d7ba3418d341826f92b0d98190f604d99537c8fbd9",
+      "b-3-refusals-are-errors-and-say-exactly-what-they-left": "e71d9825aa366e2f883b446c4de56c13c4d4921656bada605532352d95e7939b",
+      "b-4-the-old-version-before-and-after-the-repair": "dcb2d32ff39e5b37c155ef9dc422a5d89ef88dab65d8191b4497fff6de281d6d",
+      "b-5-the-consent-move-is-one-resumable-operation": "663d29a75250906f74758d2370c0120dfc7713d3d398d2cd7ac7000192386ec6",
+      "b-6-a-consumer-exclusion-handle-if-the-owner-adopts-it-proposal-d-17": "0f98d0c0442728c4e686ffd30a2b1d7b4c4afa9c549a71c2cda66ecb73c3f261",
+      "b-7-release-and-adoption-are-separate-acts": "a32a9977c68019dd4f6a3cf2fde27367ac31ed45e2e59589159fd0b76159dd93",
+      "real-versions-in-qualification-n1-upgrade": "d287d7d2ddba521eeacac7974eda731bb69a508670c246511373f31edb19f9b5",
+      "regression-tests-that-also-run-against-the-published-source": "db0bbacdc58399a024289a51cbdbc9297b80fad19fe07b0c86a6afb92c966538",
+      "unit-and-in-process-hiqlite-src-upgrade-exclusion-rs-hiqlite-wal": "13ad948cc1226bcef43606c71d92de73f4e7169273645367c90f94b1d5461355",
+      "verification": "7c5df81541bf9e6f230a020d7c4efccf654eeb6a8e2cdde1b44c5b81762d42b4"
+    },
     "sectionHeadings": [
       "035: Exclude every live node before the legacy cache move, and hand that exclusion to the node that starts",
       "1. Purpose",
@@ -158,5 +180,5 @@
     "title": "Exclude every live node before the legacy cache move, and hand that exclusion to the node that starts"
   },
   "shardHash": "07241096d9c94c1c5c686360ee3232b142d65ea89b667e0d0805b38e549a3fc1",
-  "specVersion": "1.3.0"
+  "specVersion": "1.8.0"
 }

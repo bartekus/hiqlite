@@ -45,6 +45,23 @@
     "implementation": "complete",
     "owner": "hiqlite maintainers",
     "risk": "high",
+    "sectionDigests": {
+      "023-repair-the-distributed-lock-handler-s-liveness-and-state-the-lease-limits-it-does-not-remove": "ad8ca862251fd9ebfc24781f1ce5e62613c0d3cdf29ba92f703d84af35c3f6f7",
+      "1-purpose": "527633391891f72cbca249911d396d8d955a16690f544087545e641b75b7eb7e",
+      "2-territory": "09611e57f935a8efbe8ff98410a60398ca7312d74e268e1bbf70439ae75bd7b3",
+      "3-behavior": "dcd25ff180e622d499557cb5784d6bd958d49ed2be8f1b46481f9893f5a5fb3c",
+      "4-evidence-and-its-limits": "b373de6dabcc5250ad2525050cf3300e748c1144fd6ac50ec972a666330325eb",
+      "5-known-defects": "aa275f5299c8692947870d8b398af3b81501081c034af1638c633b55cff786a6",
+      "6-resolved-decisions": "c5ae0fd61d9e6e510b38480ebd4566e572411b13ab7a5f309bfc87143b657fdd",
+      "7-out-of-scope": "2aaba0845da42f080b516f97d8dfbd4c17442aafb62c58a2c07054bdb72e06db",
+      "b-1-no-client-can-kill-the-handler": "555e1f18a6b19a37edeed3b1e882e907823a6abf1886835e8c3442deaf58abb1",
+      "b-2-a-grant-nobody-received-is-not-a-held-lock": "5e0c4499be6313b8be46d98ee70711d5a1597c7a71f2c4b4c609c7e49a83bee2",
+      "b-3-a-promoted-ticket-gets-its-own-deadline": "fdcb94e52c1481d00a39d9c0a56d4dabde9c76178a605a2a7e3693bfd1ae0d6f",
+      "b-4-the-awaiter-map-shrinks": "80d4d2442c4d9e2ec2da02f601ddcb3c6e18ab72c85a2a96bdf4bce6d1ddfc12",
+      "b-5-the-lease-length-is-unchanged-and-injectable-only-for-tests": "b8aad9b83c6ef3fe8fc094eb9ae704c99577d28f30f44e16c796d840052fd27b",
+      "b-6-a-waiter-is-bounded-by-the-lease-and-only-replicated-requests-change-lock-state": "425686198168a23499aca4233c68bf77ea99b48d07e3494a8010394ca4aa1848",
+      "verification": "02143c7ae78f10e776b821ea1f94dea28466c112a25911a53a45bb0c13a6075c"
+    },
     "sectionHeadings": [
       "023: Repair the distributed-lock handler's liveness, and state the lease limits it does not remove",
       "1. Purpose",
@@ -68,5 +85,5 @@
     "title": "Repair the distributed-lock handler's liveness and state the lease limits it does not remove"
   },
   "shardHash": "20a5d96915df634797ee85403c40e7c34f813f242f51ef317220274c06f25d20",
-  "specVersion": "1.3.0"
+  "specVersion": "1.8.0"
 }

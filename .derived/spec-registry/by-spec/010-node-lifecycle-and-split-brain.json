@@ -72,6 +72,27 @@
     },
     "owner": "hiqlite maintainers",
     "risk": "high",
+    "sectionDigests": {
+      "010-adopt-the-node-lifecycle-and-the-split-brain-observation-path": "789f493d209dfbc00055d28387ceea677c43136c21cce2b39b1c09a0b62936bb",
+      "1-purpose": "c2d9b5e0e7c1b293b8a1febdf4ee98a714f67dfc8569855d68ac1c5715364a39",
+      "2-territory": "dbe4906e0488a7dc761eb24141b20e31234a98fc8b29cb505ffc82dcad42ce99",
+      "3-behavior": "ae4e48f3b1ed0bfc974c2a41ae94cba884cbdd5cee0dbd974d81cbb4dfc15f6d",
+      "4-evidence-and-its-limits": "4c38d436a6c82a33b4cbc095ef7be244fc5d8b6e6cd3b66093b108f17ccbeae8",
+      "5-documenting-hql-split-brain-interval-and-why-only-in-hiqlite-env": "ad34e683c89e6ccc7307f38c9035816baf9a4144c39027ab8f5747cb057df822",
+      "6-known-defects": "277907954d4062304b5695d0e6415722e5320adb2a7bc394d84451913a53e279",
+      "7-resolved-decisions": "05c6ad983f6e2912da8db75513320835e63abf7c73bf20642a17a1e4306e17af",
+      "8-the-inventory-declarations-this-spec-requires": "cae379d4bba51f89d1f3416abbda85872aeb9a05e7ffab4e9bfa725e3a8b4504",
+      "9-out-of-scope": "cac26acc3f24bcaf0df3927b3c3902fccc558262aa85377839464f2763887c95",
+      "b-1-startup-is-a-fixed-order-and-most-of-it-is-not-recoverable": "5ec0e6a2fcdb67f1513dbe596002141d893af4bb7dcedc367afaea784ab0a527",
+      "b-2-a-node-s-listen-address-is-its-own-host-plus-its-peers-idea-of-its-port": "69f8c964b982e0cff8a9ca3152ee54cbd192f92a243e9b05f62e228a26d11bc9",
+      "b-3-node-identity-is-resolved-two-different-ways": "50fe31612ef08091549dd4cbd52ccece1b95a52aa5ea79bc9534fed2b52742f1",
+      "b-4-a-pristine-node-1-initializes-itself-and-checks-first-that-it-should": "c69221c18528037dab4e0176f3f23a9bb8ffa655faa47ea880fef59d192e526a",
+      "b-5-every-other-node-joins-as-learner-then-as-voter-and-waits-for-both-to-replicate": "9df27af7c973b7e2ccbd1eeb1c0bfdcaaecc1a7e981efefb0b6b8d6bebac86d4",
+      "b-6-appstate-is-the-process-wide-node-state-and-two-flags-gate-readiness": "e3feae8762db51f90fae94adde5c99fce265aa2ae61da2452b704ffd4da545cc",
+      "b-7-background-tasks-are-spawned-and-owned-by-nobody": "9e35f64521256ae716a937189958a9d80955c074eb4db233a900c80b53f9d4e0",
+      "b-8-the-split-brain-checker-observes-and-reports-only-to-the-log": "5aa03a0144c1fb56bb36c7609956abdbf42e7a49b3c52ccbfd009e78357d3c1c",
+      "verification": "e2ff6b9b669b4a28f3ae6abf822b773bd99447f5ab3d6a90a75ea86d1c12668a"
+    },
     "sectionHeadings": [
       "010: Adopt the node lifecycle and the split-brain observation path",
       "1. Purpose",
@@ -99,5 +120,5 @@
     "title": "Adopt the node lifecycle and the split-brain observation path"
   },
   "shardHash": "af28c8d2ef803b92fbd0714f0cbb3bf89f348ad4be100465a6bec918638de12b",
-  "specVersion": "1.3.0"
+  "specVersion": "1.8.0"
 }

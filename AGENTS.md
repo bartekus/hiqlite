@@ -30,10 +30,10 @@ never against upstream.
 ## Governance model
 
 Governance is provided by `spec-spine`, pinned to source revision
-`aa559f5dcaa59bd9f27b0622b51ae5b57dc2185f`. The binary reports `0.20.0`, and
-`spec-spine.toml` sets `required_version = "=0.20.0"`: exact equality, not a
+`8f2a8f75000af8f8c7348d87928891306b8d65a6` (the `v0.26.0` tag). The binary reports `0.26.0`, and
+`spec-spine.toml` sets `required_version = "=0.26.0"`: exact equality, not a
 floor, so any other reported version is refused. That equality still admits
-every revision that reports `0.20.0`, so the **revision** is the reproducibility
+every revision that reports `0.26.0`, so the **revision** is the reproducibility
 boundary and the version requirement is the coarser of the two.
 
 Authority, highest wins:
