@@ -1,27 +1,17 @@
 {
   "mapping": {
-    "amends": [
-      "004-governance-harness",
-      "017-examples-as-documentation",
-      "019-dashboard-build-contract"
-    ],
     "dependsOn": [
       "000-hiqlite-ownership-bootstrap",
-      "004-governance-harness",
-      "005-adoption-assessment-and-plan",
-      "019-dashboard-build-contract"
+      "006-cache-state-machine",
+      "023-distributed-lock-lease-liveness"
     ],
     "implementingPaths": [
       {
-        "path": ".github/workflows/acceptance.yaml",
+        "path": "hiqlite/tests/lease_wake.rs",
         "source": "spec-edge"
       },
       {
         "path": "spec-spine.toml",
-        "source": "spec-edge"
-      },
-      {
-        "path": "standards/spec/adoption-plan.md",
         "source": "spec-edge"
       },
       {
@@ -33,14 +23,14 @@
       {
         "locations": [
           {
-            "file": ".github/workflows/acceptance.yaml"
+            "file": "hiqlite/tests/lease_wake.rs"
           }
         ],
         "ownership": true,
         "sourceField": "establishes",
         "unit": {
           "kind": "file",
-          "path": ".github/workflows/acceptance.yaml"
+          "path": "hiqlite/tests/lease_wake.rs"
         }
       },
       {
@@ -59,19 +49,6 @@
       {
         "locations": [
           {
-            "file": "standards/spec/adoption-plan.md"
-          }
-        ],
-        "ownership": true,
-        "sourceField": "extends",
-        "unit": {
-          "kind": "file",
-          "path": "standards/spec/adoption-plan.md"
-        }
-      },
-      {
-        "locations": [
-          {
             "file": "standards/spec/findings-register.md"
           }
         ],
@@ -83,9 +60,9 @@
         }
       }
     ],
-    "specId": "028-enforcement-readiness-and-acceptance-control",
+    "specId": "039-lock-after-restart-evidence",
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "47aa4f548a569823d1baa6df89d5f7e23e0ad98afbe53fa96accc4923381eef6"
+  "shardHash": "d15b58e35932656bc27673e17309ff9579642537d5d2a689337549e369d95af8"
 }

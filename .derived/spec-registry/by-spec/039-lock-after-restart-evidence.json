@@ -1,0 +1,73 @@
+{
+  "record": {
+    "created": "2026-09-25",
+    "dependsOn": [
+      "000-hiqlite-ownership-bootstrap",
+      "006-cache-state-machine",
+      "023-distributed-lock-lease-liveness"
+    ],
+    "establishes": [
+      {
+        "kind": "file",
+        "path": "hiqlite/tests/lease_wake.rs"
+      }
+    ],
+    "extends": [
+      {
+        "nature": "additive",
+        "spec": "005-adoption-assessment-and-plan",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/findings-register.md"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "000-hiqlite-ownership-bootstrap",
+        "unit": {
+          "kind": "file",
+          "path": "spec-spine.toml"
+        }
+      }
+    ],
+    "id": "039-lock-after-restart-evidence",
+    "implementation": "complete",
+    "origin": {
+      "retroactive": false
+    },
+    "owner": "hiqlite maintainers",
+    "risk": "medium",
+    "sectionDigests": {
+      "039-a-lock-left-held-by-a-restart-is-granted-to-the-next-caller-within-one-lease-and-a-bounded-margin": "a46b1ccc8d37f58d39e4ab20b15f91f0fbb324779a6c31862e204239c33fb3d6",
+      "1-purpose": "739d1800fdc5f85dcd5cc18eb67a177753ee2bb6d2af524fef292ec8986c4535",
+      "2-ownership": "607377e31fb285bba0e3dd84b4385b00a94071632fafab789d58ba839b31fe42",
+      "3-behavior": "1876a5e5fe6f78fcfecfbaa2194651f5b0864cc3fd0b6c72f60a3868c43b05da",
+      "4-evidence-and-its-limits": "38aabc2a4446f102f8ab35ba8b59435ebe4689e4dec828e3a89153736d1b6de2",
+      "5-known-defects": "d61f1ab07da0df8ccec42322892f9b7d097ada099a21b7454fae31dfd47061be",
+      "6-out-of-scope": "0173766e28c8af1393f5b6b8e59f959a9620424578d582e74aecd96a3ff9f29d",
+      "7-resolved-decisions": "d489bae14a1b4679be2f7ce4d140438170f2d49bf40e9d5425950791eabb7d59",
+      "b-1-the-next-caller-is-granted-within-one-lease-and-a-bounded-margin": "cc5ffdfe9f47438f8027ade8c87343a5b30ab7792c26eb54cb16a12deed62bd8",
+      "b-2-every-queued-caller-is-served": "8c98edcfc17546db1c59a3289e0581884fdd9cba9ffe5f883835ba262d1c071e",
+      "verification": "4a547f69e3e06afd274c386824672f974c6b70cc684a18d3e5b0f35ecd460541"
+    },
+    "sectionHeadings": [
+      "039: A lock left held by a restart is granted to the next caller within one lease and a bounded margin",
+      "1. Purpose",
+      "2. Ownership",
+      "3. Behavior",
+      "B-1. The next caller is granted within one lease and a bounded margin",
+      "B-2. Every queued caller is served",
+      "4. Evidence and its limits",
+      "5. Known defects",
+      "6. Out of scope",
+      "7. Resolved decisions",
+      "Verification"
+    ],
+    "specPath": "specs/039-lock-after-restart-evidence/spec.md",
+    "status": "draft",
+    "summary": "rahi reported (its 045 D-22) that a distributed lock left held by a restart strands the next caller until its request times out. This spec records F-138, shows with an end-to-end restart test that the stall is the upstream F-102 behavior `023` B-6 already repaired, and holds the bound the fork gives: the next caller is granted within one lease plus a bounded margin. No source changes.\n",
+    "title": "A lock left held by a restart is granted to the next caller within one lease and a bounded margin"
+  },
+  "shardHash": "4a9174ae3ae0428e18879ca31506354e63df5c97c43fa7f0d17ed2a2a483ccea",
+  "specVersion": "1.8.0"
+}
