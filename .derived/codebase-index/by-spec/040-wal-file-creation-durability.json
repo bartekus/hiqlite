@@ -1,17 +1,16 @@
 {
   "mapping": {
+    "amends": [
+      "001-wal-durability-and-completion"
+    ],
     "dependsOn": [
       "000-hiqlite-ownership-bootstrap",
-      "006-cache-state-machine",
-      "023-distributed-lock-lease-liveness"
+      "001-wal-durability-and-completion",
+      "008-wal-append-completion-notification"
     ],
     "implementingPaths": [
       {
-        "path": "hiqlite/tests/lease_wake.rs",
-        "source": "spec-edge"
-      },
-      {
-        "path": "spec-spine.toml",
+        "path": "hiqlite-wal/src/",
         "source": "spec-edge"
       },
       {
@@ -23,27 +22,14 @@
       {
         "locations": [
           {
-            "file": "hiqlite/tests/lease_wake.rs"
-          }
-        ],
-        "ownership": true,
-        "sourceField": "establishes",
-        "unit": {
-          "kind": "file",
-          "path": "hiqlite/tests/lease_wake.rs"
-        }
-      },
-      {
-        "locations": [
-          {
-            "file": "spec-spine.toml"
+            "file": "hiqlite-wal/src/"
           }
         ],
         "ownership": true,
         "sourceField": "extends",
         "unit": {
-          "kind": "file",
-          "path": "spec-spine.toml"
+          "kind": "directory",
+          "path": "hiqlite-wal/src/"
         }
       },
       {
@@ -60,9 +46,9 @@
         }
       }
     ],
-    "specId": "039-lock-after-restart-evidence",
+    "specId": "040-wal-file-creation-durability",
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "f6a2db1b137e81e8667c5e69aae1c82cc921e6b54afbc37914da6622637e5f0a"
+  "shardHash": "ccbc1fd29dfde076c50ecd292336f40ffc9aed24b8cace5f3270a551e372fad3"
 }

@@ -3506,6 +3506,12 @@ that cannot be recovered. `001`'s durability statement is about data syncs and
 does not cover the name. The metadata write's best-effort directory sync
 (`metadata.rs`) is the same class and is already `001`'s stated limit.
 
+**Repair** (`040` B-1, B-2, 2026-09-25): `WalFile::create_file` flushes the
+header synchronously, `sync_all`s the file and syncs its directory, returning
+any failure, at the first file and at every rollover. Observed failing first on
+`3d6f582` through a test-only record of directory syncs; the metadata write's
+directory sync is unchanged.
+
 ### F-136 `limit`, confidence `high`
 
 **`027` B-7 does not name the `hiqlite::tls` changes against 0.14.0.**
