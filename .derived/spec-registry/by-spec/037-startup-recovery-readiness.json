@@ -96,6 +96,22 @@
       }
     ],
     "risk": "high",
+    "sectionDigests": {
+      "037-neither-healthy-nor-ready-and-serving-nothing-until-startup-recovery-has-applied-the-log": "60eb5137e100e1e43d46be5a436cb6c2a9c3e26056cf65b585c823b99c7fe52b",
+      "1-purpose": "4d4bcbef3306a2d5157e6e55d842d39236acda312bf68cfdd6a58f56b92e7a32",
+      "2-territory": "ff1cce5a92b5c08e8c69ba1693d69b8b38f69af2bd00db9f789d5698a1b14b62",
+      "3-behavior": "5b8d9a7c1dfb6734860f2bd3657ef97d58c885e0e43951d9596678bd1a0ac974",
+      "4-evidence-and-its-limits": "b8634b70e69c64d95d71f69d958e19b89916f5a56af5a9ee8bd971349ea4a05d",
+      "5-known-defects": "3e90f8150f4944cb1bda5cb5e4252474715ce591fb3bbc0e12462d0e7df78621",
+      "6-resolved-decisions": "6c87db44a48e4ab82d61b4a499e64e7f939cc9cb5a9b9834512c153cb92b7089",
+      "7-out-of-scope": "2ad686e9ac6a41ce9aa028e1cd5081d0cb4aa1ea6dc1fc7e93c8f583ed541e81",
+      "b-1-what-recovery-is-per-group": "35da310229b3358824412bebcb4e50e3108f224bfbdc7f7c381beaaa4af3868c",
+      "b-2-a-replaced-tail": "915d9b4cdcbb571037b55837dff453ee304d27c552ea18995aeebaeba33a92fb",
+      "b-3-completion-is-permanent-and-watched-not-polled": "b1b5a281f42337b02ea0abf0c79b2f3609143797d7f8ee2b162832ea05554507",
+      "b-4-nothing-is-served-before-recovery": "5ecde573ed006751ffe32f79f5c8b5e4e6bc72379a51f7f19d60c8626a30ffac",
+      "b-5-the-recovery-state-is-distinguishable": "e4d7549efca926a8b2739028f41e8c83ab54884574bf7ebe58ce54ba1e28e7a1",
+      "verification": "c0a8529ffc902da434c24d1504940f30cdeed793027cd90d75e399c0c5e1b1e5"
+    },
     "sectionHeadings": [
       "037: Neither healthy nor ready, and serving nothing, until startup recovery has applied the log",
       "1. Purpose",
@@ -118,5 +134,5 @@
     "title": "Neither healthy nor ready, and serving nothing, until startup recovery has applied the log"
   },
   "shardHash": "07b24102c7ab3677a882fd9fcca839f14370f9f4478865f6ee6864b8a28cb98b",
-  "specVersion": "1.3.0"
+  "specVersion": "1.8.0"
 }

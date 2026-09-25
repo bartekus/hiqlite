@@ -40,6 +40,18 @@
       }
     ],
     "risk": "critical",
+    "sectionDigests": {
+      "002-define-snapshot-publication-and-recovery": "5bcf67da5c1e3deea56b313ee7d69602ca350c1b020fdc4dd1bc3106a0b9871e",
+      "1-purpose": "4893d0974ee966a08c181434b6352d0848f032225be7bab2e289daea5ad8926c",
+      "2-internal-sqlite-snapshot-contents": "1b8168aee87ebdd9fe5e5023861650a434b58f7ee460acf36b677036b84f3d40",
+      "3-internal-publication": "1a5655215c8c6cfb645c93ded27b614090d99e7e5b765c2a98ce77081373d52a",
+      "4-internal-installation-and-retained-logs": "8a6ca8897be9a9033cfc38edc336371481c95feecfccb17d4debb7ec4996f8c6",
+      "5-internal-startup-and-exclusive-ownership": "e2c0035fd233a98c3a2ebf862167f6ced869618b9c92a9e7ccb2bcb619df162e",
+      "6-external-state-machine-mode": "b3434fb80a6af31633653de716eee54712e2ded0857b57f39291340fdfef3f4e",
+      "7-known-defects": "df79b6675f6bc264679d9561e9032800e9cfcfa32ecdc98a01ffa7fd10084f21",
+      "8-provenance": "dac85822463155c3984a1777c573cf4a7fb8f76c95481c5c6754fbfeb5e73167",
+      "verification": "efb5f555e11e2799843f76412030ae81a656a3549f5860a5246f3b3dac95fb50"
+    },
     "sectionHeadings": [
       "002: Define snapshot publication and recovery",
       "1. Purpose",
@@ -58,5 +70,5 @@
     "title": "Define snapshot publication and recovery"
   },
   "shardHash": "0c01d9298fe3295c591085069f2c11d7bc0c6b37d5a14c336c96124b99ee2700",
-  "specVersion": "1.3.0"
+  "specVersion": "1.8.0"
 }

@@ -49,6 +49,30 @@
     },
     "owner": "hiqlite maintainers",
     "risk": "high",
+    "sectionDigests": {
+      "000-bound-the-first-hiqlite-governance-corpus": "c05140d6fbd2f2a00671adbb89963b7c228fb09a7b74930315e676f3fa6ddc52",
+      "1-1-the-per-document-transition-adopted": "6023dbb38fbd5fdacb40ed7603dfdf11b42164122474609db5345ab364bc2d72",
+      "1-the-constitutional-hierarchy": "bd3e16e9ca865896bacb327e2c81c818fb26645e2fca5ad12b78d6341f1ed9d5",
+      "10-lifecycle-words-are-distinct": "ae19e78be181a1e7f3d4ac9fb9a2dd6e531203f0232eefda2f1f954da83b7069",
+      "11-fork-governance-is-local": "4e4d18e71fa99fa34f74f5cc9f3e8473b256873c43d281a67d825c4fa4a37b93",
+      "12-1-the-inventory-configuration-and-what-each-key-actually-does": "a8f2fe63c99f1d176299d575609314ad2c9c6826f6316f424b2287c5d1086413",
+      "12-adoption-scope": "5a8dbe6ac6838ebae5df6c008efc09afeafb22961eebf8feb13eb8d07fef9ca3",
+      "13-1-the-coupling-bypass-floor-and-what-overrides-it": "3f29b287490fe1269b8a6fe7752c834524cd474c8bf50bfaf87ecbdab213e532",
+      "13-what-each-mechanism-actually-enforces": "e027668625edc66010980b2c2935c7badb20b7ff52e1ba513752ac2443382919",
+      "14-governance-workflow": "150592e0d75444ab70dcd378751f5773d4746900dc50b7341ae27c74e34586b8",
+      "15-pull-request-trust-boundary": "eee03841de271f9d5f5b616ceccdcef8f67288bf6958fb95c6babc4a3df925cb",
+      "16-known-limitations-and-follow-up": "daaff570aa6b7f4a4ff1707c5ab420a3fdc23499609280e6adfe237e33896de0",
+      "17-provenance": "6cf3d8e8ad726aa4ed89514a7f98e2f7c274be88d2770a131d5a969e1d3165ab",
+      "2-authored-truth-and-derived-truth": "fb58be0b5a79faccc175e32c1f86b9aceb07c8393149e2308c9f95db6ea6b892",
+      "3-identity-directory-name-equals-id": "be81a90226f447efc6d46423cc13b86126545a2f52a403ce5659e542afe3e795",
+      "4-the-typed-authority-graph": "bd7be6c604b24161afdf8199b51934123f8502abbaea2216c602e56eedb35d1c",
+      "5-determinism": "7529af8d87bbc57fe9781ded12da41d142e8cdbe2849d9120d569f36149dc855",
+      "6-the-refusal-rule": "b82ebb0a56a820fb362925f00ed88601389517933576094c6ab3f3b8d03a560b",
+      "7-ownership-boundary-openraft": "37f79ff7adf2861caf969e7efbcfd7865a0842238d99d2aa59ff9c91b35a85d2",
+      "8-ownership-boundary-external-state-machine-callers": "c8c920b993c4163bc8a839e7456f32fdade929fa220507dd2ae92fa63967dea3",
+      "9-evidence-configuration-and-limits-are-part-of-the-claim": "7303947153605d208ba8f6793bc93f486ac98b76687ad1e698ebdf6570fdb89f",
+      "verification": "1cce83004596c55fe21ca92886d98cb57d5a330b9021b7c2abb0dd0a4cbfd92e"
+    },
     "sectionHeadings": [
       "000: Bound the first hiqlite governance corpus",
       "1. The constitutional hierarchy",
@@ -91,6 +115,6 @@
       "fork-governance-boundary"
     ]
   },
-  "shardHash": "8c061b7d1800eef7966dab64504cbaa2de7084120e33adf720cf29bfa0d52425",
-  "specVersion": "1.3.0"
+  "shardHash": "bf3893fbcaacfba082fe80bbbec2040f7c39201fcd2b984d45d4a0a331857708",
+  "specVersion": "1.8.0"
 }

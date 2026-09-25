@@ -365,6 +365,13 @@ hand-maintained table is a copy and will go stale again. This spec owns
 `AGENTS.md` and therefore records the change; the reconciliation it belongs to
 is `005` D-6, which moves the assessment records in the same change.
 
+**D-7 (2026-09-25, the tool pin moves to `0.26.0`).** `AGENTS.md`'s governance
+model names the pinned `spec-spine` revision and version, and states them as
+`000` section 14 does. The pin moved from `aa559f5` (`0.20.0`) to `8f2a8f7`
+(the `v0.26.0` tag), at the owner's direction to pin the latest published
+release exactly, so the paragraph now names the new pair. The rule it states
+(exact equality, the revision as the reproducibility boundary) is unchanged.
+
 ## Verification
 
 ```verify:cli

@@ -60,6 +60,22 @@
     },
     "owner": "hiqlite maintainers",
     "risk": "medium",
+    "sectionDigests": {
+      "016-adopt-the-derive-macros": "28483b025adb54f44dc0c722fe2bb1d3389c01b0a78df8fe63f328d17168752c",
+      "1-purpose": "95a559a89ed1af14abfe77d294eb1ec826a9ca204829f0ed11e44dbacdbfa11d",
+      "2-territory": "0ad9349656b3441d6cfcb8fde552bb5720b3f539cb90fd508c8453f77d148317",
+      "3-behavior": "da0f8682e12cdeaf627b05cd95ef833ca765d8d1ff510eef3fa7f99dc95020fb",
+      "4-evidence-and-its-limits": "904ffd092055ecff860a3d87fc84605ad90385e6660a19bb07f7594c081cc7b5",
+      "5-known-defects": "7713d038aa983c2562dcf6c1887d3d72e7eaedf7a1373ab95483c60b902b248d",
+      "6-resolved-decisions": "693d608a54d218bb13ca4ef0b3c44a2326d342a3cab2ed222eb20443ea91de70",
+      "7-the-inventory-declaration-this-spec-requires": "e152bf9cc8d383e8c4d7a5dbce14bb2b534791c393898d121df4f552e75a398b",
+      "8-out-of-scope": "278b39840038ba939bda23cd3e1b4ad2ee409d3b9d02a85f8479f791d32fb2e1",
+      "b-1-fromrow-implements-from-which-is-why-nothing-can-fail": "d22ccfae49a0125adb65bedcf782e67d5f60f0fe1d0e0f6bcced689a86a643c2",
+      "b-2-the-column-attribute-grammar": "005a3d3a435c0b01077c09ebd965fa824c38fa45612c962d2db2f79869911a41",
+      "b-3-option-is-detected-by-name-from-a-three-segment-path": "0c1ccb4f3a17239643a74d8820ab6c7044001170cf3aad7cc63297e852d92e01",
+      "b-4-cachevariants-supports-exactly-one-shape-of-enum": "ef88d649869d5bef732860b445e83a1abc57d802df312e5a0cd642328a50c21f",
+      "verification": "9e901bcd1b94a4805d1921b49590d80a046629ec31b60af73f27959ef76c75fd"
+    },
     "sectionHeadings": [
       "016: Adopt the derive macros",
       "1. Purpose",
@@ -82,5 +98,5 @@
     "title": "Adopt the derive macros"
   },
   "shardHash": "722421c277e6d887499fbecc508f4a641cd5fd85d1d92d1e0f909c925818de64",
-  "specVersion": "1.3.0"
+  "specVersion": "1.8.0"
 }

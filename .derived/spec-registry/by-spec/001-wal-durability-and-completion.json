@@ -34,6 +34,19 @@
       }
     ],
     "risk": "critical",
+    "sectionDigests": {
+      "001-define-wal-durability-and-completion-ordering": "a11b564b29b7cd6f1898976a609b5733f1fae78693b6f759fe724d4fa3b118a1",
+      "1-purpose": "908ebc06b09b0221037d2c6109ac163b2c708892992f9d32f70cb8a9054aa9b9",
+      "2-append-events": "4ece902eb4aa186e9281befa9eaf60e7b405d7b71da9c17d1ef787c5ba9d677d",
+      "3-synchronization-modes": "d4bb2160a2da1f010a2196d7b1cd98c81c07d40708df18eb71dfacb5b36d7640",
+      "4-vote-and-log-ordering": "7cc4f6bce9ae32bebb0c8b2a0c4a9f440a96b5b24a97db56aad58bb309922c68",
+      "5-errors-truncation-and-purge": "18aa46eef48151521d922c6bedcff033945a54705a8004dcb265ca2b4c476432",
+      "6-startup-and-recovery": "e5ccaef6f36cfe8bb143ff821ed3e5a51ae4db26e9b50bcbec05d7659caadfac",
+      "7-acceptance-boundary": "06988b4537030c9e70505c3d107a692494a0662c234481eba4814278c7b90269",
+      "8-known-defects": "8ac52f24beddbe306ea1a22bc8acb31f86d063497ef8e9b4fc85c66c04bf10e9",
+      "9-provenance": "5c9998cc0dde57d91635e37cb6d77f816110c396751a660577a3f03612464e57",
+      "verification": "ad0f79e912bf6585c387b34b091a1aa0b9a0ccb15828cb557ddf26655f106d93"
+    },
     "sectionHeadings": [
       "001: Define WAL durability and completion ordering",
       "1. Purpose",
@@ -53,5 +66,5 @@
     "title": "Define WAL durability and completion ordering"
   },
   "shardHash": "a5abf1e3976c1c27c0e8ae303d6d550e2bfa5d22f90e4671992416264bf587ad",
-  "specVersion": "1.3.0"
+  "specVersion": "1.8.0"
 }

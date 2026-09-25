@@ -47,6 +47,23 @@
       }
     ],
     "risk": "low",
+    "sectionDigests": {
+      "005-record-the-whole-project-assessment-and-the-proposed-adoption-plan": "22ed62ece8d70213cddd795fd21ddc4ab92614322a5ee081749887006a430229",
+      "1-purpose": "7630e3d46f25c58950e19ebd8e44a46870a5a7b33807e0533229b9a17825a092",
+      "2-territory": "3803e94b9793a0dc466477c59c343884a1ab9f658f53f069e5124a47d29c928e",
+      "3-behavior": "fa139ced4db66e6b15969c03185e35562ac8ae40d0f9f7c0909e0b9f4689e42c",
+      "4-evidence-and-its-limits": "1efc9ab68e3d5ecfc5b2c3bddf84683c9fda1f946aaeb492c6a19bb843de5744",
+      "5-known-defects": "5a229cc2e0784d8008b2b96ba4c801da91ac499240ca483234f469c7bb92ae20",
+      "6-out-of-scope": "0770f43c821f631cd5b3d01e5d327d37c359ec9d108cc44e4ff06d2940331e54",
+      "7-resolved-decisions": "08837ffc8e28e092eb20e9f162abd0c4c9b3aa572c09fab39437405e2b3a0082",
+      "b-1-1-the-plan-is-reconciled-against-what-has-been-delivered": "f9e0571b04825c05389a731eb7360228f5761d01657a077bb3d098a2095f2290",
+      "b-1-the-plan-authorizes-nothing-and-says-so-in-its-own-text": "81eb25dc3231abbe14acac3ab6c135954e82e4dd9198475433b4ca2acb1c962e",
+      "b-2-the-three-milestones-stay-apart": "974b999fa059320f70a9fc35e9902bd295ea280130056f23ace06e644583a8f9",
+      "b-3-findings-carry-stable-identifiers-and-separate-observation-from-inference": "ece847c3aae958cf4cc838c8ac77ce7997c3278cd7798bef73151d0a79c0df8e",
+      "b-4-external-ownership-is-described-never-claimed": "146d49205b57c561ce21d6e82e34d6476aa0d4f844c234b10d5333769650ada1",
+      "b-5-generated-output-is-governed-through-its-source-and-its-build": "186b0cb819f71394795b6db4deb539d88b3ada493fb023649127347f99683666",
+      "verification": "cf48123c1ebe1db613175056e7d575b1804770892bc936e0b8e35057873da73d"
+    },
     "sectionHeadings": [
       "005: Record the whole-project assessment and the proposed adoption plan",
       "1. Purpose",
@@ -70,5 +87,5 @@
     "title": "Record the whole-project assessment and the proposed adoption plan"
   },
   "shardHash": "0324cc194729129150998f7e69f230a393c0b094aad4f0ae9e0d8f25fec12df0",
-  "specVersion": "1.3.0"
+  "specVersion": "1.8.0"
 }

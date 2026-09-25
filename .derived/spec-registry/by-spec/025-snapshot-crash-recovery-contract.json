@@ -45,6 +45,23 @@
     "implementation": "complete",
     "owner": "hiqlite maintainers",
     "risk": "critical",
+    "sectionDigests": {
+      "025-make-internal-snapshot-publication-installation-and-restart-selection-one-crash-recovery-contract": "6204dc63f1f442917863d2c0a934a07aaa60d629d674c251bf97aff8f6534942",
+      "1-purpose": "92e3bc85bf24463a07a973238f4b7f259d8aecdf9f2c798c28ee516c2bce8962",
+      "2-territory": "7e40e69538758e6d9378a4f2880c9414d21b8a973f09e9f98d5766cce1d65776",
+      "3-behavior": "ec301a031a4147c5fc56e1b7719102a80774265c5fa773df188b56e2950b2361",
+      "4-evidence-and-its-limits": "cb8c2358c31d860479d4c6d8fda30b0089da0a3fd196edf9ee5f3219d4bf447a",
+      "5-known-defects": "fa750a6855c2431d10873637db423a53ee9e92c918124f7b4dd3f7e05a1c8825",
+      "6-resolved-decisions": "2b4b96e7c6ef7a50f606d1247d78b55b67f7fe1a5972894616b3120963011be2",
+      "7-out-of-scope": "d2459f2bdea7058255d125f92b2623326ff94a8bd3c13b7d6b16c0ea0ba8afaf",
+      "b-1-one-naming-rule-a-published-snapshot-is-a-bare-uuid-everything-else-is-staging": "3f03e0704e61b5b7428ca2c50721cb9d93a0803a61836bc85afe1d82b908124b",
+      "b-2-publication-is-a-synced-rename-not-a-copy": "f6a464844e338210a599c63f3ce0ad2cc74379925a2ce821fab1041e23c9b5bd",
+      "b-3-installation-stages-validates-restores-and-only-then-publishes": "47bcd5286fd93b782458ae91c73ad59d2b6a18799e5c48101954ff5870fff755",
+      "b-4-restart-selection-validates-falls-back-and-otherwise-refuses": "a8b47fbc83037f95527ebe87e9d4df22a889280126fc103207d5f61da18257ca",
+      "b-5-two-published-snapshots-are-kept": "605bfc9ad9fed24313cb367b17216444a4350b4ad86cfe3c8989a5d5d565b0af",
+      "b-6-serving-a-peer-is-a-different-question-from-restarting": "4ccedd3cdfeac0f8ce11bf334f6c7c18add4ade604184fe31e15ac05849a0bed",
+      "verification": "2bdf0805209e2edea1eb2b8d3b0ac682da94e026eff4c31f8f49e29f701e4b10"
+    },
     "sectionHeadings": [
       "025: Make internal snapshot publication, installation and restart selection one crash-recovery contract",
       "1. Purpose",
@@ -68,5 +85,5 @@
     "title": "Make internal snapshot publication, installation and restart selection one crash-recovery contract"
   },
   "shardHash": "5f2e210c4bdf9233f78e908cca1102a6d7a77e32f585a3fa9863a7ff0946a12b",
-  "specVersion": "1.3.0"
+  "specVersion": "1.8.0"
 }

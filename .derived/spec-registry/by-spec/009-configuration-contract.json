@@ -50,6 +50,24 @@
     },
     "owner": "hiqlite maintainers",
     "risk": "high",
+    "sectionDigests": {
+      "009-adopt-the-node-configuration-contract": "c7aff570daf0d25c6a3fb9ce9a2a0f71f5fabd1696bd263207ce5cf8177af04e",
+      "1-purpose": "64e2d779b3d3e5e696ae8bfbc2fe5da0f754c4905c63d45fb319c0a42df8ed55",
+      "2-territory": "de5cd1910b1fd3cfe9ff448a66fb68478f846484c2b913fd0506a31a668b9e76",
+      "3-behavior": "aa3e6326acdd112c3f1dc797f6d8dace460a55f5b15d6c06edf64d33bd0f2139",
+      "4-evidence-and-its-limits": "2319f1441a964c2c5ae793cb52501b9f0245ce23a9742545ba766efe8d88519d",
+      "5-known-defects": "07ec0e13fa3f6e49ecabc16f42c4024e0a4cfd19a323af9168f63d8e62c47d08",
+      "6-the-inventory-declarations-this-spec-requires": "dafb57c7830c6774b65b54fd3ee57a6006bb5a8317fb9c0398b270e89823a974",
+      "7-out-of-scope": "245843310a366beb27e43645d160199cd4a2b340c31ff675dd69079d49a4c23f",
+      "8-resolved-decisions": "e2a0697d75a05b2a7d70fac7f95ed298173eb973edfa0d66f1af0799742c18ca",
+      "b-1-two-constructors-one-struct-different-failure-modes": "f7381776f7f9f1f8baa892b706dcec2955fa65310fb652aa54149d264982dc12",
+      "b-2-precedence-is-environment-then-toml-then-default": "f9154959ed064518a6052e6b6211673b1c971fb96a4b9b4243110ecaa60ef8bd",
+      "b-3-unknown-keys-are-rejected-with-a-feature-shaped-exception": "cdbbc4e6719913fdcd319b3e26c7f5ecdfb20b3978f8092c8141ad8614bf0aff",
+      "b-4-the-reference-files-are-the-discovery-surface-and-they-are-incomplete": "99fb8ea6c9a7d00aab420bd939aeedbb6e1044083cc15bb74e192c984ee524cf",
+      "b-5-the-environment-constructor-cannot-select-the-wal-durability-mode": "9f36063ae59925e1c852d113744343e016908fa7743ce8dd0d8eff81042eecd6",
+      "b-6-encryption-keys-come-from-a-dependency": "9add13e5f00da867e7d9d8c88fdf9fef02bcea3493f304d1f1d703eacfb3aeaa",
+      "verification": "2d126ac58f2bf310cacd126bd0a05fbe24cc850734614c0a759d7ac117f6a45e"
+    },
     "sectionHeadings": [
       "009: Adopt the node configuration contract",
       "1. Purpose",
@@ -74,5 +92,5 @@
     "title": "Adopt the node configuration contract"
   },
   "shardHash": "c5a333f1f0a288ea625e736e8a915d560d9195718b751d835cd20f7c6eee4c36",
-  "specVersion": "1.3.0"
+  "specVersion": "1.8.0"
 }

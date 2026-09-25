@@ -85,6 +85,23 @@
     "implementation": "complete",
     "owner": "hiqlite maintainers",
     "risk": "critical",
+    "sectionDigests": {
+      "024-take-an-os-advisory-lock-on-the-data-directory-before-anything-touches-it": "43ef0676e6930b3cbea52716d08f3acfdb5f2d0066d2acf3ece047cc022a59d8",
+      "1-purpose": "310e37ff727db2ee57f4c9f4710142cbe7b76090b8fcb5f66e739b2c80f70c38",
+      "2-territory": "f9eb2965c6c5958a58921bb1edcd0a8a6480a847953dae5af7b055fbe92431eb",
+      "3-behavior": "d00350e9d2ae7d9dd4eb2757830998077f610bdb498797812a668c6804277bae",
+      "4-evidence-and-its-limits": "f037f07ab4ee81e55a31c2e4ac81e101377c92fe8ec46a206458aba0a9504aed",
+      "5-known-defects": "1de5f2068d224faf29b721487d2e1f3015b692bd1ff29c1f5ca7d68b4ca3ccae",
+      "6-resolved-decisions": "8899abe06036e9003f8aa7e86c71998e9db401bc8b3037808b4218851c51db71",
+      "7-out-of-scope": "9ca327bd215f139f319d0560282d2bfc2f6f5caf5c57745179c92d7dc705aae2",
+      "b-1-ownership-is-taken-before-anything-touches-storage": "3bbc5aee7efc470eb87e2ce2b015793662be98797093738a3a05854a755da0cf",
+      "b-2-the-lock-is-an-os-advisory-lock-on-a-file-at-the-data-directory-root": "9711db118d099c5536ac6ad5e4ab173797dde6d1ea60a31f49955a6fe4afa178",
+      "b-3-a-refusal-changes-nothing-and-says-so": "73309360b7ef774591db7a3d43359d946a47638c33cd8a6f64c42ad979372dd7",
+      "b-4-ownership-is-released-when-nothing-can-write-any-more": "ee1552f10af0c14ce9e9bc2f88a64a96604671a41d8cd088b2f9563e03c06e3a",
+      "b-5-the-restore-sweep-keeps-the-lock-file": "ff3b812674a2fe28ab3d296610937502d72fd5c5c08d1334c0b3535f4a6061ac",
+      "b-6-the-old-marker-keeps-its-job": "8c02e1e6f7681f6dcbd606ec708ea9f4ed9ccc80c2bbfe18123165fbd5765eca",
+      "verification": "c89959129daefccb21f3f7b89992354fd5db0b366264576fd49bc4845092287c"
+    },
     "sectionHeadings": [
       "024: Take an OS advisory lock on the data directory before anything touches it",
       "1. Purpose",
@@ -108,5 +125,5 @@
     "title": "Take an OS advisory lock on the data directory before anything touches it"
   },
   "shardHash": "9a89012d83fec904e3569b78437abdfc860fedb08f36aa0e86b6ca61750b7472",
-  "specVersion": "1.3.0"
+  "specVersion": "1.8.0"
 }

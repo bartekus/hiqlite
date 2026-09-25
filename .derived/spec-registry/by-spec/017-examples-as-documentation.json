@@ -73,6 +73,22 @@
     },
     "owner": "hiqlite maintainers",
     "risk": "medium",
+    "sectionDigests": {
+      "017-adopt-the-examples-as-executable-documentation": "91d488c7c495382467f847a8a7266f23f60163abf738274a891022b56a823e8d",
+      "1-purpose": "7e74b0120a65a969f0b4cd280b25da5c51f4bcd5702dca3fe7cf929982383a72",
+      "2-territory": "f464d95a3ef4a45d0cba32d96487d1aa6956c2aa5eeb452e89516aa0733ffb21",
+      "3-behavior": "41686175a76300ad139feb634da18b70824ed691b9642faa55e2f11a63b34033",
+      "4-evidence-and-its-limits": "2a91f1878a12c0c2e818f606a71824370d47a17762f1e1ea09ea0673370604be",
+      "5-known-defects": "a3dba32e3bff8aacdc82aaf080b70c7883f259d2c6633cb969a890263a41cb04",
+      "6-resolved-decisions": "0e8210fcda96572766605af63e29f4bba9cb5b6677b2ab5a9ddd78a7f8ab7164",
+      "7-the-inventory-declaration-this-spec-requires": "900534e1db50da013562ecb8a449f8a27eb31ea82499fa038f6357f20c72ee65",
+      "8-out-of-scope": "2a331829b70d2ee4bc117639ca42bb11b7972577804f142b05a6cfb865194bd7",
+      "b-1-six-crates-six-feature-sets-six-different-things-demonstrated": "9e628d4f45ea1f88863ea80c967a3cd07d91111c848edb7b0128c66e8d13a28a",
+      "b-2-they-are-self-checking-programs": "6cff77d9311dd74021e48663a19e90a30c25b1fc9e20552e9fe87ce0e33358e6",
+      "b-3-two-configuration-routes-and-two-of-the-crates-read-from-disk": "aa499321b648d22193cbe57920e597115e3b18a15e028899929c615f59ab8382",
+      "b-4-four-of-six-lockfiles-are-tracked-and-all-four-are-stale": "0597dd0be46259507f6b6b3631a368de5321ddc92599b57dae55cbc513ff953e",
+      "verification": "2fed49b40461f71fce062c9e88950237b4dbe96b8a3b82d110ab0fd2d3b2b40b"
+    },
     "sectionHeadings": [
       "017: Adopt the examples as executable documentation",
       "1. Purpose",
@@ -95,5 +111,5 @@
     "title": "Adopt the examples as executable documentation"
   },
   "shardHash": "1a7e6aaeb2532c5c51bac42188cc940a195fee3a4df3dbd9af1e77683c13df6b",
-  "specVersion": "1.3.0"
+  "specVersion": "1.8.0"
 }

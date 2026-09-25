@@ -64,6 +64,22 @@
     },
     "owner": "hiqlite maintainers",
     "risk": "high",
+    "sectionDigests": {
+      "019-adopt-the-dashboard-build-contract-and-measure-its-drift": "ff0e102cae373b23994efaa6343926542e86b5c63c9b13e2210d2111629da09a",
+      "1-purpose": "f744779fd99a6dd908712f1365bc4739037dc9b7a34655aaa8c7373df67eda96",
+      "2-territory": "715947f320e9a64df99b3d3e3f91f1e6de763980e5cf05a1fa5ff6372b8ea517",
+      "3-behavior": "2a12d4e2a875af17c1ce49e7b80ea03986d3b29ee41f798ef8771d3003bad5b5",
+      "4-evidence-the-rebuild-run": "51a60f6a06c60be66de114c6cba21a0e7908b8c9f158feeef7e19d638a171914",
+      "5-known-defects": "4bd8ce2a3e17e4983a7c91aab4a10b029f8a52fefb42a3f964f7606c59f7597a",
+      "6-resolved-decisions": "df46ffbd151294cfe80bca565c8e250028eca0a1e2ced6afeb7bf3a1b8ac97e1",
+      "7-inventory-declarations": "7532e21a10105b5ba4774243decc7b73312b0a236f48f8f71694e2a5bbf1423e",
+      "8-out-of-scope": "97378ab1c9bff50b815f707557f3e53015b3b081e64380770cc46641820e8d02",
+      "at-all": "e9e36cad89a6d9539fe5d49440e265a43fd641df60f688b2aac5a8d92d4c93dc",
+      "b-1-the-build-contract-stated": "17f6d868a261d07ef4d7fa0ae86fa72a293b14d02621f869839f35cf35f568e0",
+      "b-2-nothing-builds-it-and-the-recipe-that-would-is-commented-out": "a24b9a2adb36cfe965b4b128966dbeae0a9babd7602ed3fac3d4b7ac3c33f119",
+      "b-3-the-output-is-content-addressed-which-is-what-makes-drift-detectable": "d73e030a2a7e97145224d9031f1fdd12cc2cab8bd74e06eaaccdc1eb947168be",
+      "verification": "195126609cf186bbd84a09d306a4d2d2f6bfadb7abebbf58e7352a5a766231f3"
+    },
     "sectionHeadings": [
       "019: Adopt the dashboard build contract and measure its drift",
       "1. Purpose",
@@ -86,5 +102,5 @@
     "title": "Adopt the dashboard build contract and measure its drift"
   },
   "shardHash": "6858cd90ff30b15d0372eaa8c7115c7056683ddc767b0c57f415e5919d3fbb5d",
-  "specVersion": "1.3.0"
+  "specVersion": "1.8.0"
 }

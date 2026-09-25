@@ -130,6 +130,22 @@
     "implementation": "complete",
     "owner": "hiqlite maintainers",
     "risk": "critical",
+    "sectionDigests": {
+      "030-make-certificate-verification-reachable-stop-the-api-endpoint-taking-the-raft-channel-s-answers-and-repair-the-dashboard-s-pre-auth-surface": "94ae96353f7b3723361ad7f68695dbeb575f6a2f919bc1ea23916510a4920b78",
+      "1-purpose": "6f06ffa5af7a8a9270803453767362ffa306243d0be909e4fff6466667a9cf2b",
+      "2-territory": "ce223c27b663549eb915abbe42caafb50af8c0d80d76498f6d2607d5d97b9172",
+      "3-behavior": "69fe9432626c5fcf5816062811f73dc662e0637d49904ca9bcb2d4cfe6673eb8",
+      "4-evidence-and-its-limits": "06adacd1e5fa1dae10f7db9913734e21885341431a42e07880c2a0422143c731",
+      "5-known-defects": "169f9f94c029246d991047d271f85316434b381dc8924401c19a0a2896c2275d",
+      "6-resolved-decisions": "48db42f114b6bcdc7ca0083b861fdda8f60efc84123a572e258413f59e0f95b0",
+      "7-out-of-scope": "dfa3eb690bfa7ea14e85ea32e39dfa087a725d85ac0c39680cfde5bff80104ba",
+      "b-1-verification-has-something-to-verify-against": "ce3a129010a9673e5641683631fbfad4dd476a70e8ce881fc70e3b6f973b78e0",
+      "b-2-half-a-certificate-pair-is-an-error-and-so-is-a-malformed-boolean": "9d4bb835c02ecd508b875bf35dc340f05bd5be84a9e1c3a6b7ae605bf82e4a69",
+      "b-3-the-api-endpoint-answers-its-own-questions": "5cdbca28537a70937488b4f333b0bd8ccc42377f5cc5e47ec592a1295e30c974",
+      "b-4-the-claim-about-the-secret-is-narrowed-to-the-channel-it-is-true-of": "d6fdde1a7618ef931fed14c85b19d5197ee66fad2e0a8097199414e2669862a6",
+      "b-5-the-dashboard-s-unauthenticated-surface": "7c3f4b2603e1194151b47d2ac25d2752d7a67bc570eb67922b3fc4384a720e9d",
+      "verification": "5ebae01554cb3b0fdd808294ea7dd6abc65e38787f80813dc68b50d6bd3d4516"
+    },
     "sectionHeadings": [
       "030: Make certificate verification reachable, stop the API endpoint taking the raft channel's answers, and repair the dashboard's pre-auth surface",
       "1. Purpose",
@@ -152,5 +168,5 @@
     "title": "Make certificate verification reachable, stop the API endpoint taking the raft channel's answers, and repair the dashboard's pre-auth surface"
   },
   "shardHash": "e8538da3173142111aa6b391aa92f5a2c093f48c550e4cb3d831fab096770e3c",
-  "specVersion": "1.3.0"
+  "specVersion": "1.8.0"
 }

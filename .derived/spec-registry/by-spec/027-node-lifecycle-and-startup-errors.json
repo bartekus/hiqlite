@@ -110,6 +110,27 @@
     "implementation": "complete",
     "owner": "hiqlite maintainers",
     "risk": "critical",
+    "sectionDigests": {
+      "027-return-startup-failures-as-errors-observe-background-failures-and-define-the-node-lifecycle-api": "b29e4e4242a070f6f71f568da22c5cbd9f10e6f08a01ead2d69f9ceeade50eee",
+      "1-purpose": "980c95220563faf56d547dab8a58c84de6399e192c6252e29184ace2ae1b0dde",
+      "2-territory": "e9cd2590a3aa8382a24f00dfa142e428d67d9a79cbd3d2da1a0aa7062b05fa17",
+      "3-behavior": "d86fd5ddbdb5ba7b5d20560e2676a9d637b0f3d3ba8256edc63d8a9a6edd2a30",
+      "4-evidence-and-its-limits": "a53d145475b90e649344c4d614dc8fd2579d0e0f9dc801885916d9cec7eee17d",
+      "5-known-defects": "22b77a9e0255bdedf5964cef6837a3188e147779b8882865de4e18cb26c35733",
+      "6-resolved-decisions": "22376fa93ca757e9922bc7f2120a293e121a5c58c49550c857c7875752344192",
+      "7-out-of-scope": "0ec79945ba814e7de2cc558d43e8dd5fc6f38eb8a0f55701bd1eec809d718652",
+      "b-1-expected-failures-are-returned-not-panicked": "8673d73b6c6ad1bcfc19901d0e074f9cf98c2b47fe484fb00fe161a3a2cbfc7f",
+      "b-10-an-upgrade-from-hiqlite-0-14-x-carries-the-database-and-not-the-cache": "9c6291641324755bbc2ad23f30c004082977aa528a9af73144a1faf22b2dea20",
+      "b-2-both-listeners-are-bound-before-the-node-is-reported-started": "37bbf837bed6a3023a564b28168beecfc9a658e490fc67e5af44acd053667160",
+      "b-3-both-paths-shut-down-gracefully": "7f8f9493a222e94465b2d1589ab8bdfe51b93bd778b792334bf738ece63ae42a",
+      "b-4-a-partial-startup-tears-down-what-it-started": "11a2b9b9e2d9cbe7ec5f1400314649c58452a35a51b28613f0a1e28c6fc6c773",
+      "b-5-a-failed-component-takes-the-node-out-of-service-and-nothing-restarts-it": "64d10f1d065b013f8e56274092d1d9dace4ab86635bd22213acb83dfc4ee39c7",
+      "b-6-the-wal-writer-s-termination-has-a-consumer": "378afe09340ec4588f8114a7a566b2a617ad99f0b8614e101a624da17dbdbc37",
+      "b-7-the-minimum-public-api-this-release-freezes": "07b439de60e0b17a09de96d1c5a95b97ad1ec57158228bb7d63b08f3c7776f41",
+      "b-8-the-split-brain-watchdog-is-removed": "254d921d1a72ace87958c01ee90aece8fd70b08ccc45e0a078cf8d977d967385",
+      "b-9-a-node-leaving-its-own-cluster-may-not-change-anyone-else-s-membership": "388873d4f14b1e8bccd1376fa02fc3b3db7cf0907f49318dc99697e58c7f79cc",
+      "verification": "63d295c47e352832d1d0fc2f036c1a486400179961d992e639a17f571b2e9978"
+    },
     "sectionHeadings": [
       "027: Return startup failures as errors, observe background failures, and define the node lifecycle API",
       "1. Purpose",
@@ -137,5 +158,5 @@
     "title": "Return startup failures as errors, observe background failures, and define the node lifecycle API"
   },
   "shardHash": "b9cc9c7ca3afe80faaf6aec1637ea50343b7fdaec766aec717bfa1aae2db9d38",
-  "specVersion": "1.3.0"
+  "specVersion": "1.8.0"
 }

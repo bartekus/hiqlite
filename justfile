@@ -327,9 +327,9 @@ update:
     # min release is set via `dashboard/.npmrc`
     npm update
 
-# Governance tool pin. The revision is newer than the v0.20.0 tag while still
-# reporting 0.20.0, so the revision is the reproducibility boundary.
-spec-spine-rev := "aa559f5dcaa59bd9f27b0622b51ae5b57dc2185f"
+# Governance tool pin: the commit the v0.26.0 tag names, which reports 0.26.0. The revision
+# is the reproducibility boundary.
+spec-spine-rev := "8f2a8f75000af8f8c7348d87928891306b8d65a6"
 
 # Install the exact spec-spine revision used by CI.
 spine-install:
