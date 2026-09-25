@@ -544,6 +544,16 @@ drift `011`, `029` and `030` pin between it and `hiqlite.toml` stays as it was.
   wait, so a peer that never answers no longer takes the whole wait from the
   peers after it.
 
+**D-11 (2026-09-24, owner decision: B-3 stays as written).** The owner
+decided the question D-10 left open. B-3 keeps node 1 not ready while it waits
+for peer evidence, and `podManagementPolicy: Parallel` stays documented as
+required. Rationale, as the owner gave it: readiness must mean able to serve,
+which is the same rule the owner set for readiness after crash recovery
+(recorded by `037`), and `Parallel` is the standard pod management policy for
+Raft StatefulSets. The review's preferred repair (decide after the listeners,
+answer ready meanwhile) is therefore declined, and the high review finding on
+lane B is resolved by this decision rather than by a code change.
+
 **Owner decisions pending.** D-1 to D-13, D-8a to D-8e and D-15 to D-19 of the
 proposal's section 11 are not decided by this spec. Each will be dated here
 when the owner records it.
