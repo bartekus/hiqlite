@@ -403,3 +403,60 @@ on the registry:
 **Rahi:** its exact pin moves only by its own governed decision. **Rauthy:** an
 image rebuilt on the published packages, with its own F-130 acceptance. Neither
 is done by this repository.
+
+## 13. 0.15.0-patched.3: readiness after startup recovery
+
+Added by `038-recovery-readiness-release`. The registry coordinates are
+recorded by the change that records the publication, from the registry's and
+the forge's own responses, as section 12's were.
+
+**What 0.15.0-patched.3 changes** (`037`, F-134): after a start, each Raft
+group's state machine applies the log the node held, and until it has, the node
+is up but does not serve. After an unclean stop under `auto-heal` that is a
+full rebuild of the SQLite database from the log; a disk-backed cache replays
+its log on every start. Until the group recovers:
+
+- `/health` and `/ready` answer `503` with `Recovering: ...`, including inside
+  `health_check_delay_secs`, which no longer masks it;
+- `is_healthy_db` / `is_healthy_cache` return `Error::Recovering` for their own
+  group, so `wait_until_healthy_db` / `wait_until_healthy_cache` wait through it;
+- every operation of the embedded client on that group, and every new remote
+  client or event stream, is refused with `Error::Recovering`;
+- `Client::recovery_state()` returns `Some(RecoveryState::Recovering(..))`, one
+  `RecoveryProgress` (group, applied, target, `unclean_stop`) per group.
+
+**What a consumer does.**
+
+- **Wait for each group it uses before first use.** `wait_until_healthy_db`
+  before database work and `wait_until_healthy_cache` before cache work. A
+  consumer that uses a group straight after `start_node` now gets
+  `Error::Recovering` instead of a partial state; retry or wait, do not treat it
+  as fatal.
+- **Report "recovering", not "down".** `Error::is_recovering()` (or
+  `recovery_state()`) distinguishes a node that is catching up from
+  `Error::NodeFailed` or an unreachable node.
+- **Size the liveness probe.** A liveness probe on `/health` now fails for the
+  length of a replay. Use a startup probe, or a liveness threshold longer than
+  the longest expected replay, so a node is not restarted mid-recovery.
+- **Local event listeners are unchanged** (`037` KD-1): a replay still
+  re-delivers notifications to `listen_notify_local` listeners.
+
+**Pinning.** Pin
+`hiqlite = { package = "hiqlite-patched", version = "=0.15.0-patched.3" }`; its
+internal requirements are exact, so the other two follow. Move all three
+together, and build with `--locked` from a committed lockfile. The section 12
+hazard still applies to `0.15.0-patched.1`, whose caret requirements accept the
+new WAL crate: a consumer still on it pins `hiqlite-wal-patched` and
+`hiqlite-derive-patched` to `=0.15.0-patched.1` or builds `--locked`.
+
+**Yanking 0.15.0-patched.1 (guidance, not done).** Yanking it would stop new
+resolutions from choosing it, and so from forming the mixed graph, while
+leaving every existing lockfile working. It is **not** done by this release;
+it needs a separate owner decision.
+
+**Rauthy:** its F22 wait (`bartekus/rauthy` #7) becomes redundant for the
+database once it runs this release, since `wait_until_healthy_db` then returns
+only after the replay; whether to drop it is Rauthy's decision, verified with
+its own crash leg. Rauthy uses the cache after waiting only for the database,
+so it should also wait for the cache. **Rahi:** already waits for both groups;
+adopting this release is its own governed decision.
