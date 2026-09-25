@@ -257,6 +257,31 @@ secret_api = "SuperSecureSecret1337"
 # overwritten by: HQL_LEARNER_ONLY
 #learner_only = false
 
+# How long, in milliseconds, a node that is one of several members waits
+# before it starts to shut down, so readiness checks see it leaving before
+# it stops serving. Skipped when the node is the only member. The default
+# is the fixed delay this option replaced. A value above the default
+# lengthens `Client::shutdown`'s own 15 s wait by the difference.
+# default: 9500
+# overwritten by: HQL_PRE_SHUTDOWN_DELAY_MS
+#pre_shutdown_delay_ms = 9500
+
+# How long, in seconds, a pristine node 1 with peers waits for at least half
+# of them (rounded down) to answer, authenticated, that their Raft group is
+# not initialized before it initializes one. A peer that cannot be reached,
+# times out, or rejects the secret counts for nothing. On expiry the start
+# fails with an error naming the silent peers; node 1 never initializes
+# without that evidence. Bootstrapping a new cluster, and a full restart of
+# one whose cache is in memory (`cache_storage_disk = false`), therefore needs
+# the peers started alongside node 1: on Kubernetes, a StatefulSet with
+# `podManagementPolicy: Parallel`. Under the default `OrderedReady` node 1 is
+# not ready while it waits, the other pods are never created, and node 1 fails
+# at this bound and restarts. Also bounds node 1's check, before a
+# restore, that no peer holds an initialized group. Unused at N=1.
+# default: 120
+# overwritten by: HQL_INIT_PEER_WAIT_SECS
+#init_peer_wait_secs = 120
+
 # When the auto-backup task should run.
 # Accepts cron syntax:
 # "sec min hour day_of_month month day_of_week year"

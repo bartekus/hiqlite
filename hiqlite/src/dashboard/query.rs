@@ -145,6 +145,9 @@ pub(crate) async fn dashboard_query_dynamic(
 
 #[inline]
 async fn execute_dynamic(state: &AppStateExt, sql: Query) -> Result<usize, Error> {
+    // `034` B-4: the dashboard's writes are held like every other client's during a restore.
+    #[cfg(feature = "backup")]
+    crate::app_state::ensure_not_restoring(&state.restore_hold)?;
     if is_this_local_leader(state).await? {
         debug!("Executing dynamic dashboard query as local leader");
         let res = state

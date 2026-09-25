@@ -1,0 +1,11 @@
+[package]
+name = "n3-proto"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Wire and file formats shared by the N=3 harness and its node binary"
+
+[dependencies]
+serde = { version = "1.0.114", features = ["derive"] }
+serde_json = "1.0.57"
