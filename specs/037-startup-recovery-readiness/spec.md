@@ -1,7 +1,7 @@
 ---
 id: "037-startup-recovery-readiness"
 title: "Neither healthy nor ready, and serving nothing, until startup recovery has applied the log"
-status: draft
+status: approved
 created: "2026-09-24"
 owner: "hiqlite maintainers"
 risk: high

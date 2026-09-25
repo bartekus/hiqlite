@@ -182,8 +182,8 @@
       }
     ],
     "specId": "037-startup-recovery-readiness",
-    "specStatus": "draft"
+    "specStatus": "approved"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "c724c852c761e4b2f62e34ee49248c8568085475a9a08f4e29219212c5d1ba89"
+  "shardHash": "7fc3855d8c547612ce601b0c88b60fca258ed13593402ebaf85d9756fad7f548"
 }
