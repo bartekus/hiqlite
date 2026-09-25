@@ -667,7 +667,15 @@ impl WalFile {
 
         let mut mmap = unsafe { MmapOptions::new().map_mut(&file)? };
         (&mut mmap[..buf.len()]).write_all(buf)?;
-        mmap.flush_async()?;
+        // F-135: the header, the length and the name must all be durable before anything is
+        // appended here. A data sync of later appends covers none of them: after a power cut the
+        // directory could list no such file, or a file without its header.
+        mmap.flush()?;
+        file.sync_all()?;
+        let dir = std::path::Path::new(&self.path)
+            .parent()
+            .ok_or(Error::InvalidPath("WAL file path has no parent directory"))?;
+        sync_dir(dir)?;
 
         Ok(())
     }
@@ -1098,6 +1106,17 @@ impl WalFileSet {
     }
 }
 
+/// Makes the entries of `dir` durable, so a file just created in it survives a power cut
+/// (F-135). A failure is returned, not ignored: the new file would otherwise be acknowledged
+/// into without a durable name.
+fn sync_dir(dir: &std::path::Path) -> Result<(), Error> {
+    #[cfg(unix)]
+    File::open(dir)?.sync_all()?;
+    #[cfg(test)]
+    synced_dirs::record(dir);
+    Ok(())
+}
+
 /// Test-only record of every directory whose entries were synced (F-135), so a test can tell
 /// whether creating a WAL file made its name durable without a power cut.
 #[cfg(test)]
@@ -1107,13 +1126,17 @@ pub(crate) mod synced_dirs {
 
     static SYNCED: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
 
-    #[allow(dead_code)]
     pub(crate) fn record(dir: &Path) {
         SYNCED.lock().unwrap().push(dir.to_path_buf());
     }
 
     pub(crate) fn count(dir: &Path) -> usize {
-        SYNCED.lock().unwrap().iter().filter(|d| d.as_path() == dir).count()
+        SYNCED
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|d| d.as_path() == dir)
+            .count()
     }
 }
 

@@ -1,0 +1,72 @@
+{
+  "record": {
+    "amends": [
+      "001-wal-durability-and-completion"
+    ],
+    "amendsSections": [
+      "3-synchronization-modes"
+    ],
+    "created": "2026-09-25",
+    "dependsOn": [
+      "000-hiqlite-ownership-bootstrap",
+      "001-wal-durability-and-completion",
+      "008-wal-append-completion-notification"
+    ],
+    "extends": [
+      {
+        "nature": "additive",
+        "spec": "001-wal-durability-and-completion",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite-wal/src/"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "005-adoption-assessment-and-plan",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/findings-register.md"
+        }
+      }
+    ],
+    "id": "040-wal-file-creation-durability",
+    "implementation": "complete",
+    "owner": "hiqlite maintainers",
+    "risk": "high",
+    "sectionDigests": {
+      "040-make-a-new-wal-file-s-header-length-and-name-durable-before-anything-is-appended-to-it": "2f021e863fe88095166985ff4f849bbe3725b27257b39320f57d0c05bc3c6467",
+      "1-purpose": "0654f794c3aa6119bdd40ffe915e9f91ec0c807d57475ef282ce8e55d32271b2",
+      "2-ownership": "866f93efc014e5560142be41017fa51f032cbde1b0e8c115bda700678a821267",
+      "3-behavior": "4601e801a62bb52c3b8b85d9b9fa52690e45fb48c436c47ac7f1df5aef3e3b61",
+      "4-evidence-and-its-limits": "e3861b7cfe68b911ddebe0efaed3bc6bcf6120fa45978e2b3c7a4f9e6d87625c",
+      "5-known-defects": "d8265533564c3deae89e56c8aef8729b8a5795bad54efc2204279bc1f35d3ec8",
+      "6-out-of-scope": "663cf9658ad45b8805ef77d79f88e755b97ed908c0e6fbb92103c930296c6a0d",
+      "7-resolved-decisions": "c5e5bc5f441ae34278ef80ec517234152fa505ebb2338f920cce0f3b4e01917a",
+      "amendment-to-001-section-3": "c848a64ca389188072dff56d1c0b3c85d8a53980df55903ebd9b7504eac93ccc",
+      "b-1-a-new-wal-file-is-durable-before-it-is-used": "3eb04ffdb324f4cd76856a929e83f9f8950b0476cf12c1af3155b51004053cfd",
+      "b-2-a-failed-sync-fails-the-creation": "2b97f10ad09066e2facfc9d5d5b203926d23cbb21c30c6ee92df04a667271d11",
+      "verification": "b5ab3a7a3cd34ff59d47be853ca9b2ebcf0272a49195ba6ae450a8cda51253d4"
+    },
+    "sectionHeadings": [
+      "040: Make a new WAL file's header, length and name durable before anything is appended to it",
+      "1. Purpose",
+      "2. Ownership",
+      "3. Behavior",
+      "B-1. A new WAL file is durable before it is used",
+      "B-2. A failed sync fails the creation",
+      "Amendment to `001` section 3",
+      "4. Evidence and its limits",
+      "5. Known defects",
+      "6. Out of scope",
+      "7. Resolved decisions",
+      "Verification"
+    ],
+    "specPath": "specs/040-wal-file-creation-durability/spec.md",
+    "status": "draft",
+    "summary": "Repairs F-135. Creating a WAL file, the first one in an empty directory or a new one at rollover, flushed its header asynchronously and never synced the file or the directory that lists it, so under `LogSync::Immediate` an append acknowledged just after a rollover could be in a file a power cut unlists. Creation now flushes the header, syncs the file and syncs the directory, and fails if any of them fails. Amends 001 section 3.\n",
+    "title": "Make a new WAL file's header, length and name durable before anything is appended to it"
+  },
+  "shardHash": "e2af5afb32a959569600131b66b0895b2ebbc4bdf240a0340a4b4e7b27d1caca",
+  "specVersion": "1.8.0"
+}
