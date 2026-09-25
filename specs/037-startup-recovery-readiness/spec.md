@@ -193,10 +193,10 @@ Runs, each one launch, no retry:
 |---|---|---|---|---|
 | macOS arm64 | debug | Rauthy's | both fail: 37 of 3000 rows; last key `None` | both pass |
 | macOS arm64 | debug | Rahi's | cache fails: last key `None` | passes |
-| Linux arm64, Docker Desktop, native | release | Rauthy's | both fail: 18 of 3000 rows; last key `None` | recorded in the release record |
-| Linux arm64, Docker Desktop, native | release | Rahi's | cache fails | recorded in the release record |
-| Linux amd64, GitHub-hosted, native (run 36084685834) | release | Rauthy's | both fail: 33 of 3000 rows; last key `None` | recorded in the release record |
-| Linux amd64, GitHub-hosted, native (run 36084685834) | release | Rahi's | cache fails | recorded in the release record |
+| Linux arm64, Docker Desktop, native | release | Rauthy's | both fail: 18 of 3000 rows; last key `None` | both pass |
+| Linux arm64, Docker Desktop, native | release | Rahi's | cache fails | passes |
+| Linux amd64, GitHub-hosted, native (run 36084685834) | release | Rauthy's | both fail: 33 of 3000 rows; last key `None` | both pass (run 36085716425, on `56ce51a`) |
+| Linux amd64, GitHub-hosted, native (run 36084685834) | release | Rahi's | cache fails | passes (run 36085716425) |
 
 Rahi's set has no `auto-heal`, so the SQLite rebuild test is compiled out
 there; the cache test is the one that applies. The unit tests in
