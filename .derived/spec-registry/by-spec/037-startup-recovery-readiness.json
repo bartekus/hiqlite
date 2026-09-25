@@ -1,0 +1,122 @@
+{
+  "record": {
+    "created": "2026-09-24",
+    "dependsOn": [
+      "000-hiqlite-ownership-bootstrap",
+      "003-client-consistency-and-retry-outcomes",
+      "010-node-lifecycle-and-split-brain",
+      "027-node-lifecycle-and-startup-errors"
+    ],
+    "establishes": [
+      {
+        "kind": "file",
+        "path": "hiqlite/src/recovery.rs"
+      },
+      {
+        "kind": "file",
+        "path": "hiqlite/tests/recovery_readiness.rs"
+      }
+    ],
+    "extends": [
+      {
+        "nature": "additive",
+        "spec": "003-client-consistency-and-retry-outcomes",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/client/"
+        }
+      },
+      {
+        "nature": "superseding",
+        "spec": "003-client-consistency-and-retry-outcomes",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/network/"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "010-node-lifecycle-and-split-brain",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/app_state.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "005-adoption-assessment-and-plan",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/findings-register.md"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "000-hiqlite-ownership-bootstrap",
+        "unit": {
+          "kind": "file",
+          "path": "spec-spine.toml"
+        }
+      }
+    ],
+    "id": "037-startup-recovery-readiness",
+    "implementation": "complete",
+    "origin": {
+      "retroactive": false
+    },
+    "owner": "hiqlite maintainers",
+    "references": [
+      {
+        "role": "context",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/store/mod.rs"
+        }
+      },
+      {
+        "role": "context",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/lib.rs"
+        }
+      },
+      {
+        "role": "context",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/error.rs"
+        }
+      },
+      {
+        "role": "context",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/store/state_machine/sqlite/state_machine.rs"
+        }
+      }
+    ],
+    "risk": "high",
+    "sectionHeadings": [
+      "037: Neither healthy nor ready, and serving nothing, until startup recovery has applied the log",
+      "1. Purpose",
+      "2. Territory",
+      "3. Behavior",
+      "B-1. What recovery is, per group",
+      "B-2. A replaced tail",
+      "B-3. Completion is permanent and watched, not polled",
+      "B-4. Nothing is served before recovery",
+      "B-5. The recovery state is distinguishable",
+      "4. Evidence and its limits",
+      "5. Known defects",
+      "6. Resolved decisions",
+      "7. Out of scope",
+      "Verification"
+    ],
+    "specPath": "specs/037-startup-recovery-readiness/spec.md",
+    "status": "draft",
+    "summary": "Repairs F-134. hiqlite persists no committed index, so after every start a Raft group's state machine trails its own log until a leader of the new term commits, and after an unclean stop under auto-heal the SQLite state machine starts empty. Health and readiness only asked whether a leader was known, so a node reported healthy with nothing applied and Rauthy, reading at once, found its database empty and bootstrapped it again. Each group now records the last log index its log held at start; until its state machine has applied it, /health, /ready and the client health checks are false, every client operation and client stream is refused with the new, distinguishable Error::Recovering, and Client::recovery_state reports the progress.\n",
+    "title": "Neither healthy nor ready, and serving nothing, until startup recovery has applied the log"
+  },
+  "shardHash": "f2ae230eeea30811314ede77d3016031cb59a04bf2025fcb3440c2c34c230b08",
+  "specVersion": "1.3.0"
+}
