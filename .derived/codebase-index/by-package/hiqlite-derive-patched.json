@@ -3,8 +3,8 @@
     "kind": "rust-lib",
     "name": "hiqlite-derive-patched",
     "path": "hiqlite-derive",
-    "version": "0.15.0-patched.3"
+    "version": "0.15.0-patched.4"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "51c8491a8e819d73d06b27a3e0253bc9c7186d7c5f969d5e3d4fb56a50f9b546"
+  "shardHash": "dedf3cd6b934177906edcbbc828fdb9af9599dd4f382b144953b7e121a595d37"
 }

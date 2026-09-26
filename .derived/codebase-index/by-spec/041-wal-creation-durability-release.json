@@ -1,13 +1,14 @@
 {
   "mapping": {
     "amends": [
-      "036-n1-repair-release"
+      "038-recovery-readiness-release"
     ],
     "dependsOn": [
       "000-hiqlite-ownership-bootstrap",
       "031-downstream-release-qualification",
-      "036-n1-repair-release",
-      "037-startup-recovery-readiness"
+      "038-recovery-readiness-release",
+      "039-lock-after-restart-evidence",
+      "040-wal-file-creation-durability"
     ],
     "implementingPaths": [
       {
@@ -24,14 +25,6 @@
       },
       {
         "path": "standards/spec/consumer-handoff.md",
-        "source": "spec-edge"
-      },
-      {
-        "path": "standards/spec/findings-register.md",
-        "source": "spec-edge"
-      },
-      {
-        "path": "standards/spec/release-ledger.md",
         "source": "spec-edge"
       }
     ],
@@ -91,32 +84,6 @@
       {
         "locations": [
           {
-            "file": "standards/spec/findings-register.md"
-          }
-        ],
-        "ownership": true,
-        "sourceField": "extends",
-        "unit": {
-          "kind": "file",
-          "path": "standards/spec/findings-register.md"
-        }
-      },
-      {
-        "locations": [
-          {
-            "file": "standards/spec/release-ledger.md"
-          }
-        ],
-        "ownership": true,
-        "sourceField": "extends",
-        "unit": {
-          "kind": "file",
-          "path": "standards/spec/release-ledger.md"
-        }
-      },
-      {
-        "locations": [
-          {
             "file": "Cargo.lock"
           }
         ],
@@ -167,9 +134,9 @@
         }
       }
     ],
-    "specId": "038-recovery-readiness-release",
-    "specStatus": "approved"
+    "specId": "041-wal-creation-durability-release",
+    "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "3174fac2473f15a46b759983ffb76d078f3dc23cccb013e70fc4d7a2867e3c5e"
+  "shardHash": "509c241fb279e887253a2dad717a345102c515909e6433792cf221fa2aa2b87c"
 }
