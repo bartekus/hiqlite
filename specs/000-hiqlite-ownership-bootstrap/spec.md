@@ -520,6 +520,10 @@ CI does not use that default: it passes
 commit, with full Git history, so a branch is always compared against what it
 will actually merge into.
 
+`.gitignore` carries a block managed by `statecraft-cli` (ignoring the tool
+state root and `.tooling/`), added when the Statecraft CI profile was adopted;
+`004` D-8 records that adoption. The entries outside the block are unchanged.
+
 ## 15. Pull-request trust boundary
 
 `spec-spine verify` executes shell commands authored inside a spec. A pull

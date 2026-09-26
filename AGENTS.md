@@ -1,3 +1,5 @@
+@.statecraft/AGENTS.md
+
 # AGENTS.md: hiqlite (bartekus fork)
 
 This file is the shared cross-agent protocol authority for this repository, read
@@ -284,6 +286,28 @@ binary is absent, and never write a waiver.
 
 Until then these controls are the contributor running `just spine-check` and
 pull-request CI.
+
+## Continuous integration
+
+The pull-request gate is the Statecraft setup profile `github-actions-rust`,
+revision 7, rendered by `statecraft-cli init` and recorded in
+`.statecraft/environment.json` (`project.setup`). Its one aggregate check is
+`ci-gate`: governance (`sh scripts/statecraft/gate.sh governance`, also
+`make gate`), code (`sh scripts/statecraft/gate.sh code`, also `make code`) and
+an AI review of every pull request.
+
+The managed files (`.github/workflows/statecraft-*.yml`, `scripts/statecraft/*`,
+`.statecraft/setup/*`, `.github/CODEOWNERS`, `Makefile`) are changed only by
+editing `project.setup.parameters` and re-rendering (`init plan`, then
+`init apply --plan <identity>`), never by hand. A change to any workflow, to
+`scripts/statecraft/*` or to `scripts/check-authored-content.sh` blocks
+`ci-gate` until the owner approves the run's `statecraft-review-exception`
+Environment.
+
+`Check` (`code_style.yaml`), `govern` (`spec-spine.yaml`), `Acceptance`,
+`Publish` and the release-candidate `AI review` keep running as their own
+workflows; `004` D-8 records which checks the profile covers and which it does
+not. The `justfile` recipes above remain the local commands.
 
 ## House style
 
