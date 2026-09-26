@@ -263,8 +263,8 @@ sh -c 'grep -A5 "^\[lib\]" hiqlite-wal/Cargo.toml | grep -q "^name = \"hiqlite_w
 sh -c 'grep -A5 "^\[lib\]" hiqlite-derive/Cargo.toml | grep -q "^name = \"hiqlite_derive\"$"'
 # one version, and it says what it is
 sh -c 'test "$(grep -h "^version = " hiqlite/Cargo.toml hiqlite-wal/Cargo.toml hiqlite-derive/Cargo.toml | sort -u | wc -l | tr -d " ")" = "1"'
-# `036` D-2: was `^version = "0.15.0-patched.1"`; `038` D-2: then "0.15.0-patched.2"; `041` D-2: then
-# "0.15.0-patched.4"; the version this release carries.
+# Version progression: `036` moved patched.1 -> patched.2; `038` moved patched.2 -> patched.3;
+# `041` moves patched.3 -> patched.4, which the command below checks.
 sh -c 'grep -q "^version = \"0.15.0-patched.4\"" hiqlite/Cargo.toml'
 # the internal dependencies keep their keys, so the feature table needs no change
 sh -c 'grep -q "hiqlite-wal = { package = \"hiqlite-wal-patched\", version = " hiqlite/Cargo.toml'
