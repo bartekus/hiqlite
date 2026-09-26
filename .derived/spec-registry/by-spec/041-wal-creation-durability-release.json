@@ -1,0 +1,127 @@
+{
+  "record": {
+    "amends": [
+      "038-recovery-readiness-release"
+    ],
+    "amendsVerification": [
+      "038-recovery-readiness-release"
+    ],
+    "created": "2026-09-25",
+    "dependsOn": [
+      "000-hiqlite-ownership-bootstrap",
+      "031-downstream-release-qualification",
+      "038-recovery-readiness-release",
+      "039-lock-after-restart-evidence",
+      "040-wal-file-creation-durability"
+    ],
+    "extends": [
+      {
+        "nature": "additive",
+        "spec": "016-derive-macros",
+        "unit": {
+          "id": "hiqlite-derive-patched",
+          "kind": "crate"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "035-n1-upgrade-exclusion",
+        "unit": {
+          "kind": "directory",
+          "path": "qualification/n1-upgrade/"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "031-downstream-release-qualification",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/consumer-handoff.md"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "017-examples-as-documentation",
+        "unit": {
+          "kind": "directory",
+          "path": "examples/"
+        }
+      }
+    ],
+    "id": "041-wal-creation-durability-release",
+    "implementation": "in-progress",
+    "origin": {
+      "retroactive": false
+    },
+    "owner": "hiqlite maintainers",
+    "references": [
+      {
+        "role": "context",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/Cargo.toml"
+        }
+      },
+      {
+        "role": "context",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite-wal/Cargo.toml"
+        }
+      },
+      {
+        "role": "context",
+        "unit": {
+          "kind": "file",
+          "path": "Cargo.lock"
+        }
+      },
+      {
+        "role": "context",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/README.md"
+        }
+      }
+    ],
+    "risk": "critical",
+    "sectionDigests": {
+      "041-release-the-wal-file-creation-durability-repair-as-0-15-0-patched-4": "fa71f55f06a14a43681f1ac4b9d576dcb0d98ab27b5418dea09613a6deb2d019",
+      "1-purpose": "6cfbb8963cfa0dc8294e397e967e8be52880bc6d03f9d079e8d85eb335092af5",
+      "2-territory": "4f6ff3b25c53140df915dca195c2a9917b74d53e514f3b9963fe67ee0dba616e",
+      "3-behavior": "816858d53573c52b4c165aed12894cfcf0af140a8fb28ed63edccbc262f0eb88",
+      "4-evidence-and-its-limits": "024cacf19569e40988c9ac059dbbff5ee537f7a07295d4ee6f2105b90a2d049e",
+      "5-known-defects": "9886dfa1a5b0890b9c151c4485e5dde6c8961726db6712012d80b5af49045fe2",
+      "6-resolved-decisions": "35de18b12b6b5c8c293f0a3902f4b01762f4159d28eec0eded68ae6ac72a7fa5",
+      "7-out-of-scope": "01f373d94b0ad571782f82e6b1c5fb0832ba61a584d69cfd721f1c14fa95b541",
+      "b-1-one-version-three-packages-in-lockstep-exact": "571d49f65b084b12f4e425b5c5418de9adf07683cfb58773af90300602f748b3",
+      "b-2-what-this-release-carries": "29f52020ef43af9409831e3b0d8fe005bd7a6a367b1ebc7d8350221338e2f946",
+      "b-3-the-consumer-handoff-says-what-changes-for-a-consumer": "c5e4d75f11bb7fc4d4e783e42c51cf26e6317f286f27391c581c388c65e328ee",
+      "b-4-the-release-tree-is-qualified-as-itself": "0a87a4ef513848b8e3924d206229f1f953684d311b2516c8ad912a1e1230aa5d",
+      "b-5-publication-adoption-and-ratification-are-separate-acts": "23d06420894a08185e86b91ee337ded6f7aaf61344fb29910d50cf21ff0dad6e",
+      "verification": "d9a11ac7c02daddb0921afcd9fd0ce0e7c9ec17744ba4a0e3508d0fd088998f9"
+    },
+    "sectionHeadings": [
+      "041: Release the WAL file-creation durability repair as 0.15.0-patched.4",
+      "1. Purpose",
+      "2. Territory",
+      "3. Behavior",
+      "B-1. One version, three packages, in lockstep, exact",
+      "B-2. What this release carries",
+      "B-3. The consumer handoff says what changes for a consumer",
+      "B-4. The release tree is qualified as itself",
+      "B-5. Publication, adoption and ratification are separate acts",
+      "4. Evidence and its limits",
+      "5. Known defects",
+      "6. Resolved decisions",
+      "7. Out of scope",
+      "Verification"
+    ],
+    "specPath": "specs/041-wal-creation-durability-release/spec.md",
+    "status": "draft",
+    "summary": "The release identity of `040`'s repair (F-135): all three packages at 0.15.0-patched.4, in lockstep, with exact internal requirements and openraft still =0.9.25. It also carries what merged after patched.3: `039`'s lock-after-restart evidence and the F-136 and F-137 corrections. Lane B of the N=3 proposal (#39) is not in it: the owner reverted it on trunk before the release commit (D-4). Publication waits for the owner's ratification of every spec the release contains (D-3).\n",
+    "title": "Release the WAL file-creation durability repair as 0.15.0-patched.4"
+  },
+  "shardHash": "40ba500686269ab8b1a71cb6acab54775ee998c905b02a8198bf444b0c8b3579",
+  "specVersion": "1.8.0"
+}

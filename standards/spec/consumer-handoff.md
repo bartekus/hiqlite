@@ -475,3 +475,40 @@ only after the replay; whether to drop it is Rauthy's decision, verified with
 its own crash leg. Rauthy uses the cache after waiting only for the database,
 so it should also wait for the cache. **Rahi:** already waits for both groups;
 adopting this release is its own governed decision.
+
+## 14. 0.15.0-patched.4: WAL file-creation durability
+
+Added by `041-wal-creation-durability-release`. **Not published.** The registry
+coordinates are recorded here by the change that records the publication, if
+the owner's condition (`041` D-3) is met.
+
+**What 0.15.0-patched.4 changes** (`040`, F-135): creating a WAL file, the
+first one in an empty directory or a new one at rollover, now flushes its
+header synchronously, syncs the file and syncs its directory, and fails if any
+of those fails. Under `LogSync::Immediate` an append acknowledged just after a
+rollover is therefore in a file whose name survives power loss. The async
+modes' statements are unchanged. The cost is one file sync and one directory
+sync per WAL file created, not per append.
+
+**Lane B is not in this release** (`041` D-4): the N=3 start, restore and
+shutdown repairs merged as #39 were reverted before the release commit and wait
+for `033`'s N=3 qualification. Nothing in this release changes N=3 behavior
+against patched.3.
+
+**Distributed locks after a restart** (F-138, `039`): on every
+`0.15.0-patched.*`, a lock left held by a restart (never released, or released
+just before the stop) is granted to the next caller at most one lease plus two
+seconds after it asks. The stall rahi recorded (its `045` D-22), a queued
+request timing out after about 60 seconds, is upstream 0.14's; rahi's wait of
+one TTL after a restart is only needed while it runs upstream.
+
+**`hiqlite::tls` against 0.14.0** (F-136): `ServerTlsConfig::from_env` returns
+`Result<Option<Self>, Error>`, `build_tls_config` takes a second parameter
+(`ca_path`), and `ServerTlsConfigCerts` has a public field `ca`. `CHANGELOG.md`
+lists them.
+
+**Pinning.** Pin
+`hiqlite = { package = "hiqlite-patched", version = "=0.15.0-patched.4" }`;
+its internal requirements are exact, so the other two follow. Move all three
+together and build with `--locked`. The section 12 hazard of
+`0.15.0-patched.1` still applies, and `0.15.0-patched.1` is not yanked.
