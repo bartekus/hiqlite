@@ -63,10 +63,10 @@
       "Verification"
     ],
     "specPath": "specs/040-wal-file-creation-durability/spec.md",
-    "status": "draft",
+    "status": "approved",
     "summary": "Repairs F-135. Creating a WAL file, the first one in an empty directory or a new one at rollover, flushed its header asynchronously and never synced the file or the directory that lists it, so under `LogSync::Immediate` an append acknowledged just after a rollover could be in a file a power cut unlists. Creation now flushes the header, syncs the file and syncs the directory, and fails if any of them fails. Amends 001 section 3.\n",
     "title": "Make a new WAL file's header, length and name durable before anything is appended to it"
   },
-  "shardHash": "e2af5afb32a959569600131b66b0895b2ebbc4bdf240a0340a4b4e7b27d1caca",
+  "shardHash": "2e0180bdea8904802468e24a89a386413ae7984479f38f86cd84613371d94c6b",
   "specVersion": "1.8.0"
 }

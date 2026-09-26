@@ -64,10 +64,10 @@
       "Verification"
     ],
     "specPath": "specs/039-lock-after-restart-evidence/spec.md",
-    "status": "draft",
+    "status": "approved",
     "summary": "rahi reported (its 045 D-22) that a distributed lock left held by a restart strands the next caller until its request times out. This spec records F-138, shows with an end-to-end restart test that the stall is the upstream F-102 behavior `023` B-6 already repaired, and holds the bound the fork gives: the next caller is granted within one lease plus a bounded margin. No source changes.\n",
     "title": "A lock left held by a restart is granted to the next caller within one lease and a bounded margin"
   },
-  "shardHash": "4a9174ae3ae0428e18879ca31506354e63df5c97c43fa7f0d17ed2a2a483ccea",
+  "shardHash": "9a23399b0b9d6ee00ac62d7dba31545b04c4644d87138f2e2ed8480ea79407ca",
   "specVersion": "1.8.0"
 }

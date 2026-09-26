@@ -135,8 +135,8 @@
       }
     ],
     "specId": "041-wal-creation-durability-release",
-    "specStatus": "draft"
+    "specStatus": "approved"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "7dcc04c5dfb133744843664fe18754f53af5e871a7e7424bd78b9fa4a2684f7f"
+  "shardHash": "6afc7a425aec2ef6558b935af8d9bf0b29944bf02143358a0d1456d8bb5237c3"
 }
