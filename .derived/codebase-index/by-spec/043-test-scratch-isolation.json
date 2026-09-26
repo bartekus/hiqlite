@@ -2,27 +2,27 @@
   "mapping": {
     "dependsOn": [
       "000-hiqlite-ownership-bootstrap",
-      "001-wal-durability-and-completion"
+      "005-adoption-assessment-and-plan"
     ],
     "implementingPaths": [
       {
-        "path": "hiqlite.env",
+        "path": "hiqlite/src/storage_lock.rs",
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite.toml",
+        "path": "hiqlite/src/store/logs/",
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite/src/config.rs",
+        "path": "hiqlite/src/store/state_machine/memory/",
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite/src/config_toml.rs",
+        "path": "hiqlite/src/upgrade_exclusion.rs",
         "source": "spec-edge"
       },
       {
-        "path": "spec-spine.toml",
+        "path": "standards/spec/findings-register.md",
         "source": "spec-edge"
       }
     ],
@@ -30,72 +30,72 @@
       {
         "locations": [
           {
-            "file": "hiqlite.env"
+            "file": "hiqlite/src/store/logs/"
           }
         ],
         "ownership": true,
-        "sourceField": "establishes",
+        "sourceField": "extends",
         "unit": {
-          "kind": "file",
-          "path": "hiqlite.env"
+          "kind": "directory",
+          "path": "hiqlite/src/store/logs/"
         }
       },
       {
         "locations": [
           {
-            "file": "hiqlite.toml"
+            "file": "hiqlite/src/store/state_machine/memory/"
           }
         ],
         "ownership": true,
-        "sourceField": "establishes",
+        "sourceField": "extends",
         "unit": {
-          "kind": "file",
-          "path": "hiqlite.toml"
+          "kind": "directory",
+          "path": "hiqlite/src/store/state_machine/memory/"
         }
       },
       {
         "locations": [
           {
-            "file": "hiqlite/src/config_toml.rs"
-          }
-        ],
-        "ownership": true,
-        "sourceField": "establishes",
-        "unit": {
-          "kind": "file",
-          "path": "hiqlite/src/config_toml.rs"
-        }
-      },
-      {
-        "locations": [
-          {
-            "file": "hiqlite/src/config.rs"
+            "file": "hiqlite/src/storage_lock.rs"
           }
         ],
         "ownership": true,
         "sourceField": "extends",
         "unit": {
           "kind": "file",
-          "path": "hiqlite/src/config.rs"
+          "path": "hiqlite/src/storage_lock.rs"
         }
       },
       {
         "locations": [
           {
-            "file": "spec-spine.toml"
+            "file": "hiqlite/src/upgrade_exclusion.rs"
           }
         ],
         "ownership": true,
         "sourceField": "extends",
         "unit": {
           "kind": "file",
-          "path": "spec-spine.toml"
+          "path": "hiqlite/src/upgrade_exclusion.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "standards/spec/findings-register.md"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/findings-register.md"
         }
       }
     ],
-    "specId": "009-configuration-contract",
+    "specId": "043-test-scratch-isolation",
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "eb3a0df5fa8b17463465cfff6c0cfc221fc2bb725f5552465b44b0b8ce1330c4"
+  "shardHash": "d2e6485ea1418c9c8e4868b7b1ab51533a33b21121808c7641558e901106f562"
 }

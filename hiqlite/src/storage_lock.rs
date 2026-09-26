@@ -257,7 +257,7 @@ mod tests {
     use std::time::{Duration, Instant};
 
     fn scratch(name: &str) -> String {
-        let dir = format!("../target/test_data/storage_lock/{name}");
+        let dir = format!("{}/storage_lock/{name}", crate::test_scratch_root());
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir
@@ -511,7 +511,10 @@ mod tests {
     #[cfg(unix)]
     fn an_aliased_path_to_the_same_directory_is_refused() {
         let dir = scratch("aliased_path");
-        let alias = format!("../target/test_data/storage_lock/aliased_path_link");
+        let alias = format!(
+            "{}/storage_lock/aliased_path_link",
+            crate::test_scratch_root()
+        );
         let _ = std::fs::remove_file(&alias);
         std::os::unix::fs::symlink(std::fs::canonicalize(&dir).unwrap(), &alias).unwrap();
 
