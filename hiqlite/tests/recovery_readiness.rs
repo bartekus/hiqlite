@@ -178,7 +178,8 @@ async fn f134_cache_replay_is_not_healthy_before_the_replay() {
         assert!(Instant::now() < deadline, "the cache never became healthy");
 
         if client.is_healthy_cache().await.is_ok() {
-            let last: Result<Option<i64>, _> = client.get(Cache::One, format!("k{}", ROWS - 1)).await;
+            let last: Result<Option<i64>, _> =
+                client.get(Cache::One, format!("k{}", ROWS - 1)).await;
             assert!(
                 matches!(last, Ok(Some(n)) if n == ROWS - 1),
                 "the cache was healthy while the last acknowledged key read as {last:?}"

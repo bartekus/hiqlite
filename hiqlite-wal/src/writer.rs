@@ -733,7 +733,10 @@ fn run(
     {
         // The lock is released either way; a leftover file only means the next start takes
         // the not-a-clean-start path. Not worth ending the process for.
-        error!("Could not remove the WAL lock file in {}: {err}", wal.base_path);
+        error!(
+            "Could not remove the WAL lock file in {}: {err}",
+            wal.base_path
+        );
     }
 
     if let Some(ack) = shutdown_ack {
@@ -766,9 +769,15 @@ mod tests {
 
         let lockfile = acquire(&base);
         let meta = Arc::new(RwLock::new(Metadata::read_or_create(&base).unwrap()));
-        let (tx, _wal, _fail) =
-            spawn(base.clone(), Some(lockfile), LogSync::Immediate, 64 * 1024, false, meta)
-                .unwrap();
+        let (tx, _wal, _fail) = spawn(
+            base.clone(),
+            Some(lockfile),
+            LogSync::Immediate,
+            64 * 1024,
+            false,
+            meta,
+        )
+        .unwrap();
 
         let (ack_tx, ack_rx) = oneshot::channel();
         tx.send(Action::Shutdown(ack_tx)).unwrap();
@@ -799,18 +808,31 @@ mod tests {
         let caller = acquire(&base);
         let share = caller.share().unwrap();
         let meta = Arc::new(RwLock::new(Metadata::read_or_create(&base).unwrap()));
-        let (tx, _wal, _fail) =
-            spawn(base.clone(), Some(share), LogSync::Immediate, 64 * 1024, false, meta).unwrap();
+        let (tx, _wal, _fail) = spawn(
+            base.clone(),
+            Some(share),
+            LogSync::Immediate,
+            64 * 1024,
+            false,
+            meta,
+        )
+        .unwrap();
 
         drop(caller);
-        assert!(LockFile::is_locked(&base).unwrap(), "the writer still holds it");
+        assert!(
+            LockFile::is_locked(&base).unwrap(),
+            "the writer still holds it"
+        );
 
         let (ack_tx, ack_rx) = oneshot::channel();
         tx.send(Action::Shutdown(ack_tx)).unwrap();
         ack_rx.blocking_recv().unwrap();
         drop(tx);
         assert!(LockFile::exists(&base).unwrap(), "a share never unlinks");
-        assert!(!LockFile::is_locked(&base).unwrap(), "released once both are done");
+        assert!(
+            !LockFile::is_locked(&base).unwrap(),
+            "released once both are done"
+        );
     }
 
     /// A writer started without the lock (the caller holds it) neither releases nor unlinks it.
@@ -822,15 +844,28 @@ mod tests {
 
         let lockfile = acquire(&base);
         let meta = Arc::new(RwLock::new(Metadata::read_or_create(&base).unwrap()));
-        let (tx, _wal, _fail) =
-            spawn(base.clone(), None, LogSync::Immediate, 64 * 1024, false, meta).unwrap();
+        let (tx, _wal, _fail) = spawn(
+            base.clone(),
+            None,
+            LogSync::Immediate,
+            64 * 1024,
+            false,
+            meta,
+        )
+        .unwrap();
 
         let (ack_tx, ack_rx) = oneshot::channel();
         tx.send(Action::Shutdown(ack_tx)).unwrap();
         ack_rx.blocking_recv().unwrap();
 
-        assert!(lockfile.is_linked_at(&base).unwrap(), "the caller's file is still linked");
-        assert!(LockFile::is_locked(&base).unwrap(), "and still locked by the caller");
+        assert!(
+            lockfile.is_linked_at(&base).unwrap(),
+            "the caller's file is still linked"
+        );
+        assert!(
+            LockFile::is_locked(&base).unwrap(),
+            "and still locked by the caller"
+        );
         lockfile.unlink_while_held(&base).unwrap();
         assert!(!LockFile::exists(&base).unwrap());
     }
@@ -996,8 +1031,15 @@ mod tests {
         let lockfile = acquire(base);
         let meta = Arc::new(RwLock::new(Metadata::read_or_create(base).unwrap()));
 
-        let (tx, _wal, _fail) =
-            spawn(base.to_string(), Some(lockfile), sync, 64 * 1024, false, meta).unwrap();
+        let (tx, _wal, _fail) = spawn(
+            base.to_string(),
+            Some(lockfile),
+            sync,
+            64 * 1024,
+            false,
+            meta,
+        )
+        .unwrap();
         tx
     }
 
@@ -1192,7 +1234,6 @@ mod tests {
         assert!(callback_rx.try_recv().is_err());
     }
 
-
     /// F-114, deterministically. An append queued behind one the writer is still reading, which
     /// then turns out truncated, used to be stranded: the writer terminated without reading it,
     /// the adapter's senders kept it alive in the queue, and whoever was sending its entries
@@ -1215,7 +1256,10 @@ mod tests {
         })
         .await
         .unwrap();
-        entries_a.send_async(Some((1, b"first".to_vec()))).await.unwrap();
+        entries_a
+            .send_async(Some((1, b"first".to_vec())))
+            .await
+            .unwrap();
 
         // B: queued behind A in the one-slot channel while the writer is still inside A.
         let (ack_b_tx, ack_b) = oneshot::channel();
@@ -1242,19 +1286,29 @@ mod tests {
         // B's producer must not block, and B must be refused, once, on both channels.
         let sent = tokio::time::timeout(bound, async {
             for id in 2..=4u64 {
-                if entries_b.send_async(Some((id, b"more".to_vec()))).await.is_err() {
+                if entries_b
+                    .send_async(Some((id, b"more".to_vec())))
+                    .await
+                    .is_err()
+                {
                     break;
                 }
             }
             let _ = entries_b.send_async(None).await;
         })
         .await;
-        assert!(sent.is_ok(), "the producer of an append queued behind a termination blocked");
+        assert!(
+            sent.is_ok(),
+            "the producer of an append queued behind a termination blocked"
+        );
         let b = tokio::time::timeout(bound, ack_b)
             .await
             .expect("an append queued behind a termination must be answered")
             .expect("the answer must not be a dropped channel");
-        assert!(b.is_err(), "a terminated writer must refuse queued work, got {b:?}");
+        assert!(
+            b.is_err(),
+            "a terminated writer must refuse queued work, got {b:?}"
+        );
         assert!(
             note_b.recv_timeout(bound).expect("one completion").is_err(),
             "the completion is a failure too"
@@ -1267,7 +1321,10 @@ mod tests {
         let sd = tokio::time::timeout(bound, sd_rx)
             .await
             .expect("a shutdown of a terminated writer must be answered, not awaited forever");
-        assert!(sd.is_err(), "a terminated writer must not acknowledge a clean shutdown");
+        assert!(
+            sd.is_err(),
+            "a terminated writer must not acknowledge a clean shutdown"
+        );
     }
 
     /// F-028: a truncated entry stream was acknowledged and notified as a **successful**
@@ -1299,9 +1356,9 @@ mod tests {
                     .collect();
                 let (ack_rx, note_rx) = dispatch_truncated_append(&tx, entries);
 
-                let ack = ack_rx
-                    .await
-                    .unwrap_or_else(|_| panic!("{label} / {case}: the append must be acknowledged, not left pending"));
+                let ack = ack_rx.await.unwrap_or_else(|_| {
+                    panic!("{label} / {case}: the append must be acknowledged, not left pending")
+                });
                 let err = ack.expect_err(&format!(
                     "{label} / {case}: a truncated append must never be acknowledged as a success"
                 ));
@@ -1312,7 +1369,9 @@ mod tests {
 
                 let notified = note_rx
                     .recv_timeout(Duration::from_secs(5))
-                    .unwrap_or_else(|_| panic!("{label} / {case}: exactly one completion must arrive"));
+                    .unwrap_or_else(|_| {
+                        panic!("{label} / {case}: exactly one completion must arrive")
+                    });
                 let notified = notified.expect_err(&format!(
                     "{label} / {case}: a truncated append must never notify success"
                 ));
@@ -1373,7 +1432,10 @@ mod tests {
 
             let (ack, _) = dispatch_append(&tx, 1, b"after an empty batch".to_vec());
             assert!(
-                matches!(tokio::time::timeout(Duration::from_secs(5), ack).await, Ok(Ok(Ok(())))),
+                matches!(
+                    tokio::time::timeout(Duration::from_secs(5), ack).await,
+                    Ok(Ok(Ok(())))
+                ),
                 "{label}: an empty batch is not a failure and must not end the writer"
             );
 
@@ -1396,7 +1458,8 @@ mod tests {
             let tx = start_writer(&base, sync.clone());
 
             for id in 1..=3u64 {
-                let (ack_rx, note_rx) = dispatch_append(&tx, id, format!("entry-{id}").into_bytes());
+                let (ack_rx, note_rx) =
+                    dispatch_append(&tx, id, format!("entry-{id}").into_bytes());
 
                 ack_rx
                     .await
@@ -1469,7 +1532,9 @@ mod tests {
             .expect("the persistence failure must be notified")
             .expect_err("it must not be notified as success");
         assert!(
-            notified.to_string().contains("injected persistence failure"),
+            notified
+                .to_string()
+                .contains("injected persistence failure"),
             "the notification must carry the injected cause, got: {notified}"
         );
 
@@ -1490,7 +1555,10 @@ mod tests {
             tokio::time::timeout(Duration::from_secs(5), ack).await,
             Ok(Ok(Err(Error::Internal(reason)))) if reason.contains("terminated")
         );
-        refused && note.recv_timeout(Duration::from_secs(5)).is_ok_and(|r| r.is_err())
+        refused
+            && note
+                .recv_timeout(Duration::from_secs(5))
+                .is_ok_and(|r| r.is_err())
     }
 
     /// The termination itself is reported. The thread's `JoinHandle` is not retained; the report
@@ -1573,5 +1641,4 @@ mod tests {
         tx.send(Action::Shutdown(ack_tx)).unwrap();
         ack_rx.blocking_recv().unwrap();
     }
-
 }

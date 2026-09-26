@@ -219,8 +219,7 @@ mod tests {
             .expect_err("a migration with no numeric index is not a valid set");
         let text = err.to_string();
         assert!(
-            text.contains("must start with an integer index")
-                || text.contains("no `_` separating"),
+            text.contains("must start with an integer index") || text.contains("no `_` separating"),
             "the message must name the rule that was broken, got: {text}"
         );
         assert!(
@@ -232,7 +231,10 @@ mod tests {
     #[test]
     fn an_index_set_that_does_not_start_at_one_is_an_error() {
         let err = Migrations::try_build::<Bad2>().expect_err("indices must start at 1");
-        assert!(err.to_string().contains("must start at index 1"), "got: {err}");
+        assert!(
+            err.to_string().contains("must start at index 1"),
+            "got: {err}"
+        );
     }
 
     /// F-065: a duplicate index was reported as "Migration index has a gap: 1 does not follow
@@ -243,8 +245,8 @@ mod tests {
         #[folder = "tests/cluster/migrations/duplicate"]
         struct Duplicate;
 
-        let err = Migrations::try_build::<Duplicate>()
-            .expect_err("two files cannot both be migration 1");
+        let err =
+            Migrations::try_build::<Duplicate>().expect_err("two files cannot both be migration 1");
         let text = err.to_string();
         assert!(
             text.contains("used twice"),

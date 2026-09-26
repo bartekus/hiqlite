@@ -134,10 +134,10 @@ impl LockFile {
     pub fn unlink_while_held(self, base_path: &str) -> io::Result<()> {
         if !self.shared && self.is_linked_at(base_path)? {
             #[cfg(test)]
-            UNLINK_OBSERVED
-                .lock()
-                .unwrap()
-                .push((base_path.to_string(), Self::is_locked(base_path).unwrap_or(false)));
+            UNLINK_OBSERVED.lock().unwrap().push((
+                base_path.to_string(),
+                Self::is_locked(base_path).unwrap_or(false),
+            ));
             fs::remove_file(Self::path(base_path))?;
         }
         drop(self);
@@ -221,7 +221,10 @@ mod tests {
         fs::write(LockFile::path(&base_path), b"left by an earlier run").unwrap();
 
         let lock = acquired(&base_path);
-        assert!(lock.existed_before(), "the unclean-start signal must survive");
+        assert!(
+            lock.existed_before(),
+            "the unclean-start signal must survive"
+        );
         assert_eq!(
             fs::read(LockFile::path(&base_path)).unwrap(),
             b"left by an earlier run"

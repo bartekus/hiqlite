@@ -219,7 +219,9 @@ async fn are_we_leader(state: &AppStateExt, raft_type: &RaftType) -> Result<(), 
         .any(|id| id == state.id);
 
     membership_change_allowed(
-        state.is_shutting_down.load(std::sync::atomic::Ordering::Relaxed),
+        state
+            .is_shutting_down
+            .load(std::sync::atomic::Ordering::Relaxed),
         leader,
         state.id,
         this_node_is_voter,
@@ -248,8 +250,7 @@ pub(crate) fn decide_membership_change_now(
     };
     // openraft's first assertion in `append_membership` is on the server state, not on the
     // reported leader id, and the two can disagree while a self-removal is being applied.
-    if metrics.current_leader == Some(state.id) && metrics.state != openraft::ServerState::Leader
-    {
+    if metrics.current_leader == Some(state.id) && metrics.state != openraft::ServerState::Leader {
         return Err(Error::LeaderChange(
             "this node reports itself leader but its raft is no longer in the leader state; ask \
              another node"
@@ -260,7 +261,10 @@ pub(crate) fn decide_membership_change_now(
         state.membership.is_closed(),
         metrics.current_leader,
         state.id,
-        metrics.membership_config.voter_ids().any(|id| id == state.id),
+        metrics
+            .membership_config
+            .voter_ids()
+            .any(|id| id == state.id),
     )
 }
 
@@ -430,9 +434,14 @@ pub(crate) async fn leave_cluster_exec(
 
         if is_voter {
             warn!("Node {} ({:?}) is a Voter", payload.node_id, raft_type);
-            if let Err(err) =
-                helpers::remove_voter(state, raft_type, payload.node_id, payload.stay_as_learner, held)
-                    .await
+            if let Err(err) = helpers::remove_voter(
+                state,
+                raft_type,
+                payload.node_id,
+                payload.stay_as_learner,
+                held,
+            )
+            .await
             {
                 error!(
                     "Error removing Node {} ({:?}) from Voters: {:?}",
@@ -450,7 +459,8 @@ pub(crate) async fn leave_cluster_exec(
                 "Node {} ({:?}) is a Learner and should not stay one",
                 payload.node_id, raft_type
             );
-            if let Err(err) = helpers::remove_learner(state, raft_type, payload.node_id, held).await {
+            if let Err(err) = helpers::remove_learner(state, raft_type, payload.node_id, held).await
+            {
                 error!(
                     "Error removing Node {} ({:?}) from Learners: {:?}",
                     payload.node_id, raft_type, err

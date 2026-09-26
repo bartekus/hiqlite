@@ -556,13 +556,9 @@ impl StateMachineSqlite {
                             .into(),
                     )
                 })?;
-            let bytes: Vec<u8> = stmt
-                .query_row((), |row| row.get(0))
-                .map_err(|err| {
-                    Error::Sqlite(
-                        format!("snapshot '{path_dbg}' has no metadata row: {err}").into(),
-                    )
-                })?;
+            let bytes: Vec<u8> = stmt.query_row((), |row| row.get(0)).map_err(|err| {
+                Error::Sqlite(format!("snapshot '{path_dbg}' has no metadata row: {err}").into())
+            })?;
             let metadata: StateMachineData = deserialize(&bytes).map_err(|err| {
                 Error::Sqlite(
                     format!("snapshot '{path_dbg}' has metadata that does not decode: {err}")
@@ -603,7 +599,9 @@ impl StateMachineSqlite {
         let (dir, file) = path
             .rsplit_once('/')
             .map(|(d, f)| (d.to_string(), f.to_string()))
-            .ok_or_else(|| Error::Error(format!("{path} is not a path inside a directory").into()))?;
+            .ok_or_else(|| {
+                Error::Error(format!("{path} is not a path inside a directory").into())
+            })?;
         let conn = Self::connect(dir, file, true, 2).await?;
 
         let id_str = id.to_string();
@@ -639,8 +637,10 @@ impl StateMachineSqlite {
             })?;
             let metadata: StateMachineData = deserialize(&bytes).map_err(|err| {
                 Error::Sqlite(
-                    format!("received snapshot '{path_dbg}' has metadata that does not decode: {err}")
-                        .into(),
+                    format!(
+                        "received snapshot '{path_dbg}' has metadata that does not decode: {err}"
+                    )
+                    .into(),
                 )
             })?;
             if metadata.last_snapshot_id.as_deref() != Some(id_str.as_str()) {
@@ -1029,8 +1029,7 @@ impl RaftStateMachine<TypeConfigSqlite> for StateMachineSqlite {
         // SQLite database at all, is discarded here with the live database untouched. Before
         // this, the file was published under its final name first and validated never.
         let staged_id = Uuid::parse_str(&meta.snapshot_id).map_err(|err| StorageError::IO {
-            source: StorageIOError::write(
-                openraft::AnyError::error(format!(
+            source: StorageIOError::write(openraft::AnyError::error(format!(
                 "the received snapshot id {:?} is not a UUID: {err}",
                 meta.snapshot_id
             ))),
@@ -1038,8 +1037,7 @@ impl RaftStateMachine<TypeConfigSqlite> for StateMachineSqlite {
         if let Err(err) = self.validate_staged_snapshot(&staged, staged_id).await {
             let _ = fs::remove_file(&staged).await;
             return Err(StorageError::IO {
-                source: StorageIOError::write(
-                openraft::AnyError::error(format!(
+                source: StorageIOError::write(openraft::AnyError::error(format!(
                     "the received snapshot {} is not usable and was discarded without touching \
                      this node's database: {err}",
                     meta.snapshot_id
@@ -1420,7 +1418,9 @@ mod tests {
             let good_id = build_one_snapshot(&root_str, 1, "CREATE TABLE t (id INTEGER);").await;
 
             let bad_id = Uuid::now_v7();
-            fs::write(format!("{snapshots}/{bad_id}"), &bytes).await.unwrap();
+            fs::write(format!("{snapshots}/{bad_id}"), &bytes)
+                .await
+                .unwrap();
 
             let mut sm = state_machine_over(&snapshots).await;
             let selected = sm
@@ -1449,7 +1449,9 @@ mod tests {
         let _good_id = build_one_snapshot(&root_str, 1, "CREATE TABLE t (id INTEGER);").await;
 
         let bad_id = Uuid::now_v7();
-        fs::write(format!("{snapshots}/{bad_id}"), b"torn").await.unwrap();
+        fs::write(format!("{snapshots}/{bad_id}"), b"torn")
+            .await
+            .unwrap();
 
         let mut sm = state_machine_over(&snapshots).await;
         let err = sm
@@ -1558,7 +1560,8 @@ mod tests {
         .expect("an unusable received snapshot must be rejected before the restore is attempted")
         .expect_err("an unusable received snapshot must not install");
         assert!(
-            err.to_string().contains("without touching this node's database"),
+            err.to_string()
+                .contains("without touching this node's database"),
             "got: {err}"
         );
 

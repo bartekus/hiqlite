@@ -299,7 +299,11 @@ mod tests {
     /// generated code asked the row for a bare `i64`, which fails at runtime on a NULL.
     #[test]
     fn both_spellings_of_option_take_the_optional_branch() {
-        for path in ["std::option::Option<i64>", "core::option::Option<i64>", "Option<i64>"] {
+        for path in [
+            "std::option::Option<i64>",
+            "core::option::Option<i64>",
+            "Option<i64>",
+        ] {
             let out = generate(&format!(
                 r#"struct Test {{ #[column(from_i64)] a: {path} }}"#
             ))
@@ -351,12 +355,8 @@ mod tests {
     /// Both orders of a combined rename are accepted and mean the same thing.
     #[test]
     fn rename_combines_with_a_conversion_in_either_order() {
-        let first = generate(
-            r#"struct Test { #[column(rename = "col", from_i64)] a: i64 }"#,
-        );
-        let second = generate(
-            r#"struct Test { #[column(from_i64, rename = "col")] a: i64 }"#,
-        );
+        let first = generate(r#"struct Test { #[column(rename = "col", from_i64)] a: i64 }"#);
+        let second = generate(r#"struct Test { #[column(from_i64, rename = "col")] a: i64 }"#);
         assert!(first.contains("col"), "{first}");
         assert!(second.contains("col"), "{second}");
         assert_eq!(first, second);

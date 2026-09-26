@@ -20,7 +20,6 @@ use crate::backup;
 #[cfg(feature = "dashboard")]
 use crate::dashboard;
 
-
 /// Whether this node keeps anything on disk that another process could corrupt.
 ///
 /// The one configuration that does not is a cache-only node with
@@ -33,7 +32,11 @@ fn storage_ownership_required(node_config: &NodeConfig) -> bool {
     {
         true
     }
-    #[cfg(all(not(feature = "sqlite"), feature = "cache", feature = "in-memory-snapshots"))]
+    #[cfg(all(
+        not(feature = "sqlite"),
+        feature = "cache",
+        feature = "in-memory-snapshots"
+    ))]
     {
         node_config.cache_storage_disk
     }
@@ -52,8 +55,6 @@ fn storage_ownership_required(node_config: &NodeConfig) -> bool {
         false
     }
 }
-
-
 
 /// Stop what a partial startup already started.
 ///

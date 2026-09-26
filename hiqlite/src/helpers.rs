@@ -2,11 +2,11 @@ use crate::app_state::{AppState, RaftType};
 use crate::{Error, Node};
 use bincode::error::{DecodeError, EncodeError};
 use openraft::{ChangeMembers, RaftMetrics};
-use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 use std::collections::BTreeSet;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use tracing::info;
 
 #[inline(always)]
@@ -156,7 +156,13 @@ pub async fn remove_learner(
         }
         #[cfg(feature = "cache")]
         RaftType::Cache => {
-            bounded_membership_op(state.raft_cache.raft.change_membership(ChangeMembers::RemoveNodes(set), false)).await?;
+            bounded_membership_op(
+                state
+                    .raft_cache
+                    .raft
+                    .change_membership(ChangeMembers::RemoveNodes(set), false),
+            )
+            .await?;
             Ok(())
         }
         RaftType::Unknown => panic!("neither `sqlite` nor `cache` feature enabled"),
@@ -232,7 +238,13 @@ pub async fn remove_voter(
         }
         #[cfg(feature = "cache")]
         RaftType::Cache => {
-            bounded_membership_op(state.raft_cache.raft.change_membership(ChangeMembers::RemoveVoters(set), retain)).await?;
+            bounded_membership_op(
+                state
+                    .raft_cache
+                    .raft
+                    .change_membership(ChangeMembers::RemoveVoters(set), retain),
+            )
+            .await?;
             Ok(())
         }
         RaftType::Unknown => panic!("neither `sqlite` nor `cache` feature enabled"),

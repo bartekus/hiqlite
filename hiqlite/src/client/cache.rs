@@ -241,7 +241,11 @@ impl Client {
                 cache_idx: cache.hiqlite_cache_index(),
                 key: key.into(),
                 value,
-                expires: ttl.map(|seconds| Utc::now().timestamp_micros().saturating_add(seconds.saturating_mul(1_000_000))),
+                expires: ttl.map(|seconds| {
+                    Utc::now()
+                        .timestamp_micros()
+                        .saturating_add(seconds.saturating_mul(1_000_000))
+                }),
             },
             false,
         )

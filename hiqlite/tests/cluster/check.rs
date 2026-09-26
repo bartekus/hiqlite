@@ -26,7 +26,14 @@ pub async fn is_client_db_healthy(client: &Client, id: Option<u64>) -> Result<()
     client.wait_until_healthy_cache().await;
     log(format!("Cache {:?} is healthy", id));
     wait_for_members(
-        || async { Ok(client.metrics_cache().await?.membership_config.nodes().count()) },
+        || async {
+            Ok(client
+                .metrics_cache()
+                .await?
+                .membership_config
+                .nodes()
+                .count())
+        },
         "cache",
         id,
     )

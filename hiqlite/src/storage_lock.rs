@@ -77,7 +77,11 @@ impl StorageOwnership {
         // would do it to a file another process may be holding.
         let open_err = |err: std::io::Error| {
             Error::Config(
-                format!("cannot open the storage owner lock {}: {err}", path.display()).into(),
+                format!(
+                    "cannot open the storage owner lock {}: {err}",
+                    path.display()
+                )
+                .into(),
             )
         };
         let (mut file, created) = match OpenOptions::new()
@@ -207,7 +211,10 @@ impl StorageOwnership {
         {
             // The lock is held; only the note failed. Say so and carry on rather than giving
             // up ownership we already have.
-            warn!("Could not record the storage owner note in {}: {err}", path.display());
+            warn!(
+                "Could not record the storage owner note in {}: {err}",
+                path.display()
+            );
         }
     }
 
@@ -387,7 +394,10 @@ mod tests {
         let (status, output) = run_child(&dir, "once");
         assert!(output.contains("CHILD_ACQUIRED"), "got: {output}");
         assert!(output.contains("CHILD_RELEASED"), "got: {output}");
-        assert!(status.success(), "the child must exit cleanly, printed: {output}");
+        assert!(
+            status.success(),
+            "the child must exit cleanly, printed: {output}"
+        );
 
         let owner = StorageOwnership::acquire(&dir)
             .expect("ownership must be available after an orderly shutdown");
@@ -450,8 +460,8 @@ mod tests {
         let line = wait_for_marker(&mut child, "CHILD_ACQUIRED");
         assert!(line.contains("CHILD_ACQUIRED"), "got: {line}");
 
-        let err = StorageOwnership::acquire(&dir)
-            .expect_err("another live process owns this directory");
+        let err =
+            StorageOwnership::acquire(&dir).expect_err("another live process owns this directory");
         assert!(matches!(err, Error::StorageInUse(_)), "got: {err}");
         assert!(
             err.to_string().contains("pid="),
@@ -503,11 +513,7 @@ mod tests {
         let dir = scratch("aliased_path");
         let alias = format!("../target/test_data/storage_lock/aliased_path_link");
         let _ = std::fs::remove_file(&alias);
-        std::os::unix::fs::symlink(
-            std::fs::canonicalize(&dir).unwrap(),
-            &alias,
-        )
-        .unwrap();
+        std::os::unix::fs::symlink(std::fs::canonicalize(&dir).unwrap(), &alias).unwrap();
 
         let _first = StorageOwnership::acquire(&dir).expect("the first owner takes it");
         let err = StorageOwnership::acquire(&alias)

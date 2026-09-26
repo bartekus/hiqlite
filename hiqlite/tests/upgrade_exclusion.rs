@@ -52,7 +52,12 @@ impl Drop for Holder {
 fn hold(path: &str) -> Holder {
     let mut holder = Holder(
         Command::new(std::env::current_exe().unwrap())
-            .args(["--exact", "child_holds_lock", "--nocapture", "--test-threads=1"])
+            .args([
+                "--exact",
+                "child_holds_lock",
+                "--nocapture",
+                "--test-threads=1",
+            ])
             .env(HOLD, path)
             .stdout(Stdio::piped())
             .spawn()
@@ -63,7 +68,10 @@ fn hold(path: &str) -> Holder {
     loop {
         line.clear();
         // On a failed assertion the holder is dropped, which kills and waits for it.
-        assert!(out.read_line(&mut line).unwrap() > 0, "the holder exited early");
+        assert!(
+            out.read_line(&mut line).unwrap() > 0,
+            "the holder exited early"
+        );
         if line.contains("LOCKED") {
             return holder;
         }
@@ -81,7 +89,11 @@ fn tree(dir: &str) -> BTreeMap<String, (bool, u64, u64, Vec<u8>)> {
             let ino = std::os::unix::fs::MetadataExt::ino(&meta);
             #[cfg(not(unix))]
             let ino = 0;
-            let rel = path.strip_prefix(root).unwrap().to_string_lossy().into_owned();
+            let rel = path
+                .strip_prefix(root)
+                .unwrap()
+                .to_string_lossy()
+                .into_owned();
             if meta.is_dir() {
                 out.insert(rel, (true, ino, 0, Vec::new()));
                 walk(root, &path, out);
@@ -105,9 +117,17 @@ fn fresh(case: &str) -> String {
 /// What a cleanly stopped hiqlite 0.14 disk cache leaves: WAL files, no marker, snapshots.
 fn legacy_cache(dir: &str) {
     std::fs::create_dir_all(format!("{dir}/logs_cache")).unwrap();
-    std::fs::write(format!("{dir}/logs_cache/00000000000000000001.wal"), b"legacy wal").unwrap();
+    std::fs::write(
+        format!("{dir}/logs_cache/00000000000000000001.wal"),
+        b"legacy wal",
+    )
+    .unwrap();
     std::fs::create_dir_all(format!("{dir}/state_machine_cache/snapshots")).unwrap();
-    std::fs::write(format!("{dir}/state_machine_cache/snapshots/s1"), b"legacy snapshot").unwrap();
+    std::fs::write(
+        format!("{dir}/state_machine_cache/snapshots/s1"),
+        b"legacy snapshot",
+    )
+    .unwrap();
 }
 
 fn config(dir: &str) -> NodeConfig {
@@ -154,7 +174,10 @@ fn assert_only_owner_lock_added(
 ) {
     let mut after = after.clone();
     if !before.contains_key("hiqlite-owner.lock") {
-        assert!(after.remove("hiqlite-owner.lock").is_some(), "the owner lock is created");
+        assert!(
+            after.remove("hiqlite-owner.lock").is_some(),
+            "the owner lock is created"
+        );
     }
     assert_eq!(
         before.keys().collect::<Vec<_>>(),
@@ -190,9 +213,14 @@ async fn f126_a_live_node_is_refused_before_the_move() {
         if let Ok(client) = &res {
             let _ = client.shutdown().await;
         }
-        let err = res.err().unwrap_or_else(|| panic!("{held}: a live node must be refused"));
+        let err = res
+            .err()
+            .unwrap_or_else(|| panic!("{held}: a live node must be refused"));
         assert!(matches!(err, Error::StorageInUse(_)), "{held}: got {err}");
-        assert!(err.to_string().contains(&format!("{held}/lock.hql")), "{err}");
+        assert!(
+            err.to_string().contains(&format!("{held}/lock.hql")),
+            "{err}"
+        );
         assert_only_owner_lock_added(&before, &tree(&dir));
         drop(holder);
     }
@@ -214,7 +242,10 @@ async fn f127_the_unclean_marker_is_refused_before_the_move() {
     set_consent(Some("true"));
     let res = start(&dir).await;
     set_consent(None);
-    let err = res.expect("no panic").err().expect("an unclean marker must be refused");
+    let err = res
+        .expect("no panic")
+        .err()
+        .expect("an unclean marker must be refused");
     assert!(matches!(err, Error::Startup(_)), "got {err}");
     assert!(err.to_string().contains("state_machine/lock"), "{err}");
     assert_only_owner_lock_added(&before, &tree(&dir));
@@ -260,7 +291,9 @@ async fn f130_an_interrupted_published_move_is_refused_then_finished() {
     if let Ok(client) = &res {
         let _ = client.shutdown().await;
     }
-    let err = res.err().expect("an interrupted move must not start without consent");
+    let err = res
+        .err()
+        .expect("an interrupted move must not start without consent");
     assert!(err.to_string().contains("pre-upgrade-100"), "{err}");
     assert_only_owner_lock_added(&before, &tree(&dir));
 
@@ -271,7 +304,10 @@ async fn f130_an_interrupted_published_move_is_refused_then_finished() {
     let client = res.expect("no panic").expect("the move completes");
     client.shutdown().await.expect("a clean stop");
     assert_eq!(
-        std::fs::read(format!("{dir}/pre-upgrade-100/state_machine_cache/snapshots/s1")).unwrap(),
+        std::fs::read(format!(
+            "{dir}/pre-upgrade-100/state_machine_cache/snapshots/s1"
+        ))
+        .unwrap(),
         b"legacy snapshot"
     );
     // A clean stop removed every WAL lock file.
@@ -309,7 +345,11 @@ async fn the_consent_move_completes_once() {
     set_consent(None);
     let client = res.expect("no panic").expect("a marked directory starts");
     client.shutdown().await.expect("a clean stop");
-    assert_eq!(pre_upgrade_dirs(&dir).len(), 1, "a repeated consent moves nothing more");
+    assert_eq!(
+        pre_upgrade_dirs(&dir).len(),
+        1,
+        "a repeated consent moves nothing more"
+    );
 }
 
 fn pre_upgrade_dirs(dir: &str) -> Vec<String> {

@@ -451,7 +451,10 @@ mod tests {
         let mut keys = toml
             .lines()
             .filter_map(|line| {
-                let line = line.trim_start().strip_prefix('#').unwrap_or(line.trim_start());
+                let line = line
+                    .trim_start()
+                    .strip_prefix('#')
+                    .unwrap_or(line.trim_start());
                 let (key, _) = line.split_once(" = ")?;
                 if !key.is_empty()
                     && key

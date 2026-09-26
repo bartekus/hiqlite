@@ -9,8 +9,8 @@ use crate::{Client, Error};
 use std::borrow::Cow;
 use std::time::Duration;
 use tokio::sync::oneshot;
-use tokio::time;
 use tokio::task;
+use tokio::time;
 use tracing::error;
 
 /// How long one await for a queued ticket lasts before it re-requests: the lease, plus margin for
