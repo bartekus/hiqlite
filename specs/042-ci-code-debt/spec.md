@@ -152,6 +152,17 @@ The reformat is one mechanical commit with no other change except the
 regenerated `.derived/` shards it forces; its SHA is listed in
 `.git-blame-ignore-revs`, so `git blame` with that file configured skips it.
 
+**A3 (featureless workspace test).** `cargo test --workspace --locked`, with
+default features only, compiles and runs every test target whose features are
+enabled and skips the `cluster` integration target cleanly: `hiqlite/Cargo.toml`
+declares it as a `[[test]]` with `required-features = ["backup", "cache",
+"dlock", "listen_notify", "macros", "sqlite"]`, the features its modules call.
+Cargo then leaves it out of a run that lacks them, and `clippy --all-targets`
+does the same. A run with those features (the `Check` job's `just test-no-s3`,
+`--features cache,counters,dlock,listen_notify,macros,toml,external-state-machine`
+on top of the defaults) still builds and executes it. The other integration
+targets already gate themselves with `#![cfg(...)]` on their features.
+
 ## 4. Evidence and its limits
 
 Why the files differed (measured 2026-09-25, rustfmt from toolchain 1.95.0, no
@@ -195,8 +206,18 @@ shards, because the content hashes in the index change with every formatted
 file and a commit without them fails `spine-check` on its own
 (`gate_each_commit`). No other file changes in it.
 
+**D-3 (2026-09-25).** `required-features` rather than a `#![cfg(...)]` at the
+top of `tests/cluster/main.rs`, because it leaves the upstream-derived test
+source untouched and makes cargo report the skip instead of building an empty
+binary. `hiqlite/Cargo.toml` is claimed by no spec, so no `extends` edge is
+needed for it. The feature list is what the modules use (SQLite, the cache,
+`lock`, listen/notify, the `CacheVariants` derive, and the backup tests), not
+the whole `Check` set; `counters`, `toml` and `external-state-machine` are not
+needed to build the target.
+
 ## Verification
 
 ```verify:cli
 cargo +1.95.0 fmt --all -- --check
+grep -q 'required-features = \["backup", "cache", "dlock", "listen_notify", "macros", "sqlite"\]' hiqlite/Cargo.toml
 ```
