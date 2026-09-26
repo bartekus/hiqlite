@@ -135,8 +135,8 @@ fn config(dir: &str) -> NodeConfig {
         node_id: 1,
         nodes: vec![Node {
             id: 1,
-            addr_raft: "127.0.0.1:38612".to_string(),
-            addr_api: "127.0.0.1:38611".to_string(),
+            addr_raft: "127.0.0.1:28612".to_string(),
+            addr_api: "127.0.0.1:28611".to_string(),
         }],
         data_dir: dir.to_string().into(),
         secret_raft: "SuperSecureSecret1337".to_string(),

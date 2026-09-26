@@ -91,7 +91,7 @@ async fn lock_within(client: &hiqlite::Client, key: &'static str) -> (hiqlite::L
 /// restart asks well inside that replayed lease.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn f138_a_lock_held_at_the_stop_is_granted_to_the_next_caller_within_one_lease() {
-    let port = 38741;
+    let port = 28741;
     let dir = fresh("held_at_stop");
 
     let client = start(&dir, port).await;
@@ -113,7 +113,7 @@ async fn f138_a_lock_held_at_the_stop_is_granted_to_the_next_caller_within_one_l
 /// without any of them sitting out a request timeout.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn f138_callers_queued_behind_a_replayed_lock_are_each_served() {
-    let port = 38751;
+    let port = 28751;
     let dir = fresh("queued_behind_replay");
 
     let client = start(&dir, port).await;
