@@ -197,8 +197,11 @@ The limit: formatting is checked by rustfmt, not by a test. That the reformat
 changed no behavior rests on rustfmt's own guarantee and on the full suite
 passing before and after, not on a semantic diff.
 
-The three changes merged as #53 (A1), #56 (A3) and #57 (A2). On the merged
-trunk `a305996` (2026-09-26, macOS arm64, toolchain 1.95.0), the profile's
+The three changes merged in stack order as #53 (A1), #56 (A3) and #57 (A2).
+The A-n identifiers name the three independent requirements above, not their
+execution order: A3 had to make the featureless target compilable before A2
+could lint all targets. On the merged trunk `a305996` (2026-09-26, macOS arm64,
+toolchain 1.95.0), the profile's
 `sh scripts/statecraft/gate.sh code` (revision 7, copied from #47) exits 0:
 `cargo build --workspace --locked`, `cargo test --workspace --locked` (default
 features; `cluster` skipped), `cargo clippy --workspace --all-targets --locked
