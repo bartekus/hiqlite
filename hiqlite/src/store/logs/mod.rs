@@ -49,7 +49,7 @@ mod tests {
     use std::fs;
 
     fn fresh(case: &str) -> String {
-        let dir = format!("../target/test_data/cache_format/{case}");
+        let dir = format!("{}/cache_format/{case}", crate::test_scratch_root());
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir
