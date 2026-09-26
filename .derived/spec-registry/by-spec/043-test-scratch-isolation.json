@@ -45,6 +45,30 @@
           "kind": "file",
           "path": "standards/spec/findings-register.md"
         }
+      },
+      {
+        "nature": "additive",
+        "spec": "035-n1-upgrade-exclusion",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/tests/upgrade_exclusion.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "037-startup-recovery-readiness",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/tests/recovery_readiness.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "039-lock-after-restart-evidence",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/tests/lease_wake.rs"
+        }
       }
     ],
     "id": "043-test-scratch-isolation",
@@ -52,14 +76,14 @@
     "owner": "hiqlite maintainers",
     "risk": "low",
     "sectionDigests": {
-      "043-give-each-lib-test-process-its-own-scratch-root": "7058f523cee95ffbe2477807c442789a36b3c88e3255dd819c4fdc57d92cc7d9",
+      "043-give-each-lib-test-process-its-own-scratch-root": "f49509d9ea7aece3dfda773117aaab73e4a1bc277d4aea9b4e5f385e592cfe1c",
       "1-purpose": "e39b95744ec419226d9f8ffbd2861d384fcca2f7a7c0415256de23e7215e2cde",
       "2-ownership": "7f8195e4f46cf59a917b9fe5a1cbf651939a18416dc0de8475289abd60526a1c",
-      "3-behavior": "6278f4b7f8c28fa89d055d9655e664e435be7b65199a355f7a598209fcc290db",
-      "4-evidence-and-its-limits": "1dc2cb1d9796015c62b27530c779690c717d794a951d0c247cc85cba6acbc9d8",
-      "5-known-defects": "08cf59afbe2b128e6f7ea0fd9212c6fca28ae88418c99d606dffee68fa17aab3",
+      "3-behavior": "08c700a3a1e26447e6e055268513bbc11a6cb9a932dd8c210d5d5d14ce9cc158",
+      "4-evidence-and-its-limits": "2387e7085af076257984a7e45cd61907037939182f4fbe2806fe9d0026ec07c7",
+      "5-known-defects": "885b897494440f291af421136e941f58f7d80f7c82b2575bd057a45fc9077948",
       "6-out-of-scope": "1882d4e36227f3e9691aff81fa3e3ed40560133f7be44d5d35189b94438a5561",
-      "7-resolved-decisions": "bb8d6a2bebf8a94740b3ed7cbf3b7b5c841a689d8767da155f61702df78f212c",
+      "7-resolved-decisions": "a36c3262e87074610a4423fb84ddb22a781cddcd4761def4b389499d2a8905dc",
       "verification": "ef633e446a9c93677aa703f95b2547d1418b49a4a9160eb8c17d6da0f3e88bd4"
     },
     "sectionHeadings": [
@@ -78,6 +102,6 @@
     "summary": "Repairs F-139 and F-140, two lib tests that failed once on a loaded host. The cause was not timing: the tests' scratch directories were fixed paths under `../target/test_data`, shared by every process running the lib tests from one checkout, so concurrent runs removed and locked each other's directories. Each test process now uses its own root. Test code only.\n",
     "title": "Give each lib test process its own scratch root, so concurrent runs from one checkout do not collide"
   },
-  "shardHash": "ac7d77a2e8533d0ab4777dacaba7a5059dbb3e4c50237132249a1b5fce36905a",
+  "shardHash": "3698dbe58cde63f72c24cc70cdc4f7571a95700b699e4a32cc13585b3cf56e53",
   "specVersion": "1.8.0"
 }

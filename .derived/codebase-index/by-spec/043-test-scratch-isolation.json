@@ -22,6 +22,18 @@
         "source": "spec-edge"
       },
       {
+        "path": "hiqlite/tests/lease_wake.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/tests/recovery_readiness.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/tests/upgrade_exclusion.rs",
+        "source": "spec-edge"
+      },
+      {
         "path": "standards/spec/findings-register.md",
         "source": "spec-edge"
       }
@@ -82,6 +94,45 @@
       {
         "locations": [
           {
+            "file": "hiqlite/tests/lease_wake.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/tests/lease_wake.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/tests/recovery_readiness.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/tests/recovery_readiness.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/tests/upgrade_exclusion.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/tests/upgrade_exclusion.rs"
+        }
+      },
+      {
+        "locations": [
+          {
             "file": "standards/spec/findings-register.md"
           }
         ],
@@ -97,5 +148,5 @@
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "d108ec9b8b42a2426ffd9ac4db54f42646559cc0f9b9ce74b261943402fd2426"
+  "shardHash": "ea9fcaf77e6792032ec270fac4e1962b72d8899cd120b6076cdbdaed9cbe1ab1"
 }
