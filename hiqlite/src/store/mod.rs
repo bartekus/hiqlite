@@ -156,11 +156,11 @@ pub(crate) async fn start_raft_db(
     )
     .await
     .map_err(|err| {
-            // A start that failed is not a component that failed: the log store dropped here
-            // ends its writer, and without this the watch recorded that as a WAL writer failure.
-            lifecycle.begin_shutdown();
-            Error::Startup(format!("cannot create the sqlite raft: {err}").into())
-        })?;
+        // A start that failed is not a component that failed: the log store dropped here
+        // ends its writer, and without this the watch recorded that as a WAL writer failure.
+        lifecycle.begin_shutdown();
+        Error::Startup(format!("cannot create the sqlite raft: {err}").into())
+    })?;
 
     if let Err(err) = init::init_pristine_node_1_db(
         &raft,
@@ -266,7 +266,9 @@ where
             .get_log_state()
             .await
             .map_err(|err| {
-                Error::Error(format!("cannot read the cache WAL log state at startup: {err}").into())
+                Error::Error(
+                    format!("cannot read the cache WAL log state at startup: {err}").into(),
+                )
             })?
             .last_log_id
             .map(|id| id.index);

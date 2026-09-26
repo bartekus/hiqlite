@@ -199,7 +199,12 @@ impl UpgradeExclusion {
         }
     }
 
-    fn run_inner(&mut self, opens_db: bool, opens_cache_log: bool, consent: bool) -> Result<(), Stop> {
+    fn run_inner(
+        &mut self,
+        opens_db: bool,
+        opens_cache_log: bool,
+        consent: bool,
+    ) -> Result<(), Stop> {
         let data_dir = self.data_dir.clone();
 
         // Step 2. Every WAL directory this start will open, created if absent, so there is no
@@ -657,7 +662,9 @@ impl UpgradeExclusion {
         {
             TryAcquire::Acquired(lock) => lock,
             TryAcquire::Held { .. } => {
-                return Err(fail(format!("{staged}/lock.hql is locked by another process")));
+                return Err(fail(format!(
+                    "{staged}/lock.hql is locked by another process"
+                )));
             }
         };
         write_marker(&staged)
@@ -718,14 +725,15 @@ impl UpgradeExclusion {
                 "{staged} holds {other}, which this build never writes there; inspect it"
             )));
         }
-        let lock = match LockFile::try_acquire(&staged).map_err(|e| Stop::Incomplete(e.to_string()))? {
-            TryAcquire::Acquired(lock) => lock,
-            TryAcquire::Held { .. } => {
-                return Err(Stop::Incomplete(format!(
-                    "{staged}/lock.hql is locked by another process"
-                )));
-            }
-        };
+        let lock =
+            match LockFile::try_acquire(&staged).map_err(|e| Stop::Incomplete(e.to_string()))? {
+                TryAcquire::Acquired(lock) => lock,
+                TryAcquire::Held { .. } => {
+                    return Err(Stop::Incomplete(format!(
+                        "{staged}/lock.hql is locked by another process"
+                    )));
+                }
+            };
         for name in entries.iter().filter(|n| *n != "lock.hql") {
             fs::remove_file(format!("{staged}/{name}"))
                 .map_err(|e| Stop::Incomplete(format!("cannot remove {staged}/{name}: {e}")))?;
@@ -896,7 +904,11 @@ mod tests {
                 let path = entry.unwrap().path();
                 let meta = fs::symlink_metadata(&path).unwrap();
                 let ino = std::os::unix::fs::MetadataExt::ino(&meta);
-                let rel = path.strip_prefix(root).unwrap().to_string_lossy().into_owned();
+                let rel = path
+                    .strip_prefix(root)
+                    .unwrap()
+                    .to_string_lossy()
+                    .into_owned();
                 if meta.is_dir() {
                     out.insert(rel, (true, ino, Vec::new()));
                     walk(root, &path, out);
@@ -912,9 +924,17 @@ mod tests {
 
     fn legacy(dir: &str) {
         fs::create_dir_all(format!("{dir}/logs_cache")).unwrap();
-        fs::write(format!("{dir}/logs_cache/00000000000000000001.wal"), b"legacy wal").unwrap();
+        fs::write(
+            format!("{dir}/logs_cache/00000000000000000001.wal"),
+            b"legacy wal",
+        )
+        .unwrap();
         fs::create_dir_all(format!("{dir}/state_machine_cache/snapshots")).unwrap();
-        fs::write(format!("{dir}/state_machine_cache/snapshots/s1"), b"legacy snap").unwrap();
+        fs::write(
+            format!("{dir}/state_machine_cache/snapshots/s1"),
+            b"legacy snap",
+        )
+        .unwrap();
     }
 
     fn acquire(dir: &str, consent: bool) -> Result<crate::storage_lock::StorageOwnership, Error> {
@@ -1001,16 +1021,20 @@ mod tests {
         let ownership = acquire(&dir, false).unwrap();
         let exclusion = ownership.wal_exclusion().unwrap();
         let lock = exclusion.db_lock().unwrap();
-        assert!(lock.existed_before(), "a pre-existing lock file is the unclean-start signal");
+        assert!(
+            lock.existed_before(),
+            "a pre-existing lock file is the unclean-start signal"
+        );
         assert!(!exclusion.cache_lock().unwrap().existed_before());
 
         // Release-and-reacquire is not an option: the second descriptor is refused.
-        let again = hiqlite_wal::LogStore::<crate::store::state_machine::sqlite::TypeConfigSqlite>::start(
-            format!("{dir}/logs"),
-            hiqlite_wal::LogSync::Immediate,
-            64 * 1024,
-        )
-        .await;
+        let again =
+            hiqlite_wal::LogStore::<crate::store::state_machine::sqlite::TypeConfigSqlite>::start(
+                format!("{dir}/logs"),
+                hiqlite_wal::LogSync::Immediate,
+                64 * 1024,
+            )
+            .await;
         assert!(again.is_err(), "a second descriptor must not get the lock");
 
         let store = hiqlite_wal::LogStore::<crate::store::state_machine::sqlite::TypeConfigSqlite>::start_with_lock(
@@ -1101,11 +1125,18 @@ mod tests {
         let partial = list_prefixed(&dir, |n| n.ends_with(PARTIAL_SUFFIX)).unwrap();
         assert_eq!(partial.len(), 1);
         assert_eq!(
-            fs::read(format!("{dir}/{}/logs_cache/00000000000000000001.wal", partial[0])).unwrap(),
+            fs::read(format!(
+                "{dir}/{}/logs_cache/00000000000000000001.wal",
+                partial[0]
+            ))
+            .unwrap(),
             b"legacy wal"
         );
         let held = contender.borrow_mut().take().unwrap();
-        assert!(held.is_linked_at(&format!("{dir}/logs_cache")).unwrap(), "left alone");
+        assert!(
+            held.is_linked_at(&format!("{dir}/logs_cache")).unwrap(),
+            "left alone"
+        );
     }
 
     /// `035` U-5: each refusal names exactly what it created, against the listing.
@@ -1143,12 +1174,18 @@ mod tests {
         .await
         .unwrap();
         store.stop().await.unwrap();
-        assert!(is_held(&format!("{dir}/logs")), "the writer stopped, the lock is still held");
+        assert!(
+            is_held(&format!("{dir}/logs")),
+            "the writer stopped, the lock is still held"
+        );
 
         ownership.release_clean();
         assert!(!Path::new(&format!("{dir}/logs/lock.hql")).exists());
         assert!(!Path::new(&format!("{dir}/logs_cache/lock.hql")).exists());
-        assert!(Path::new(&format!("{dir}/hiqlite-owner.lock")).exists(), "never unlinked");
+        assert!(
+            Path::new(&format!("{dir}/hiqlite-owner.lock")).exists(),
+            "never unlinked"
+        );
     }
 
     /// Found in review: a start that fails after its log store opened drops its storage
@@ -1169,7 +1206,10 @@ mod tests {
 
         // The failed start's error path: ownership dropped without the clean release.
         drop(ownership);
-        assert!(is_held(&format!("{dir}/logs")), "the writer has not stopped yet");
+        assert!(
+            is_held(&format!("{dir}/logs")),
+            "the writer has not stopped yet"
+        );
 
         store.stop().await.unwrap();
         // The writer's thread drops its share after acknowledging; allow it to finish.
@@ -1178,7 +1218,10 @@ mod tests {
             assert!(std::time::Instant::now() < deadline, "never released");
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
-        assert!(Path::new(&format!("{dir}/logs/lock.hql")).exists(), "kept: the stop was not clean");
+        assert!(
+            Path::new(&format!("{dir}/logs/lock.hql")).exists(),
+            "kept: the stop was not clean"
+        );
     }
 
     /// `035` U-7: a crash after each step; the next start without consent refuses, and with
@@ -1198,7 +1241,10 @@ mod tests {
             let dir = fresh(&format!("u7-{point}"));
             legacy(&dir);
             let crashed = with_fault(point, || acquire(&dir, true));
-            assert!(crashed.is_err(), "{point}: the injected crash stops the start");
+            assert!(
+                crashed.is_err(),
+                "{point}: the injected crash stops the start"
+            );
 
             let err = acquire(&dir, false).expect_err(point);
             assert!(matches!(err, Error::Startup(_)), "{point}: {err}");
@@ -1206,7 +1252,11 @@ mod tests {
 
             let ownership = acquire(&dir, true).unwrap_or_else(|e| panic!("{point}: {e}"));
             let moved = list_prefixed(&dir, |n| n.starts_with(PRE_UPGRADE_DIR_PREFIX)).unwrap();
-            assert_eq!(moved.len(), 1, "{point}: one operation, one directory: {moved:?}");
+            assert_eq!(
+                moved.len(),
+                1,
+                "{point}: one operation, one directory: {moved:?}"
+            );
             let moved = &moved[0];
             assert!(!moved.ends_with(PARTIAL_SUFFIX), "{point}: completed");
             assert_eq!(
@@ -1219,18 +1269,29 @@ mod tests {
                 b"legacy snap",
                 "{point}"
             );
-            assert!(!Path::new(&format!("{dir}/state_machine_cache")).exists(), "{point}");
-            assert!(!holds_wal_files(&format!("{dir}/logs_cache")).unwrap(), "{point}");
+            assert!(
+                !Path::new(&format!("{dir}/state_machine_cache")).exists(),
+                "{point}"
+            );
+            assert!(
+                !holds_wal_files(&format!("{dir}/logs_cache")).unwrap(),
+                "{point}"
+            );
             assert_eq!(
                 fs::read_to_string(format!("{dir}/logs_cache/{CACHE_LOG_FORMAT_FILE}")).unwrap(),
                 CACHE_LOG_FORMAT,
                 "{point}"
             );
-            assert!(!Path::new(&format!("{dir}/{STAGED_CACHE_LOG_DIR}")).exists(), "{point}");
+            assert!(
+                !Path::new(&format!("{dir}/{STAGED_CACHE_LOG_DIR}")).exists(),
+                "{point}"
+            );
             ownership.release_clean();
 
             // And the start after that is ordinary.
-            acquire(&dir, false).unwrap_or_else(|e| panic!("{point}: {e}")).release_clean();
+            acquire(&dir, false)
+                .unwrap_or_else(|e| panic!("{point}: {e}"))
+                .release_clean();
         }
     }
 

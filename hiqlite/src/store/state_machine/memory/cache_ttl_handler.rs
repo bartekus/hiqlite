@@ -57,9 +57,7 @@ async fn ttl_handler(
 
     loop {
         let sleep_exp = {
-            let first_exp = data
-                .first_entry()
-                .map(|e| normalize(*e.key()) - now());
+            let first_exp = data.first_entry().map(|e| normalize(*e.key()) - now());
 
             if let Some(exp) = first_exp {
                 if exp < 1 {
@@ -158,8 +156,7 @@ mod tests {
 
     /// Controllable clock + sync point: `sync` awaits a SnapshotBuild ack, so the handler has
     /// processed the current clock value before the assertions run.
-    fn harness(
-    ) -> (
+    fn harness() -> (
         flume::Sender<TtlRequest>,
         flume::Receiver<CacheRequestHandler>,
         Arc<AtomicI64>,
@@ -181,8 +178,10 @@ mod tests {
     async fn collision_bump_keeps_both_keys() {
         let (tx, rx_kv, _) = harness();
         // same expiry micros: the second key is bumped by 1us, so both expire
-        tx.send(TtlRequest::Ttl((T0 - 1, "k1".to_string()))).unwrap();
-        tx.send(TtlRequest::Ttl((T0 - 1, "k2".to_string()))).unwrap();
+        tx.send(TtlRequest::Ttl((T0 - 1, "k1".to_string())))
+            .unwrap();
+        tx.send(TtlRequest::Ttl((T0 - 1, "k2".to_string())))
+            .unwrap();
         sync(&tx).await;
 
         let mut got = vec![];
@@ -197,7 +196,8 @@ mod tests {
     async fn refreshed_key_is_not_deleted_at_old_expiry() {
         let (tx, rx_kv, clock) = harness();
         tx.send(TtlRequest::Ttl((T0 + 1, "k".to_string()))).unwrap();
-        tx.send(TtlRequest::Ttl((T0 + 60, "k".to_string()))).unwrap();
+        tx.send(TtlRequest::Ttl((T0 + 60, "k".to_string())))
+            .unwrap();
         sync(&tx).await; // both requests processed at clock=T0
         clock.store(T0 + 2, Ordering::Relaxed); // past the old expiry
         sync(&tx).await;
@@ -208,7 +208,8 @@ mod tests {
     async fn refreshed_key_expires_at_new_expiry() {
         let (tx, rx_kv, clock) = harness();
         tx.send(TtlRequest::Ttl((T0 + 1, "k".to_string()))).unwrap();
-        tx.send(TtlRequest::Ttl((T0 + 60, "k".to_string()))).unwrap();
+        tx.send(TtlRequest::Ttl((T0 + 60, "k".to_string())))
+            .unwrap();
         sync(&tx).await; // both requests processed at clock=T0
         clock.store(T0 + 2, Ordering::Relaxed);
         sync(&tx).await;
@@ -236,7 +237,8 @@ mod tests {
     #[tokio::test]
     async fn snapshot_roundtrip_preserves_expiries() {
         let (tx, rx_kv, _) = harness();
-        tx.send(TtlRequest::Ttl((T0 + 3600, "k".to_string()))).unwrap();
+        tx.send(TtlRequest::Ttl((T0 + 3600, "k".to_string())))
+            .unwrap();
 
         let (ack, rx) = oneshot::channel();
         tx.send(TtlRequest::SnapshotBuild(ack)).unwrap();

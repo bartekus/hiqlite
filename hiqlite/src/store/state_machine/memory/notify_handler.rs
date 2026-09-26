@@ -85,8 +85,7 @@ mod tests {
     use std::time::Duration;
     use tokio::sync::oneshot;
 
-    fn subscribe()
-    -> (
+    fn subscribe() -> (
         flume::Sender<Result<sse::Event, Error>>,
         flume::Receiver<Result<sse::Event, Error>>,
         oneshot::Sender<()>,

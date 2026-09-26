@@ -1,12 +1,13 @@
 use crate::network::AppStateExt;
 use crate::network::api::ApiStreamResponsePayload;
 use crate::query::rows::{ColumnOwned, RowOwned, ValueOwned};
-use crate::store::state_machine::sqlite::state_machine::{Query, QueryWrite, FORBIDDEN_NON_DET_FNS};
+use crate::store::state_machine::sqlite::state_machine::{
+    FORBIDDEN_NON_DET_FNS, Query, QueryWrite,
+};
 use crate::{Error, Params};
 use tokio::sync::oneshot;
 use tokio::task;
 use tracing::debug;
-
 
 /// The first SQL keyword token, lowercased, with leading whitespace and comments skipped.
 ///
@@ -243,11 +244,10 @@ fn find_forbidden_non_det_fn(sql: &str) -> Option<&'static str> {
                     let needle = name.as_bytes();
                     bytes[i..].starts_with(needle)
                         && bytes[i..].get(needle.len()) == Some(&b'(')
-                        && (i == 0
-                            || {
-                                let prev = bytes[i - 1];
-                                !prev.is_ascii_alphanumeric() && prev != b'_'
-                            })
+                        && (i == 0 || {
+                            let prev = bytes[i - 1];
+                            !prev.is_ascii_alphanumeric() && prev != b'_'
+                        })
                 }) {
                     return Some(name);
                 }
@@ -277,7 +277,10 @@ mod tests {
         assert_eq!(first_keyword("PRAGMA table_info(x)"), "pragma");
 
         // Reads it sent through the raft (F-088).
-        assert_eq!(first_keyword("WITH x AS (SELECT 1) SELECT * FROM x"), "with");
+        assert_eq!(
+            first_keyword("WITH x AS (SELECT 1) SELECT * FROM x"),
+            "with"
+        );
         assert_eq!(first_keyword("VALUES (1)"), "values");
         assert_eq!(first_keyword("   \n\t SELECT 1"), "select");
         assert_eq!(first_keyword("-- a note\nSELECT 1"), "select");
@@ -302,7 +305,10 @@ mod tests {
     #[test]
     fn forbidden_fn_scan_catches_only_real_calls() {
         // forbidden calls are detected ...
-        assert_eq!(find_forbidden_non_det_fn("INSERT INTO t VALUES (now())"), Some("now"));
+        assert_eq!(
+            find_forbidden_non_det_fn("INSERT INTO t VALUES (now())"),
+            Some("now")
+        );
         assert_eq!(
             find_forbidden_non_det_fn("UPDATE t SET at = strftime('%s','now') WHERE id = 1"),
             Some("strftime")
@@ -311,7 +317,10 @@ mod tests {
             find_forbidden_non_det_fn("INSERT INTO t VALUES (datetime('now'))"),
             Some("datetime")
         );
-        assert_eq!(find_forbidden_non_det_fn("INSERT INTO t VALUES (NOW())"), Some("now"));
+        assert_eq!(
+            find_forbidden_non_det_fn("INSERT INTO t VALUES (NOW())"),
+            Some("now")
+        );
 
         // ... while names that merely contain a forbidden fn do not match
         assert_eq!(find_forbidden_non_det_fn("SELECT * FROM my_now"), None);
@@ -321,8 +330,14 @@ mod tests {
         );
 
         // ... and forbidden names inside string literals or comments are not calls
-        assert_eq!(find_forbidden_non_det_fn("INSERT INTO t VALUES ('now()')"), None);
-        assert_eq!(find_forbidden_non_det_fn("INSERT INTO t VALUES ('a''now()''b')"), None);
+        assert_eq!(
+            find_forbidden_non_det_fn("INSERT INTO t VALUES ('now()')"),
+            None
+        );
+        assert_eq!(
+            find_forbidden_non_det_fn("INSERT INTO t VALUES ('a''now()''b')"),
+            None
+        );
         assert_eq!(
             find_forbidden_non_det_fn("-- now()\nINSERT INTO t VALUES (1)"),
             None

@@ -358,9 +358,9 @@ async fn quarantine_data_dir_contents(data_dir: &str) -> Result<(), Error> {
         }
 
         if !created {
-            fs::create_dir_all(&quarantine).await.map_err(|err| {
-                Error::Error(format!("cannot create {quarantine}: {err}").into())
-            })?;
+            fs::create_dir_all(&quarantine)
+                .await
+                .map_err(|err| Error::Error(format!("cannot create {quarantine}: {err}").into()))?;
             created = true;
         }
 
@@ -571,10 +571,7 @@ async fn finish_staged_restore(node_config: &NodeConfig) -> Result<bool, Error> 
     //
     // They are removed before the rename, so the window in which the final name holds a
     // database with a foreign WAL is never entered.
-    for sidecar in [
-        format!("{path_db_full}-wal"),
-        format!("{path_db_full}-shm"),
-    ] {
+    for sidecar in [format!("{path_db_full}-wal"), format!("{path_db_full}-shm")] {
         if fs::try_exists(&sidecar).await.unwrap_or(false) {
             remove_file_reported(&sidecar).await?;
         }
@@ -663,7 +660,9 @@ async fn is_metadata_ok(path_db: String) -> Result<(), Error> {
         Ok::<(), Error>(())
     })
     .await
-    .map_err(|err| Error::Error(format!("backup validation task for '{path_dbg}' failed: {err}").into()))??;
+    .map_err(|err| {
+        Error::Error(format!("backup validation task for '{path_dbg}' failed: {err}").into())
+    })??;
     Ok(())
 }
 
@@ -708,7 +707,9 @@ async fn sync_parent_dir(dir: &str) -> Result<(), Error> {
         task::spawn_blocking(move || {
             std::fs::File::open(&dir)
                 .and_then(|d| d.sync_all())
-                .map_err(|err| Error::Error(format!("cannot sync the directory {dir}: {err}").into()))
+                .map_err(|err| {
+                    Error::Error(format!("cannot sync the directory {dir}: {err}").into())
+                })
         })
         .await?
     }
@@ -806,7 +807,9 @@ pub async fn restore_backup_finish(state: &Arc<AppState>) {
             Err(err) => {
                 error!("Error during logs purge (attempt {attempt} of 10): {err}");
                 if attempt == 10 {
-                    error!("Giving up on the post-restore log purge; the logs stay until the next one");
+                    error!(
+                        "Giving up on the post-restore log purge; the logs stay until the next one"
+                    );
                     return;
                 }
                 time::sleep(Duration::from_millis(100)).await;
@@ -927,7 +930,11 @@ mod tests {
     #[test]
     fn retention_never_deletes_the_newest_backup() {
         let t = |secs: i64| DateTime::from_timestamp(secs, 0).unwrap();
-        let backups = [("a", t(1_800_000_000)), ("b", t(1_800_000_100)), ("c", t(1_800_000_200))];
+        let backups = [
+            ("a", t(1_800_000_000)),
+            ("b", t(1_800_000_100)),
+            ("c", t(1_800_000_200)),
+        ];
 
         // Everything is past the threshold: all but the newest go.
         assert_eq!(expired_backups(&backups, t(1_900_000_000)), vec!["a", "b"]);
@@ -1005,8 +1012,11 @@ mod tests {
         let path = bad_meta.clone();
         task::spawn_blocking(move || {
             let conn = rusqlite::Connection::open(path).unwrap();
-            conn.execute("CREATE TABLE _metadata (key TEXT PRIMARY KEY, data BLOB)", ())
-                .unwrap();
+            conn.execute(
+                "CREATE TABLE _metadata (key TEXT PRIMARY KEY, data BLOB)",
+                (),
+            )
+            .unwrap();
             conn.execute(
                 "INSERT INTO _metadata VALUES ('meta', ?1)",
                 [b"not a StateMachineData".to_vec()],
@@ -1040,12 +1050,19 @@ mod tests {
             Utc::now().timestamp_nanos_opt().unwrap()
         ));
         let base = dir.to_string_lossy().into_owned();
-        fs::create_dir_all(dir.join("state_machine/db")).await.unwrap();
-        fs::create_dir_all(dir.join("logs")).await.unwrap();
-        fs::write(dir.join("state_machine/db/hiqlite.db"), b"the previous state")
+        fs::create_dir_all(dir.join("state_machine/db"))
             .await
             .unwrap();
-        fs::write(dir.join("hiqlite-owner.lock"), b"pid=1").await.unwrap();
+        fs::create_dir_all(dir.join("logs")).await.unwrap();
+        fs::write(
+            dir.join("state_machine/db/hiqlite.db"),
+            b"the previous state",
+        )
+        .await
+        .unwrap();
+        fs::write(dir.join("hiqlite-owner.lock"), b"pid=1")
+            .await
+            .unwrap();
 
         quarantine_data_dir_contents(&base).await.unwrap();
 
@@ -1111,21 +1128,30 @@ mod tests {
         fs::write(db_dir.join("hiqlite.db"), b"the previous database")
             .await
             .unwrap();
-        fs::write(db_dir.join("hiqlite.db-wal"), b"the previous write-ahead log")
-            .await
-            .unwrap();
+        fs::write(
+            db_dir.join("hiqlite.db-wal"),
+            b"the previous write-ahead log",
+        )
+        .await
+        .unwrap();
         fs::write(db_dir.join("hiqlite.db-shm"), b"the previous shared memory")
             .await
             .unwrap();
 
         // A backup that passes validation on its own merits, so nothing here depends on
         // `HQL_BACKUP_SKIP_VALIDATION`, which is process-wide.
-        let backup = dir.join("valid-backup.sqlite").to_string_lossy().into_owned();
+        let backup = dir
+            .join("valid-backup.sqlite")
+            .to_string_lossy()
+            .into_owned();
         let path = backup.clone();
         task::spawn_blocking(move || {
             let conn = rusqlite::Connection::open(path).unwrap();
-            conn.execute("CREATE TABLE _metadata (key TEXT PRIMARY KEY, data BLOB)", ())
-                .unwrap();
+            conn.execute(
+                "CREATE TABLE _metadata (key TEXT PRIMARY KEY, data BLOB)",
+                (),
+            )
+            .unwrap();
             conn.execute(
                 "INSERT INTO _metadata VALUES ('meta', ?1)",
                 [crate::helpers::serialize(&StateMachineData::default()).unwrap()],
@@ -1195,13 +1221,21 @@ mod tests {
             .unwrap();
         assert!(!finish_staged_restore(&node_config).await.unwrap());
         assert!(!db_dir.join("hiqlite.db.restoring.tmp").exists());
-        assert!(db_dir.join("hiqlite.db-wal").exists(), "nothing was destroyed");
+        assert!(
+            db_dir.join("hiqlite.db-wal").exists(),
+            "nothing was destroyed"
+        );
 
         // The crash state: staged image committed, the old WAL already gone.
-        fs::remove_file(db_dir.join("hiqlite.db-wal")).await.unwrap();
-        fs::write(db_dir.join("hiqlite.db.restoring"), b"the restored database")
+        fs::remove_file(db_dir.join("hiqlite.db-wal"))
             .await
             .unwrap();
+        fs::write(
+            db_dir.join("hiqlite.db.restoring"),
+            b"the restored database",
+        )
+        .await
+        .unwrap();
         assert!(
             restore_backup_start(&node_config).await.unwrap(),
             "the start reports the restore as applied"
@@ -1276,8 +1310,8 @@ mod tests {
 
         let mut with_bad_style = complete.to_vec();
         with_bad_style.push(("HQL_S3_PATH_STYLE", "neither"));
-        let err = cfg(&with_bad_style)
-            .expect_err("an unparsable path style is a configuration error");
+        let err =
+            cfg(&with_bad_style).expect_err("an unparsable path style is a configuration error");
         assert!(err.to_string().contains("HQL_S3_PATH_STYLE"), "got: {err}");
     }
 }

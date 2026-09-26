@@ -28,7 +28,6 @@ pub fn deserialize<T: DeserializeOwned>(bytes: &[u8]) -> Result<T, DecodeError> 
     bincode::serde::decode_from_slice::<T, _>(bytes, BINCODE_CONFIG).map(|(res, _)| res)
 }
 
-
 /// The writer or reader thread has ended, so the channel it owned is gone.
 ///
 /// Every call below used to `expect` or `unwrap` here. That turns a terminal storage thread
@@ -467,9 +466,13 @@ mod tests {
             for index in 2..=BATCH {
                 let entry = blank_ent::<TestTypeConfig>(1, 1, index);
                 let bytes = serialize(&entry).unwrap();
-                bounded(label, "send an entry", entry_tx.send_async(Some((index, bytes))))
-                    .await
-                    .unwrap();
+                bounded(
+                    label,
+                    "send an entry",
+                    entry_tx.send_async(Some((index, bytes))),
+                )
+                .await
+                .unwrap();
             }
             drop(entry_tx);
 
@@ -571,9 +574,13 @@ mod tests {
                 "{label}: the store must not report entries beyond the batch it was sent, got {last}"
             );
 
-            let entries = bounded(label, "read the prefix", reopened.try_get_log_entries(1..=last))
-                .await
-                .unwrap();
+            let entries = bounded(
+                label,
+                "read the prefix",
+                reopened.try_get_log_entries(1..=last),
+            )
+            .await
+            .unwrap();
             assert_eq!(
                 entries.len() as u64,
                 last,
@@ -602,7 +609,11 @@ mod tests {
 
         /// Every wait in this test is bounded and names itself, so a stall is a failure that
         /// says where it stalled. The test used to hang CI for as long as the job allowed.
-        async fn bounded<T>(label: &str, step: &str, fut: impl std::future::Future<Output = T>) -> T {
+        async fn bounded<T>(
+            label: &str,
+            step: &str,
+            fut: impl std::future::Future<Output = T>,
+        ) -> T {
             tokio::time::timeout(std::time::Duration::from_secs(20), fut)
                 .await
                 .unwrap_or_else(|_| panic!("{label}: stalled at: {step}"))
@@ -687,10 +698,7 @@ mod tests {
         let (ack, ack_rx) = oneshot::channel::<Result<(), crate::error::Error>>();
         drop(ack);
         let err = writer_verdict::<TestTypeConfig>(ack_rx).await;
-        assert!(
-            format!("{err}").contains("no longer running"),
-            "got: {err}"
-        );
+        assert!(format!("{err}").contains("no longer running"), "got: {err}");
     }
 
     /// An append the writer rejects must not reach openraft as a successful storage call. The

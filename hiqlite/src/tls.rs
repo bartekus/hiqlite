@@ -120,9 +120,7 @@ impl ServerTlsConfig {
     pub fn from_env(variant: &str) -> Result<Option<Self>, crate::Error> {
         let parse_bool = |name: String, raw: String| -> Result<bool, crate::Error> {
             raw.trim().parse::<bool>().map_err(|err| {
-                crate::Error::Config(
-                    format!("{name} must be `true` or `false`: {err}").into(),
-                )
+                crate::Error::Config(format!("{name} must be `true` or `false`: {err}").into())
             })
         };
 
@@ -244,7 +242,6 @@ impl ServerTlsConfig {
         }
     }
 }
-
 
 /// Read a PEM file of certificates.
 pub(crate) fn load_pem_certs(path: &str) -> Result<Vec<CertificateDer<'static>>, Error> {

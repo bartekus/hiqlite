@@ -278,7 +278,10 @@ mod tests {
         drop(held);
         assert!(gate.admit(ADMISSION_WAIT, || Ok(())).await.is_err());
         assert!(gate.drain(SHUTDOWN_DRAIN).await.unwrap().is_none());
-        assert!(!gate.stopped_cleanly(), "a failed stop is not reported as a clean one");
+        assert!(
+            !gate.stopped_cleanly(),
+            "a failed stop is not reported as a clean one"
+        );
     }
 
     /// A change that does not finish holds shutdown for the bound and no longer, and on timeout

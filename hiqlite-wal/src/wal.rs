@@ -279,7 +279,8 @@ impl WalFile {
 
     #[inline]
     pub fn space_left(&self) -> u32 {
-        self.len_max.saturating_sub(self.data_end.unwrap_or_else(|| self.offset_logs() as u32))
+        self.len_max
+            .saturating_sub(self.data_end.unwrap_or_else(|| self.offset_logs() as u32))
     }
 
     /// Expects to have enough space left -> check MUST be done upfront
@@ -842,7 +843,9 @@ impl WalFileSet {
         // the `data_end` bounds check below is skipped for the last file, so it must be done
         // here for the first one - otherwise a corrupt header could pass startup checks
         if first.data_end.unwrap_or(0) > first.len_max {
-            return Err(Error::Integrity("WAL data offset bigger than file size".into()));
+            return Err(Error::Integrity(
+                "WAL data offset bigger than file size".into(),
+            ));
         }
         let mut wal_no = first.wal_no;
         let mut until = first.id_until;
@@ -1787,7 +1790,11 @@ mod tests {
         let (res, base_path) = reopen_after_crash("past_header", true, false);
         let mut wal = res.expect("a torn tail past the header is not an integrity failure");
         assert_eq!(wal.id_until, 3, "the torn record 4 is not recovered");
-        assert_eq!(read_ids(&wal, 1, 3).len(), 3, "the complete prefix is readable");
+        assert_eq!(
+            read_ids(&wal, 1, 3).len(),
+            3,
+            "the complete prefix is readable"
+        );
 
         // the log continues from the prefix, over the torn bytes
         let mut buf = Vec::with_capacity(32);
@@ -1800,7 +1807,10 @@ mod tests {
     fn a_complete_record_past_the_header_is_recovered_not_dropped() {
         let (res, base_path) = reopen_after_crash("complete", false, false);
         let wal = res.unwrap();
-        assert_eq!(wal.id_until, 4, "a complete record the header missed is recovered");
+        assert_eq!(
+            wal.id_until, 4,
+            "a complete record the header missed is recovered"
+        );
         assert_eq!(read_ids(&wal, 1, 4).len(), 4);
         let _ = fs::remove_dir_all(&base_path);
     }

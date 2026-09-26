@@ -16,9 +16,7 @@ use tracing::{debug, error, warn};
 /// silently under unwinding. For an embedded node that profile belongs to the consumer, so
 /// neither outcome is something hiqlite gets to choose. It is now a startup error the caller
 /// receives from the constructor.
-pub(crate) fn split_brain_interval_from(
-    raw: Option<&str>,
-) -> Result<Duration, crate::Error> {
+pub(crate) fn split_brain_interval_from(raw: Option<&str>) -> Result<Duration, crate::Error> {
     let raw = raw.unwrap_or("60");
     let secs = raw.trim().parse::<u64>().map_err(|err| {
         crate::Error::Startup(
@@ -33,11 +31,7 @@ pub(crate) fn split_brain_interval_from(
     Ok(Duration::from_secs(secs))
 }
 
-pub fn spawn(
-    state: Arc<AppState>,
-    nodes: Vec<Node>,
-    tls: bool,
-) -> Result<(), crate::Error> {
+pub fn spawn(state: Arc<AppState>, nodes: Vec<Node>, tls: bool) -> Result<(), crate::Error> {
     let interval = split_brain_interval_from(env::var("HQL_SPLIT_BRAIN_INTERVAL").ok().as_deref())?;
 
     // The watchdog is gone, and F-014 is why. Under `panic = "abort"` the checker's own panic
@@ -53,13 +47,7 @@ pub fn spawn(
     Ok(())
 }
 
-async fn check_split_brain(
-    state: Arc<AppState>,
-    nodes: Vec<Node>,
-    tls: bool,
-    interval: Duration,
-) {
-
+async fn check_split_brain(state: Arc<AppState>, nodes: Vec<Node>, tls: bool, interval: Duration) {
     loop {
         time::sleep(interval).await;
 

@@ -1,7 +1,7 @@
 use crate::app_state::AppState;
-use crate::membership_gate::SHUTDOWN_DRAIN;
 use crate::client::stream::ClientStreamReq;
 use crate::helpers::deserialize;
+use crate::membership_gate::SHUTDOWN_DRAIN;
 use crate::network::HEADER_NAME_SECRET;
 use crate::{Client, Error};
 use openraft::ServerState;
@@ -123,7 +123,10 @@ impl Client {
     /// "recovering" rather than "down". `None` for a remote client, which has no local node; the
     /// node it talks to refuses with the same error.
     pub fn recovery_state(&self) -> Option<crate::RecoveryState> {
-        self.inner.state.as_ref().map(|state| state.recovery_state())
+        self.inner
+            .state
+            .as_ref()
+            .map(|state| state.recovery_state())
     }
 
     /// `Err(Error::Recovering)` until the database group has finished its startup recovery.
@@ -290,9 +293,7 @@ impl Client {
 
             if tokio::time::Instant::now() >= deadline {
                 return Err(last.unwrap_or_else(|| {
-                    Error::Timeout(
-                        format!("the {what} raft did not become healthy in time"),
-                    )
+                    Error::Timeout(format!("the {what} raft did not become healthy in time"))
                 }));
             }
             let _ = &last;
@@ -474,10 +475,13 @@ impl Client {
                 // gate, which this shutdown closed itself and holds.
                 let may_leave_locally = metrics.state == ServerState::Leader
                     && management::membership_change_allowed(
-                    false,
-                    metrics.current_leader,
-                    state.id,
-                        metrics.membership_config.voter_ids().any(|id| id == state.id),
+                        false,
+                        metrics.current_leader,
+                        state.id,
+                        metrics
+                            .membership_config
+                            .voter_ids()
+                            .any(|id| id == state.id),
                     )
                     .is_ok();
 
@@ -538,9 +542,17 @@ impl Client {
                 .raft_cache
                 .is_raft_stopped
                 .store(true, Ordering::Relaxed);
-            note_stop(&mut first_err, "the cache raft", state.raft_cache.raft.shutdown().await);
+            note_stop(
+                &mut first_err,
+                "the cache raft",
+                state.raft_cache.raft.shutdown().await,
+            );
             if let Some(handle) = &state.raft_cache.shutdown_handle {
-                note_stop(&mut first_err, "the cache log writer", handle.shutdown().await);
+                note_stop(
+                    &mut first_err,
+                    "the cache log writer",
+                    handle.shutdown().await,
+                );
             }
             let _ = tx_client_cache.send_async(ClientStreamReq::Shutdown).await;
         };
@@ -569,7 +581,11 @@ impl Client {
 
             state.raft_db.is_raft_stopped.store(true, Ordering::Relaxed);
 
-            note_stop(&mut first_err, "the sqlite raft", state.raft_db.raft.shutdown().await);
+            note_stop(
+                &mut first_err,
+                "the sqlite raft",
+                state.raft_db.raft.shutdown().await,
+            );
             info!("Shutting down sqlite logs writer");
             note_stop(
                 &mut first_err,

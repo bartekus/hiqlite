@@ -1,6 +1,6 @@
 use crate::Error;
-use cryptr::utils::b64_decode;
 use cryptr::EncKeys;
+use cryptr::utils::b64_decode;
 use spow::pow::Pow;
 use std::env;
 use std::fmt::Debug;
@@ -51,9 +51,7 @@ impl DashboardState {
         //
         // A malformed value now behaves exactly like an absent one, and says which it was.
         let Ok(bytes) = b64_decode(&b64) else {
-            warn!(
-                "HQL_PASSWORD_DASHBOARD is not valid base64 and the dashboard will be disabled"
-            );
+            warn!("HQL_PASSWORD_DASHBOARD is not valid base64 and the dashboard will be disabled");
             return Self {
                 password_dashboard: None,
             };

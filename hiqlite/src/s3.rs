@@ -1,7 +1,7 @@
 use crate::Error;
+pub use cryptr::EncKeys;
 pub use cryptr::stream::s3::*;
 use cryptr::stream::writer::channel_writer::{ChannelReceiver, ChannelWriter};
-pub use cryptr::EncKeys;
 use cryptr::{EncValue, FileReader, FileWriter, S3Reader, S3Writer, StreamReader, StreamWriter};
 use std::env;
 use std::sync::Arc;
@@ -77,16 +77,13 @@ impl S3Config {
             })
         };
 
-        let url = reqwest::Url::parse(&url).map_err(|err| {
-            Error::Config(format!("HQL_S3_URL is not a valid URL: {err}").into())
-        })?;
+        let url = reqwest::Url::parse(&url)
+            .map_err(|err| Error::Config(format!("HQL_S3_URL is not a valid URL: {err}").into()))?;
         let bucket_name = required("HQL_S3_BUCKET")?;
         let region = Region(required("HQL_S3_REGION")?);
         let path_style = match lookup("HQL_S3_PATH_STYLE") {
             Some(v) => v.trim().parse::<bool>().map_err(|err| {
-                Error::Config(
-                    format!("HQL_S3_PATH_STYLE must be `true` or `false`: {err}").into(),
-                )
+                Error::Config(format!("HQL_S3_PATH_STYLE must be `true` or `false`: {err}").into())
             })?,
             None => true,
         };

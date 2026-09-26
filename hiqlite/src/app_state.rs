@@ -19,12 +19,12 @@ use crate::store::state_machine::memory::notify_handler::NotifyRequest;
 use crate::store::state_machine::memory::state_machine::CacheIncompatibility;
 #[cfg(feature = "cache")]
 use crate::store::state_machine::memory::{TypeConfigKV, kv_handler::CacheRequestHandler};
-#[cfg(feature = "cache")]
-use std::sync::OnceLock;
 #[cfg(feature = "sqlite")]
 use crate::store::state_machine::sqlite::{
     TypeConfigSqlite, state_machine::SqlitePool, writer::WriterRequest,
 };
+#[cfg(feature = "cache")]
+use std::sync::OnceLock;
 #[cfg(any(feature = "backup", feature = "dashboard"))]
 use std::sync::atomic::{AtomicUsize, Ordering};
 

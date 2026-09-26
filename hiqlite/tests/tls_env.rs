@@ -71,23 +71,24 @@ fn from_env_branches() {
     let err = ServerTlsConfig::from_env("TEST")
         .expect_err("a malformed override is a configuration error, not a panic");
     assert!(
-        err.to_string().contains("HQL_TLS_TEST_DANGER_TLS_NO_VERIFY"),
+        err.to_string()
+            .contains("HQL_TLS_TEST_DANGER_TLS_NO_VERIFY"),
         "got: {err}"
     );
 
     // ---- F-041: exactly one of the key/cert pair was a silent plaintext downgrade ----
     clear("TEST");
     unsafe { env::set_var("HQL_TLS_TEST_KEY", "tls/key.pem") };
-    let err = ServerTlsConfig::from_env("TEST")
-        .expect_err("a key with no certificate cannot serve TLS");
+    let err =
+        ServerTlsConfig::from_env("TEST").expect_err("a key with no certificate cannot serve TLS");
     let text = err.to_string();
     assert!(text.contains("HQL_TLS_TEST_KEY"), "got: {text}");
     assert!(text.contains("HQL_TLS_TEST_CERT"), "got: {text}");
 
     clear("TEST");
     unsafe { env::set_var("HQL_TLS_TEST_CERT", "tls/cert-chain.pem") };
-    let err = ServerTlsConfig::from_env("TEST")
-        .expect_err("a certificate with no key cannot serve TLS");
+    let err =
+        ServerTlsConfig::from_env("TEST").expect_err("a certificate with no key cannot serve TLS");
     assert!(err.to_string().contains("TLS needs both"), "got: {err}");
 
     // ---- auto certificates, with nothing else set ----

@@ -267,8 +267,12 @@ mod tests {
 
         let tx = spawn(meta, Arc::new(RwLock::new(set)))?;
         let (ack, rx) = flume::bounded(2);
-        tx.send(Action::Logs { from: 2, until: 3, ack })
-            .expect("reader to always be listening");
+        tx.send(Action::Logs {
+            from: 2,
+            until: 3,
+            ack,
+        })
+        .expect("reader to always be listening");
 
         let mut got_err = false;
         while let Ok(msg) = rx.recv() {
@@ -324,8 +328,12 @@ mod tests {
 
         // Room for one entry, then the requester goes away, as a failed decode does.
         let (ack, rx) = flume::bounded(1);
-        tx.send(Action::Logs { from: 1, until: 5, ack })
-            .expect("reader to be listening");
+        tx.send(Action::Logs {
+            from: 1,
+            until: 5,
+            ack,
+        })
+        .expect("reader to be listening");
         assert!(matches!(rx.recv(), Ok(Some(Ok(_)))));
         drop(rx);
 
@@ -339,7 +347,9 @@ mod tests {
         let st = loop {
             match rx.try_recv() {
                 Ok(st) => break st?,
-                Err(oneshot::error::TryRecvError::Empty) if std::time::Instant::now() < deadline => {
+                Err(oneshot::error::TryRecvError::Empty)
+                    if std::time::Instant::now() < deadline =>
+                {
                     std::thread::sleep(std::time::Duration::from_millis(10));
                 }
                 Err(err) => panic!("the reader must answer after an abandoned request: {err}"),

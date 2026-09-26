@@ -75,9 +75,11 @@ impl RaftSnapshotBuilder<TypeConfigSqlite> for SQLiteSnapshotBuilder {
                 source: StorageIOError::write_state_machine(&err),
             })?;
 
-        let snapshot = fs::File::open(&path).await.map_err(|err| StorageError::IO {
-            source: StorageIOError::read_state_machine(&err),
-        })?;
+        let snapshot = fs::File::open(&path)
+            .await
+            .map_err(|err| StorageError::IO {
+                source: StorageIOError::read_state_machine(&err),
+            })?;
 
         let path_snapshots = self.path_snapshots.clone();
         #[cfg(feature = "backup")]

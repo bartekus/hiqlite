@@ -79,12 +79,7 @@ pub(crate) fn spawn_with_lease(lease_seconds: i64) -> flume::Sender<LockRequest>
 /// standing on every other path.
 ///
 /// Returns whether the client actually received it.
-fn answer(
-    key: &str,
-    id: u64,
-    ack: oneshot::Sender<LockState>,
-    state: LockState,
-) -> bool {
+fn answer(key: &str, id: u64, ack: oneshot::Sender<LockState>, state: LockState) -> bool {
     match ack.send(state) {
         Ok(()) => true,
         Err(state) => {
@@ -440,7 +435,11 @@ mod tests {
         rx.await.unwrap()
     }
 
-    pub(super) async fn acquire(tx: &flume::Sender<LockRequest>, key: &str, log_id: u64) -> LockState {
+    pub(super) async fn acquire(
+        tx: &flume::Sender<LockRequest>,
+        key: &str,
+        log_id: u64,
+    ) -> LockState {
         let (ack, rx) = oneshot::channel();
         send(
             tx,
@@ -453,7 +452,11 @@ mod tests {
         rx.await.unwrap()
     }
 
-    pub(super) async fn await_lock(tx: &flume::Sender<LockRequest>, key: &str, id: u64) -> LockState {
+    pub(super) async fn await_lock(
+        tx: &flume::Sender<LockRequest>,
+        key: &str,
+        id: u64,
+    ) -> LockState {
         let (ack, rx) = oneshot::channel();
         send(
             tx,
@@ -655,8 +658,10 @@ mod lease_tests {
                         "a promoted ticket must be claimable with the same id"
                     );
                 }
-                other => panic!("awaiter {id} got {other:?}, which is neither a grant nor a \
-                                 promotion it can act on"),
+                other => panic!(
+                    "awaiter {id} got {other:?}, which is neither a grant nor a \
+                                 promotion it can act on"
+                ),
             }
             holder = id;
         }
@@ -710,7 +715,10 @@ mod lease_tests {
             LockState::Locked(10),
             "the handler must still be serving other keys"
         );
-        assert!(!tx.is_disconnected(), "the handler task must still be alive");
+        assert!(
+            !tx.is_disconnected(),
+            "the handler task must still be alive"
+        );
     }
 
     /// A grant that nobody received is not a held lock.
@@ -780,7 +788,10 @@ mod lease_tests {
         let tx = spawn_with_lease(SHORT_LEASE);
 
         assert_eq!(lock_bounded(&tx, "k", 1).await, LockState::Locked(1));
-        assert_eq!(lock_bounded(&tx, "other", 100).await, LockState::Locked(100));
+        assert_eq!(
+            lock_bounded(&tx, "other", 100).await,
+            LockState::Locked(100)
+        );
 
         wait_out_the_lease().await;
 
@@ -798,7 +809,10 @@ mod lease_tests {
         );
         // An unrelated key is untouched throughout.
         release(&tx, "other", 100);
-        assert_eq!(lock_bounded(&tx, "other", 101).await, LockState::Locked(101));
+        assert_eq!(
+            lock_bounded(&tx, "other", 101).await,
+            LockState::Locked(101)
+        );
         assert!(!tx.is_disconnected());
     }
 
@@ -818,7 +832,10 @@ mod lease_tests {
         let (ack, rx) = oneshot::channel();
         send(&before, LockRequest::SnapshotBuild(ack));
         let snapshot = rx.await.unwrap();
-        assert!(snapshot.contains_key("k"), "the held lock is in the snapshot");
+        assert!(
+            snapshot.contains_key("k"),
+            "the held lock is in the snapshot"
+        );
 
         // The node goes away without ticket 1 ever releasing.
         drop(before);

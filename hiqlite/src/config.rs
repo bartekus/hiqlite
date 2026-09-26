@@ -584,10 +584,20 @@ mod tests {
         let err = c.is_valid().expect_err("a zero wal_size must be refused");
         assert!(err.to_string().contains("HQL_WAL_SIZE"), "got: {err}");
         c.wal_size = 8 * 1024 - 1;
-        assert!(c.is_valid().is_err(), "below the WAL's minimum must be refused");
+        assert!(
+            c.is_valid().is_err(),
+            "below the WAL's minimum must be refused"
+        );
         c.wal_size = 8 * 1024;
-        let err = c.is_valid().err().map(|e| e.to_string()).unwrap_or_default();
-        assert!(!err.contains("wal_size"), "the minimum itself is accepted, got: {err}");
+        let err = c
+            .is_valid()
+            .err()
+            .map(|e| e.to_string())
+            .unwrap_or_default();
+        assert!(
+            !err.contains("wal_size"),
+            "the minimum itself is accepted, got: {err}"
+        );
     }
 
     #[test]
