@@ -173,7 +173,6 @@ pub(crate) async fn start_raft_db(
             .as_ref()
             .map(|c| c.danger_tls_no_verify())
             .unwrap_or(false),
-        std::time::Duration::from_secs(node_config.init_peer_wait_secs as u64),
     )
     .await
     {
@@ -325,7 +324,6 @@ where
             .as_ref()
             .map(|c| c.danger_tls_no_verify())
             .unwrap_or(false),
-        std::time::Duration::from_secs(node_config.init_peer_wait_secs as u64),
     )
     .await
     {
