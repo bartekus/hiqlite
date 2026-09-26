@@ -288,15 +288,15 @@
       }
     ],
     "id": "042-ci-code-debt",
-    "implementation": "in-progress",
+    "implementation": "complete",
     "owner": "hiqlite maintainers",
     "risk": "low",
     "sectionDigests": {
-      "042-make-the-workspace-pass-the-ci-profile-s-code-job": "078d6d82e54975cfce70fc82e345ec4b97e7f27b0c4f63422f17c2e22a3d4e2d",
+      "042-make-the-workspace-pass-the-ci-profile-s-code-job": "fccdccc09e4ab3dece1e06c6fa194d03d2a47c6c7e9a8e7c03cb4c83cfc7ddc8",
       "1-purpose": "6d559f82b8a6f149e5ad46fb55fcf20f9211851407df9e854ca13779d8f68e36",
       "2-ownership": "970c96be585496628d695213fb7139a64c822fe3bc7c4bca3922ef2879949f03",
       "3-behavior": "5f3df3debdc650867c9f5f72d9e7ae87f746a4658e887061d24c084129079b88",
-      "4-evidence-and-its-limits": "122dcf17a5802fb850d7b1ed7f4685bff943c1f9db85ab5a0aba872ffb815f3e",
+      "4-evidence-and-its-limits": "d87ce2d5e7a1d0855505115575db8b85d0cf87bfdad0792da1f09dfdbc8af334",
       "5-known-defects": "e93c9304b21d75f9c0237215f30c14436d59baa42921a213f8b442a210f5d5e1",
       "6-out-of-scope": "29f10e2d45cf2db4f82d473171ada4530dcd9e13cd57477e12148834656b554f",
       "7-resolved-decisions": "fb97b8bf6d1e578eca336f77da5e53778c29daa0ba2d6798e18c9dde993a358b",
@@ -318,6 +318,6 @@
     "summary": "The Statecraft CI profile's `code` job (`004` D-8, PR #47) runs `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings` and `cargo test --workspace --locked` with default features, and the trunk failed all three. This spec records why and removes the debt in three separate changes, so `ci-gate` can become the required check. It changes no runtime behavior.\n",
     "title": "Make the workspace pass the CI profile's code job: rustfmt, clippy on all targets, and a featureless workspace test"
   },
-  "shardHash": "485df4934139d99ff900071b27968d99430fc58684b1418641f3ac17b0f619d4",
+  "shardHash": "d23368c7111965bdbb365c6f84de00c2a960aeab0f281771a9f9dca54d526e87",
   "specVersion": "1.8.0"
 }
