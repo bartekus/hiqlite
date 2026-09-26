@@ -573,14 +573,16 @@ mod tests {
     /// through `is_valid` rather than the environment, which is process-wide (`009` D-3).
     #[test]
     fn a_wal_size_of_zero_is_refused_by_name() {
-        let mut c = NodeConfig::default();
-        c.node_id = 1;
-        c.nodes = vec![Node {
-            id: 1,
-            addr_raft: "localhost:8100".into(),
-            addr_api: "localhost:8200".into(),
-        }];
-        c.wal_size = 0;
+        let mut c = NodeConfig {
+            node_id: 1,
+            nodes: vec![Node {
+                id: 1,
+                addr_raft: "localhost:8100".into(),
+                addr_api: "localhost:8200".into(),
+            }],
+            wal_size: 0,
+            ..Default::default()
+        };
         let err = c.is_valid().expect_err("a zero wal_size must be refused");
         assert!(err.to_string().contains("HQL_WAL_SIZE"), "got: {err}");
         c.wal_size = 8 * 1024 - 1;
@@ -616,7 +618,7 @@ mod tests {
         );
         assert_eq!(c.data_dir, "data");
         assert_eq!(c.filename_db, "hiqlite.db");
-        assert_eq!(c.log_statements, true);
+        assert!(c.log_statements);
 
         assert_eq!(c.secret_raft, "SuperSecureSecret1337");
         assert_eq!(c.secret_api, "SuperSecureSecret1337");

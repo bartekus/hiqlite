@@ -1161,9 +1161,11 @@ mod tests {
         .await
         .unwrap();
 
-        let mut node_config = NodeConfig::default();
-        node_config.data_dir = base.clone().into();
-        node_config.filename_db = "hiqlite.db".into();
+        let node_config = NodeConfig {
+            data_dir: base.clone().into(),
+            filename_db: "hiqlite.db".into(),
+            ..Default::default()
+        };
 
         restore_backup(&node_config, BackupSource::File(backup))
             .await
@@ -1205,9 +1207,11 @@ mod tests {
         ));
         let db_dir = dir.join("state_machine/db");
         fs::create_dir_all(&db_dir).await.unwrap();
-        let mut node_config = NodeConfig::default();
-        node_config.data_dir = dir.to_string_lossy().into_owned().into();
-        node_config.filename_db = "hiqlite.db".into();
+        let node_config = NodeConfig {
+            data_dir: dir.to_string_lossy().into_owned().into(),
+            filename_db: "hiqlite.db".into(),
+            ..Default::default()
+        };
 
         // An incomplete staging copy: discarded, and the database is left alone.
         fs::write(db_dir.join("hiqlite.db"), b"the previous database")
