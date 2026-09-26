@@ -24,6 +24,11 @@ doctest = false
 # Runs the expected failure paths under `panic = "abort"`, which no test can do: Rust's test
 # harness requires unwinding. Built only with the internal probe feature, so it is absent from
 # every normal build.
+[[test]]
+name = "cluster"
+path = "tests/cluster/main.rs"
+required-features = ["backup", "cache", "dlock", "listen_notify", "macros", "sqlite"]
+
 [[bin]]
 name = "hiqlite-abort-probe"
 path = "src/bin/abort_probe.rs"
