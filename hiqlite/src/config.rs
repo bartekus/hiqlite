@@ -153,18 +153,6 @@ pub struct NodeConfig {
     /// If true, keep a newly joining node as a learner instead of promoting it to a voting member
     /// during startup reconciliation. This does not demote an existing voter.
     pub learner_only: bool,
-    /// How long a node that is one of several members waits before it starts to shut down, in
-    /// milliseconds, so that readiness checks see it leaving before it stops serving. Skipped
-    /// when the node is the only member. `033` B-4: this was a fixed 9.5 s, and the default is
-    /// that value, so leaving it unset changes nothing. `Client::shutdown` waits this much longer
-    /// than its own 15 s for any value above the default.
-    pub pre_shutdown_delay_ms: u32,
-    /// How long a pristine node 1 in a configuration with peers waits for at least half of them
-    /// (rounded down) to answer, authenticated, that their raft group is not initialized before
-    /// it initializes one, in seconds. On expiry the start returns `Error::Startup` naming the
-    /// peers it did not hear from; it never initializes without that evidence (`033` B-3).
-    /// Unused at N=1 and by every other node. Default 120.
-    pub init_peer_wait_secs: u32,
     /// To guarantee the stability of your Raft cluster no matter how high requests might spike,
     /// you can set rate-limits.
     #[cfg(feature = "cache")]
@@ -174,11 +162,6 @@ pub struct NodeConfig {
     #[cfg(feature = "sqlite")]
     pub rate_limit_db: Option<RateLimitConfig>,
 }
-
-/// `033` B-4: the pre-shutdown delay's default, the constant it replaced.
-pub(crate) const DEFAULT_PRE_SHUTDOWN_DELAY_MS: u32 = 9_500;
-/// `033` B-3: the default bound on a pristine node 1's wait for its peers' answers.
-pub(crate) const DEFAULT_INIT_PEER_WAIT_SECS: u32 = 120;
 
 impl Default for NodeConfig {
     fn default() -> Self {
@@ -225,8 +208,6 @@ impl Default for NodeConfig {
             insecure_cookie: false,
             health_check_delay_secs: 30,
             learner_only: false,
-            pre_shutdown_delay_ms: DEFAULT_PRE_SHUTDOWN_DELAY_MS,
-            init_peer_wait_secs: DEFAULT_INIT_PEER_WAIT_SECS,
             #[cfg(feature = "cache")]
             rate_limit_cache: None,
             #[cfg(feature = "sqlite")]
@@ -407,17 +388,6 @@ impl NodeConfig {
                 .unwrap_or("false")
                 .parse::<bool>()
                 .expect("Cannot parse HQL_LEARNER_ONLY as bool"),
-            pre_shutdown_delay_ms: env::var("HQL_PRE_SHUTDOWN_DELAY_MS")
-                .ok()
-                .map(|v| {
-                    v.parse()
-                        .expect("Cannot parse HQL_PRE_SHUTDOWN_DELAY_MS as u32")
-                })
-                .unwrap_or(DEFAULT_PRE_SHUTDOWN_DELAY_MS),
-            init_peer_wait_secs: env::var("HQL_INIT_PEER_WAIT_SECS")
-                .ok()
-                .map(|v| v.parse().expect("Cannot parse HQL_INIT_PEER_WAIT_SECS as u32"))
-                .unwrap_or(DEFAULT_INIT_PEER_WAIT_SECS),
             #[cfg(feature = "backup")]
             backup_keep_days_local,
             #[cfg(feature = "cache")]

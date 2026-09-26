@@ -1,8 +1,5 @@
 {
   "record": {
-    "amends": [
-      "026-backup-and-restore-integrity"
-    ],
     "created": "2026-09-23",
     "dependsOn": [
       "000-hiqlite-ownership-bootstrap",
@@ -77,12 +74,26 @@
       }
     ],
     "id": "034-fresh-cell-restore",
-    "implementation": "in-progress",
+    "implementation": "pending",
     "origin": {
       "retroactive": false
     },
     "owner": "hiqlite maintainers",
     "references": [
+      {
+        "role": "context",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/backup.rs"
+        }
+      },
+      {
+        "role": "context",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/start.rs"
+        }
+      },
       {
         "role": "context",
         "unit": {
@@ -100,14 +111,14 @@
     ],
     "risk": "critical",
     "sectionDigests": {
-      "034-restore-a-backup-into-a-fresh-three-voter-cell-once-from-an-image-that-proves-whose-it-is": "38963d60ba99d48dae969b64f5203c21182d7bad5d5975b041ddc72f46fcde70",
+      "034-restore-a-backup-into-a-fresh-three-voter-cell-once-from-an-image-that-proves-whose-it-is": "e439fca1ad8c452cd02ddb96ef8b1ec0e42ab909e859cd545e3ecbc4b90afbcb",
       "1-purpose": "d73a340d4210749e206b89b69595ef514b064b959db1127b8472de77f024fe77",
-      "2-territory": "30b6ce53dfef72cdd6d80ce6203041b851f3206ffc36ba4da82acfdbec757e36",
+      "2-territory": "f6d1f1376bc173d9449eeaf024fd95b370c59434e1ce4195023c4e08e81b96e1",
       "3-behavior": "f31e23a43cffd9d6516c278b87e241a22b573152acb3e8b9b9acfa37b46a7aa6",
       "4-acceptance-to-be-implemented": "43e16146246ad6dcd7f9edb7f23000facc766c0f270d3af41a538ef6d1907008",
-      "5-evidence-and-its-limits": "e79c165c0525564211e96a09778bc97356b54dfba665d8d49eeab42ea5cda579",
+      "5-evidence-and-its-limits": "20f313136982cdd8ee6b1798710873fcc6958b015076db846601e26b58462203",
       "6-known-defects": "21e0d337638a86dadd7069a6e64d56e9f38ded191bc570b268cecf95b6fc1c36",
-      "7-resolved-decisions": "1b0cf661db99bcf45fa34c5e266948accb360a0b16a8a4464982f55d0ca51dec",
+      "7-resolved-decisions": "26b2fcba29360580c14557eb0f02174a91313f433836365725ece4c5f4eb5932",
       "b-1-an-image-carries-its-manifest": "a8fa89432ac2e1672d9ab95b6069ae3a6a9ef04a69abc142c0d110fdd1f926b9",
       "b-2-an-offline-export-from-a-stopped-data-directory": "ab9bbc9663c2ed0c7b84334cf46f7f003097ff9e28dcd1398c564c5740ae52c4",
       "b-3-restore-is-callable-checked-and-applied-at-most-once": "af4c368a6526dddc6ee14140a52771f5ca78b5d991e59f60c6e0f17878612beb",
@@ -115,7 +126,7 @@
       "b-5-an-upload-s-outcome-can-be-observed": "60e7eb0c43615d02167c7895ee86d272c11842c79957e1d07bf11951ce486d66",
       "b-6-a-committed-barrier-if-the-owner-adopts-it": "1f1520ddcda0926ebb06d6dcb4cb40ea60fe998d856e6c313deb582f27a62a49",
       "b-7-a-clean-stop-is-recorded-where-an-export-can-read-it": "0d410d41d34a4b0a7819fb25963f5a15303fa708360bb529e3fe9a098e5eed28",
-      "verification": "82b65f5e3e1e2d9334f0b782583d38eda43bb9d8206a147b786bac2898730c15"
+      "verification": "23cb8be50a71e2bb1166b0ac03b1dce54486f95eb4a549117c51524a716b0b31"
     },
     "sectionHeadings": [
       "034: Restore a backup into a fresh three-voter cell, once, from an image that proves whose it is",
@@ -137,9 +148,9 @@
     ],
     "specPath": "specs/034-fresh-cell-restore/spec.md",
     "status": "draft",
-    "summary": "Proposes the hiqlite half of the migration and disaster-recovery procedure in 033's proposal: a backup image that carries its own identity and digest, an offline export from a stopped data directory, a callable restore that is applied at most once and refuses the wrong image before it destroys anything, and a node-1 restore into an empty cell that either initializes or fails with an error, never waits forever. Addresses F-119, F-120, 026 KD-5 and KD-8 for that procedure. The export's currency rule is a proposal whose safety argument and alternatives are in the topology proposal's section 13; the committed index it first relied on is not persisted (F-124). In-place multi-node restore (F-058) stays unsupported. Lane B (2026-09-23) implements B-4 on a branch, each repair with a test observed failing without it; B-1 to B-3 and B-5 to B-7 are not implemented.\n",
+    "summary": "Proposes the hiqlite half of the migration and disaster-recovery procedure in 033's proposal: a backup image that carries its own identity and digest, an offline export from a stopped data directory, a callable restore that is applied at most once and refuses the wrong image before it destroys anything, and a node-1 restore into an empty cell that either initializes or fails with an error, never waits forever. Addresses F-119, F-120, 026 KD-5 and KD-8 for that procedure. The export's currency rule is a proposal whose safety argument and alternatives are in the topology proposal's section 13; the committed index it first relied on is not persisted (F-124). In-place multi-node restore (F-058) stays unsupported. Changes no code until an implementing change lands.\n",
     "title": "Restore a backup into a fresh three-voter cell, once, from an image that proves whose it is"
   },
-  "shardHash": "151141fd026c8c37a913fb029e77314a719fb6a470bbf0dfa4c7d162b2f5f972",
+  "shardHash": "e0a0e75feb877f3d48e3b68e3c9ff69a9b588695589bd20ae99ca06fcdcab5d1",
   "specVersion": "1.8.0"
 }

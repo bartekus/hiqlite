@@ -585,10 +585,6 @@ spec:
     matchLabels:
       app: hiqlite
   serviceName: hiqlite-headless
-  # Required: a pristine node 1 initializes only once its peers have answered, and
-  # it is not ready while it waits. `OrderedReady`, the default, would create the
-  # other pods only after node 1 is ready, which then never happens.
-  podManagementPolicy: Parallel
   template:
     metadata:
       labels:
