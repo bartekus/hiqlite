@@ -1,0 +1,5 @@
+# Mechanical reformatting commits, skipped by `git blame --ignore-revs-file .git-blame-ignore-revs`
+# (GitHub reads this file by default).
+
+# style(042): apply cargo fmt 1.95.0 to the workspace (spec 042 A1)
+f3ab898be1d57bd0bd374d877b5b0da99b7a4e59
