@@ -152,6 +152,17 @@ The reformat is one mechanical commit with no other change except the
 regenerated `.derived/` shards it forces; its SHA is listed in
 `.git-blame-ignore-revs`, so `git blame` with that file configured skips it.
 
+**A2 (clippy on all targets).** `cargo +1.95.0 clippy --workspace
+--all-targets --locked -- -D warnings`, default features, exits 0. The
+findings were all in lib test code: in `hiqlite-wal` (`wal.rs`), three
+`get(0)` for `first()` and three `assert_eq!` against a literal bool; once the
+`cluster` target stopped failing to compile (A3), six more in `hiqlite`'s lib
+tests: two `Default::default()` followed by field assignments in `backup.rs`
+and one in `config.rs`, turned into struct literals with `..Default::default()`;
+one `assert_eq!` against `true` in `config.rs`; a redundant closure in
+`migration.rs`; and a `format!` without arguments in `storage_lock.rs`, which
+`043` rewrote. No non-test code changes.
+
 **A3 (featureless workspace test).** `cargo test --workspace --locked`, with
 default features only, compiles and runs every test target whose features are
 enabled and skips the `cluster` integration target cleanly: `hiqlite/Cargo.toml`
@@ -215,9 +226,14 @@ needed for it. The feature list is what the modules use (SQLite, the cache,
 the whole `Check` set; `counters`, `toml` and `external-state-machine` are not
 needed to build the target.
 
+**D-4 (2026-09-25).** The clippy change is stacked on `043`'s branch, because
+the last finding is a line `043` rewrites for another reason; fixing it twice
+would conflict.
+
 ## Verification
 
 ```verify:cli
 cargo +1.95.0 fmt --all -- --check
+cargo +1.95.0 clippy --workspace --all-targets --locked -- -D warnings
 grep -q 'required-features = \["backup", "cache", "dlock", "listen_notify", "macros", "sqlite"\]' hiqlite/Cargo.toml
 ```

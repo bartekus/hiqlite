@@ -263,7 +263,7 @@ mod tests {
     #[test]
     fn the_panicking_wrapper_still_panics_for_source_compatibility() {
         assert!(Migrations::try_build::<Good>().is_ok());
-        let res = std::panic::catch_unwind(|| Migrations::build::<Bad2>());
+        let res = std::panic::catch_unwind(Migrations::build::<Bad2>);
         assert!(res.is_err(), "`build` keeps its published behavior");
     }
 }
