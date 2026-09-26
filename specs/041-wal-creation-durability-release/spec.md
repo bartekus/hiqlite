@@ -153,8 +153,9 @@ published `0.15.0-patched.3`.
 **D-2 (2026-09-25, this block is `038`'s).** `038`'s block pins
 `0.15.0-patched.3` in seven commands. It is carried forward whole with those
 moved to `0.15.0-patched.4` and marked, the check that no lockfile names an
-older version widened to `patched.3`, and `041`'s own commands appended. `038`'s
-section-13 checks stay, since section 13 stays.
+older version widened to `patched.3` for every current-generation lockfile,
+with the N=1 harness's intentionally old lockfile excluded, and `041`'s own
+commands appended. `038`'s section-13 checks stay, since section 13 stays.
 
 **D-3 (2026-09-25, owner decision: release authority and its precondition).**
 The owner granted `0.15.0-patched.4`, containing the F-135 repair and the
@@ -263,7 +264,7 @@ sh -c 'grep -A5 "^\[lib\]" hiqlite-derive/Cargo.toml | grep -q "^name = \"hiqlit
 # one version, and it says what it is
 sh -c 'test "$(grep -h "^version = " hiqlite/Cargo.toml hiqlite-wal/Cargo.toml hiqlite-derive/Cargo.toml | sort -u | wc -l | tr -d " ")" = "1"'
 # `036` D-2: was `^version = "0.15.0-patched.1"`; `038` D-2: then "0.15.0-patched.2"; `041` D-2: then
-# "0.15.0-patched.3"; the version this release carries.
+# "0.15.0-patched.4"; the version this release carries.
 sh -c 'grep -q "^version = \"0.15.0-patched.4\"" hiqlite/Cargo.toml'
 # the internal dependencies keep their keys, so the feature table needs no change
 sh -c 'grep -q "hiqlite-wal = { package = \"hiqlite-wal-patched\", version = " hiqlite/Cargo.toml'
@@ -351,7 +352,7 @@ sh -c 'grep -q "safe.directory" .github/workflows/publish.yaml'
 sh -c 'test "$(grep -h "^version = \"0.15.0-patched.4\"" hiqlite/Cargo.toml hiqlite-wal/Cargo.toml hiqlite-derive/Cargo.toml | wc -l | tr -d " ")" = "3"'
 sh -c 'test "$(grep -A1 -E "^name = \"hiqlite(-wal|-derive)?-patched\"$" Cargo.lock | grep -c "^version = \"0.15.0-patched.4\"$")" = "3"'
 sh -c 'test "$(grep -A1 -E "^name = \"hiqlite(-wal|-derive)?-patched\"$" qualification/n1-upgrade/new/Cargo.lock | grep -c "^version = \"0.15.0-patched.4\"$")" = "3"'
-sh -c '! git grep -q -E "^version = \"0.15.0-patched.[123]\"" -- "*Cargo.lock"'
+sh -c '! git grep -q -E "^version = \"0.15.0-patched.[123]\"" -- "*Cargo.lock" ":(exclude)qualification/n1-upgrade/old/Cargo.lock"'
 # B-2: the internal requirements are exact
 sh -c 'grep -q "hiqlite-derive = { package = \"hiqlite-derive-patched\", version = \"=0.15.0-patched.4\", path = " hiqlite/Cargo.toml'
 sh -c 'grep -q "hiqlite-wal = { package = \"hiqlite-wal-patched\", version = \"=0.15.0-patched.4\", path = " hiqlite/Cargo.toml'

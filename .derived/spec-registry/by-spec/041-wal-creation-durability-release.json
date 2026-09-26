@@ -86,20 +86,20 @@
     ],
     "risk": "critical",
     "sectionDigests": {
-      "041-release-the-wal-file-creation-durability-repair-as-0-15-0-patched-4": "8b7b05ff838708b7df736f572b682bf239e1f39ce3de4683a4ba230c471192ec",
+      "041-release-the-wal-file-creation-durability-repair-as-0-15-0-patched-4": "723e3bd5db55d87cd1503c5953452cb1773d3d2752badd4ca761bb1968381a94",
       "1-purpose": "6cfbb8963cfa0dc8294e397e967e8be52880bc6d03f9d079e8d85eb335092af5",
       "2-territory": "4f6ff3b25c53140df915dca195c2a9917b74d53e514f3b9963fe67ee0dba616e",
       "3-behavior": "816858d53573c52b4c165aed12894cfcf0af140a8fb28ed63edccbc262f0eb88",
       "4-evidence-and-its-limits": "024cacf19569e40988c9ac059dbbff5ee537f7a07295d4ee6f2105b90a2d049e",
       "5-known-defects": "9886dfa1a5b0890b9c151c4485e5dde6c8961726db6712012d80b5af49045fe2",
-      "6-resolved-decisions": "6c115d2b91941ce8c7ecdc82cde9471ceaa33f4d599c6b4412208bcdf1faaccb",
+      "6-resolved-decisions": "35de18b12b6b5c8c293f0a3902f4b01762f4159d28eec0eded68ae6ac72a7fa5",
       "7-out-of-scope": "01f373d94b0ad571782f82e6b1c5fb0832ba61a584d69cfd721f1c14fa95b541",
       "b-1-one-version-three-packages-in-lockstep-exact": "571d49f65b084b12f4e425b5c5418de9adf07683cfb58773af90300602f748b3",
       "b-2-what-this-release-carries": "29f52020ef43af9409831e3b0d8fe005bd7a6a367b1ebc7d8350221338e2f946",
       "b-3-the-consumer-handoff-says-what-changes-for-a-consumer": "c5e4d75f11bb7fc4d4e783e42c51cf26e6317f286f27391c581c388c65e328ee",
       "b-4-the-release-tree-is-qualified-as-itself": "0a87a4ef513848b8e3924d206229f1f953684d311b2516c8ad912a1e1230aa5d",
       "b-5-publication-adoption-and-ratification-are-separate-acts": "23d06420894a08185e86b91ee337ded6f7aaf61344fb29910d50cf21ff0dad6e",
-      "verification": "ed3ada23ac8a027cdd3e6b56ecd6646fdc17474d382ea0ac0cbd26efa9682acd"
+      "verification": "d7ca14d48423d22fc8fbc166910b0cfe8372debc10fab2b91a60f65a4cebf998"
     },
     "sectionHeadings": [
       "041: Release the WAL file-creation durability repair as 0.15.0-patched.4",
@@ -122,6 +122,6 @@
     "summary": "The release identity of `040`'s repair (F-135): all three packages at 0.15.0-patched.4, in lockstep, with exact internal requirements and openraft still =0.9.25. It also carries what merged after patched.3: `039`'s lock-after-restart evidence and the F-136 and F-137 corrections. Lane B of the N=3 proposal (#39) is not in it: the owner reverted it on trunk before the release commit (D-4). Publication waits for the owner's ratification of every spec the release contains (D-3).\n",
     "title": "Release the WAL file-creation durability repair as 0.15.0-patched.4"
   },
-  "shardHash": "1049e2e111484e924b0950e942b9672f014d1ed861be88f2e2b3c676706aeb68",
+  "shardHash": "827057851c697c25308d680a36072fd8d22d65510f726629eb357c41c8cb0210",
   "specVersion": "1.8.0"
 }
