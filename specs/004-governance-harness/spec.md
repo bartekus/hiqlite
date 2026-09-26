@@ -372,6 +372,48 @@ model names the pinned `spec-spine` revision and version, and states them as
 release exactly, so the paragraph now names the new pair. The rule it states
 (exact equality, the revision as the reproducibility boundary) is unchanged.
 
+**D-8 (2026-09-25, the Statecraft CI profile is adopted, revision 7).** At the
+owner's direction (the program's uniform CI decision of 2026-09-24), this
+repository renders the Statecraft setup profile `github-actions-rust`,
+revision 7, from `statecraft-cli` at `9bb61881ef3ec12b08f00f090bab45d8b3ee81e6`.
+Parameters: `default_branch` `spec-spine` (the governed trunk, not the
+remote's `main`); `governance.enforce_coverage` `false`;
+`governance.authored_content` `scripts/check-authored-content.sh` (copied from
+`statecraft-cli` at that revision, header and refusal messages retargeted to the
+organization's rules); `authored_content_text`, `gate_each_commit` and
+`require_signed_commits` `true`; `review.code_owners` `@bartekus`.
+
+*Coverage debt.* `spec-spine index coverage --fail-on-untraced` exits `1` on
+the trunk, because `require_ownership` is off and most source is unclaimed (`000`
+section 16). Enforcing it would be the separate adoption decision `AGENTS.md`
+reserves to the owner, so the profile runs coverage without that flag.
+
+*What stays outside `ci-gate`.* The profile's code job runs fixed commands
+(`cargo build`, `cargo test`, `cargo clippy --all-targets` and `cargo fmt
+--check`, all `--workspace --locked`). It does not run the feature matrix
+(`just clippy`), the examples (`just clippy-examples`), the feature-set test run
+(`just test-no-s3`) or the committed-lockfile proof, so `code_style.yaml`
+(`Check`) stays unchanged. `spec-spine.yaml` (`govern`) is covered by the
+profile's governance job and coupling step, but it stays until the owner has
+moved the required checks to `ci-gate`, so no pull request loses its required
+check in between. `acceptance.yaml`, `publish.yaml` and the release-candidate
+`ai-review.yaml` stay: none is a pull-request check. Whether any of them becomes
+a declared extra required job is the owner's decision.
+
+*Known gap at adoption.* The trunk does not yet pass the profile's code job:
+`cargo fmt --all --check` reports differences in 55 files, and
+`clippy --all-targets` reaches test code that carries pre-existing lints (the
+reason `just clippy` avoids it). Those are recorded, not fixed here: a
+reformat touches files many specs own and is its own change.
+
+*Not rendered.* `init` also writes a `specs/000-bootstrap/spec.md` with
+`status: approved`. It collides with `000-hiqlite-ownership-bootstrap` (spec-spine
+`V-004`, a shared numeric prefix), and committing it would ratify a spec by
+tooling, which this corpus forbids. It is left out, so the governance half of
+`init` reports `partial`; the setup half applies cleanly and a second apply
+changes nothing.
+
+
 ## Verification
 
 ```verify:cli

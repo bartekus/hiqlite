@@ -50,7 +50,7 @@
     "owner": "hiqlite maintainers",
     "risk": "high",
     "sectionDigests": {
-      "000-bound-the-first-hiqlite-governance-corpus": "c05140d6fbd2f2a00671adbb89963b7c228fb09a7b74930315e676f3fa6ddc52",
+      "000-bound-the-first-hiqlite-governance-corpus": "5e03d39bf53913dbb3d495c8bf9320ac457b57726f06ed1a72649253e9862cfb",
       "1-1-the-per-document-transition-adopted": "6023dbb38fbd5fdacb40ed7603dfdf11b42164122474609db5345ab364bc2d72",
       "1-the-constitutional-hierarchy": "bd3e16e9ca865896bacb327e2c81c818fb26645e2fca5ad12b78d6341f1ed9d5",
       "10-lifecycle-words-are-distinct": "ae19e78be181a1e7f3d4ac9fb9a2dd6e531203f0232eefda2f1f954da83b7069",
@@ -59,7 +59,7 @@
       "12-adoption-scope": "5a8dbe6ac6838ebae5df6c008efc09afeafb22961eebf8feb13eb8d07fef9ca3",
       "13-1-the-coupling-bypass-floor-and-what-overrides-it": "3f29b287490fe1269b8a6fe7752c834524cd474c8bf50bfaf87ecbdab213e532",
       "13-what-each-mechanism-actually-enforces": "e027668625edc66010980b2c2935c7badb20b7ff52e1ba513752ac2443382919",
-      "14-governance-workflow": "150592e0d75444ab70dcd378751f5773d4746900dc50b7341ae27c74e34586b8",
+      "14-governance-workflow": "35007d8898ae39acb7dc02f46d92d45a58174a9ec3fa68cd409b3d9d75a12cde",
       "15-pull-request-trust-boundary": "eee03841de271f9d5f5b616ceccdcef8f67288bf6958fb95c6babc4a3df925cb",
       "16-known-limitations-and-follow-up": "daaff570aa6b7f4a4ff1707c5ab420a3fdc23499609280e6adfe237e33896de0",
       "17-provenance": "6cf3d8e8ad726aa4ed89514a7f98e2f7c274be88d2770a131d5a969e1d3165ab",
@@ -115,6 +115,6 @@
       "fork-governance-boundary"
     ]
   },
-  "shardHash": "bf3893fbcaacfba082fe80bbbec2040f7c39201fcd2b984d45d4a0a331857708",
+  "shardHash": "67e4b0be467cde8b9dc398d2741d9c7d9555e142875bb95b253c53065d69739c",
   "specVersion": "1.8.0"
 }
