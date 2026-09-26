@@ -1,7 +1,7 @@
 ---
 id: "042-ci-code-debt"
 title: "Make the workspace pass the CI profile's code job: rustfmt, clippy on all targets, and a featureless workspace test"
-status: draft
+status: approved
 created: "2026-09-25"
 owner: "hiqlite maintainers"
 risk: low

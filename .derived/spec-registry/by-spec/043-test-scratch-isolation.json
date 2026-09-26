@@ -98,10 +98,10 @@
       "Verification"
     ],
     "specPath": "specs/043-test-scratch-isolation/spec.md",
-    "status": "draft",
+    "status": "approved",
     "summary": "Repairs F-139 and F-140, two lib tests that failed once on a loaded host. The cause was not timing: the tests' scratch directories were fixed paths under `../target/test_data`, shared by every process running the lib tests from one checkout, so concurrent runs removed and locked each other's directories. Each test process now uses its own root. Test code only.\n",
     "title": "Give each lib test process its own scratch root, so concurrent runs from one checkout do not collide"
   },
-  "shardHash": "3698dbe58cde63f72c24cc70cdc4f7571a95700b699e4a32cc13585b3cf56e53",
+  "shardHash": "c71f46ea01cf2f4e61464b8a44f2f13679865583f4f089206eaf85f3c1026b31",
   "specVersion": "1.8.0"
 }
