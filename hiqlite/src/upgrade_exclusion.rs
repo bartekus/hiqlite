@@ -880,7 +880,7 @@ mod tests {
     type Tree = BTreeMap<String, (bool, u64, Vec<u8>)>;
 
     fn fresh(case: &str) -> String {
-        let dir = format!("../target/test_data/upgrade_exclusion_unit/{case}");
+        let dir = format!("{}/upgrade_exclusion_unit/{case}", crate::test_scratch_root());
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir

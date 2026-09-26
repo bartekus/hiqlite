@@ -1,24 +1,16 @@
 {
   "mapping": {
-    "amends": [
-      "006-cache-state-machine"
-    ],
     "dependsOn": [
       "000-hiqlite-ownership-bootstrap",
-      "006-cache-state-machine",
-      "007-cache-log-store"
+      "005-adoption-assessment-and-plan"
     ],
     "implementingPaths": [
       {
-        "path": "hiqlite/src/app_state.rs",
+        "path": "hiqlite/src/storage_lock.rs",
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite/src/client/",
-        "source": "spec-edge"
-      },
-      {
-        "path": "hiqlite/src/network/",
+        "path": "hiqlite/src/store/logs/",
         "source": "spec-edge"
       },
       {
@@ -26,7 +18,7 @@
         "source": "spec-edge"
       },
       {
-        "path": "standards/spec/adoption-plan.md",
+        "path": "hiqlite/src/upgrade_exclusion.rs",
         "source": "spec-edge"
       },
       {
@@ -38,27 +30,14 @@
       {
         "locations": [
           {
-            "file": "hiqlite/src/client/"
+            "file": "hiqlite/src/store/logs/"
           }
         ],
         "ownership": true,
         "sourceField": "extends",
         "unit": {
           "kind": "directory",
-          "path": "hiqlite/src/client/"
-        }
-      },
-      {
-        "locations": [
-          {
-            "file": "hiqlite/src/network/"
-          }
-        ],
-        "ownership": true,
-        "sourceField": "extends",
-        "unit": {
-          "kind": "directory",
-          "path": "hiqlite/src/network/"
+          "path": "hiqlite/src/store/logs/"
         }
       },
       {
@@ -77,27 +56,27 @@
       {
         "locations": [
           {
-            "file": "hiqlite/src/app_state.rs"
+            "file": "hiqlite/src/storage_lock.rs"
           }
         ],
         "ownership": true,
         "sourceField": "extends",
         "unit": {
           "kind": "file",
-          "path": "hiqlite/src/app_state.rs"
+          "path": "hiqlite/src/storage_lock.rs"
         }
       },
       {
         "locations": [
           {
-            "file": "standards/spec/adoption-plan.md"
+            "file": "hiqlite/src/upgrade_exclusion.rs"
           }
         ],
         "ownership": true,
         "sourceField": "extends",
         "unit": {
           "kind": "file",
-          "path": "standards/spec/adoption-plan.md"
+          "path": "hiqlite/src/upgrade_exclusion.rs"
         }
       },
       {
@@ -114,9 +93,9 @@
         }
       }
     ],
-    "specId": "022-replicated-cache-command-compatibility",
+    "specId": "043-test-scratch-isolation",
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "fefaa66eb15b73bb85b1829b27a876ceff5cd371c28d137e3b425a71a288e4c6"
+  "shardHash": "942239f3d20b8b6ab2bc8be1c28fc98a3e100387cd07e253f8efd7c89b9d7c2e"
 }

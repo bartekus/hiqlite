@@ -3557,3 +3557,30 @@ granted 12.0 s after asking and three queued callers are all served within
 woken only by a release, and its wait was bounded only by the request
 timeout), which has shipped since `0.15.0-patched.1`. `039` records the
 evidence; nothing in the fork changes.
+
+### F-139 `defect`, confidence `high`
+
+**`storage_lock::tests::a_crash_releases_ownership` failed with
+`StorageInUse` after its child had aborted.** Seen once on 2026-09-25 during a
+patched.4 suite run on a loaded host; it passed alone and in the rerun. The
+cause is not timing: every lib test in `storage_lock` used a fixed directory
+under `../target/test_data/storage_lock/`, shared by every process running the
+lib tests from the same checkout, so a second concurrent run (a suite beside an
+acceptance block, for example) removed and locked the first run's directories.
+Reproduced on trunk `f4ce3a7` (macOS arm64): two concurrent processes of the lib
+test binary, filtered to `storage_lock::` and `store::logs::`, failed in 30 of
+30 runs, `a_crash_releases_ownership` among the failures; one process at a time
+beside twelve CPU hogs failed in 0 of 30. Test isolation only; no runtime
+behavior is involved. Repaired by `043`.
+
+### F-140 `defect`, confidence `high`
+
+**`store::logs::tests::the_opt_in_moves_the_legacy_cache_aside_and_marks_the_new_one`
+failed renaming a `.partial` directory that was not there.** Same occasion and
+same cause as F-139: the cache-format tests used fixed directories under
+`../target/test_data/cache_format/`, and a concurrent run's `remove_dir_all`
+took the directory from under the move. It failed in the same 30-of-30
+concurrent reproduction. The same pattern existed in the `upgrade_exclusion`
+and cache-compatibility lib tests. Repaired by `043`. The `hiqlite-wal` lib
+tests use cwd-relative `test_data/` paths with the same exposure; they are
+recorded as `043` KD-1 and left unrepaired.
