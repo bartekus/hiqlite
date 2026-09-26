@@ -1,0 +1,323 @@
+{
+  "record": {
+    "created": "2026-09-25",
+    "dependsOn": [
+      "000-hiqlite-ownership-bootstrap",
+      "004-governance-harness"
+    ],
+    "extends": [
+      {
+        "nature": "additive",
+        "spec": "001-wal-durability-and-completion",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite-wal/src/"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "001-wal-durability-and-completion",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/config.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "002-snapshot-publication-and-recovery",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/store/state_machine/sqlite/"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "003-client-consistency-and-retry-outcomes",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/client/"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "003-client-consistency-and-retry-outcomes",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/network/"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "006-cache-state-machine",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/store/state_machine/memory/"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "007-cache-log-store",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/store/logs/"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "010-node-lifecycle-and-split-brain",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/app_state.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "010-node-lifecycle-and-split-brain",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/split_brain_check.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "010-node-lifecycle-and-split-brain",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/start.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "011-transport-security-material",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/tls.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "011-transport-security-material",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/tests/tls_env.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "012-cluster-integration-evidence",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/tests/cluster/cache.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "012-cluster-integration-evidence",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/tests/cluster/check.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "012-cluster-integration-evidence",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/tests/cluster/learner_only.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "012-cluster-integration-evidence",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/tests/cluster/remote_only.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "013-backup-retention-and-object-storage",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/backup.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "013-backup-retention-and-object-storage",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/s3.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "014-schema-migration-contract",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/migration.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "015-server-binary-and-proxy",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/server/config.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "015-server-binary-and-proxy",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/server/password.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "015-server-binary-and-proxy",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/server/proxy/handlers.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "015-server-binary-and-proxy",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/server/proxy/state.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "016-derive-macros",
+        "unit": {
+          "id": "hiqlite-derive-patched",
+          "kind": "crate"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "018-dashboard-service-and-ui",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/dashboard/handlers.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "018-dashboard-service-and-ui",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/dashboard/middleware.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "018-dashboard-service-and-ui",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/dashboard/mod.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "018-dashboard-service-and-ui",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/dashboard/query.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "018-dashboard-service-and-ui",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/dashboard/session.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "018-dashboard-service-and-ui",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/dashboard/static_files.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "024-exclusive-storage-ownership",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/storage_lock.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "027-node-lifecycle-and-startup-errors",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/membership_gate.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "035-n1-upgrade-exclusion",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/upgrade_exclusion.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "035-n1-upgrade-exclusion",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/tests/upgrade_exclusion.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "037-startup-recovery-readiness",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/tests/recovery_readiness.rs"
+        }
+      }
+    ],
+    "id": "042-ci-code-debt",
+    "implementation": "in-progress",
+    "owner": "hiqlite maintainers",
+    "risk": "low",
+    "sectionDigests": {
+      "042-make-the-workspace-pass-the-ci-profile-s-code-job": "e26ae2e57268a895d08ead7b027239c8346e45fed16d6260037bed5ee108309c",
+      "1-purpose": "6d559f82b8a6f149e5ad46fb55fcf20f9211851407df9e854ca13779d8f68e36",
+      "2-ownership": "970c96be585496628d695213fb7139a64c822fe3bc7c4bca3922ef2879949f03",
+      "3-behavior": "7b0041a54a94e3082e774f73bfecfeec77b7c7aa2096794fe8b6ae135c3b7c57",
+      "4-evidence-and-its-limits": "122dcf17a5802fb850d7b1ed7f4685bff943c1f9db85ab5a0aba872ffb815f3e",
+      "5-known-defects": "e93c9304b21d75f9c0237215f30c14436d59baa42921a213f8b442a210f5d5e1",
+      "6-out-of-scope": "29f10e2d45cf2db4f82d473171ada4530dcd9e13cd57477e12148834656b554f",
+      "7-resolved-decisions": "7ed96c3004914f76027105e0a4a11b4c78ebc4e529bb0152ab4deef74983b4a3",
+      "verification": "93000f34eb7337a95cb0f99fc190b27508fb736e9f1e39efbf035d4a715036fd"
+    },
+    "sectionHeadings": [
+      "042: Make the workspace pass the CI profile's code job",
+      "1. Purpose",
+      "2. Ownership",
+      "3. Behavior",
+      "4. Evidence and its limits",
+      "5. Known defects",
+      "6. Out of scope",
+      "7. Resolved decisions",
+      "Verification"
+    ],
+    "specPath": "specs/042-ci-code-debt/spec.md",
+    "status": "draft",
+    "summary": "The Statecraft CI profile's `code` job (`004` D-8, PR #47) runs `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings` and `cargo test --workspace --locked` with default features, and the trunk failed all three. This spec records why and removes the debt in three separate changes, so `ci-gate` can become the required check. It changes no runtime behavior.\n",
+    "title": "Make the workspace pass the CI profile's code job: rustfmt, clippy on all targets, and a featureless workspace test"
+  },
+  "shardHash": "081553a928b0a857cc05c34eed8a4df46a596271eb4d98d715aacc27a4ec2a37",
+  "specVersion": "1.8.0"
+}

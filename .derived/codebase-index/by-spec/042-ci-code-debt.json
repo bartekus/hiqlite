@@ -1,0 +1,611 @@
+{
+  "mapping": {
+    "dependsOn": [
+      "000-hiqlite-ownership-bootstrap",
+      "004-governance-harness"
+    ],
+    "implementingPaths": [
+      {
+        "path": "hiqlite-derive",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite-wal/src/",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/app_state.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/backup.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/client/",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/config.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/dashboard/handlers.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/dashboard/middleware.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/dashboard/mod.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/dashboard/query.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/dashboard/session.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/dashboard/static_files.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/membership_gate.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/migration.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/network/",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/s3.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/server/config.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/server/password.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/server/proxy/handlers.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/server/proxy/state.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/split_brain_check.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/start.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/storage_lock.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/store/logs/",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/store/state_machine/memory/",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/store/state_machine/sqlite/",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/tls.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/upgrade_exclusion.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/tests/cluster/cache.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/tests/cluster/check.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/tests/cluster/learner_only.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/tests/cluster/remote_only.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/tests/recovery_readiness.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/tests/tls_env.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/tests/upgrade_exclusion.rs",
+        "source": "spec-edge"
+      }
+    ],
+    "resolvedUnits": [
+      {
+        "locations": [
+          {
+            "file": "hiqlite-derive"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "id": "hiqlite-derive-patched",
+          "kind": "crate"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite-wal/src/"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite-wal/src/"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/client/"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/client/"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/network/"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/network/"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/store/logs/"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/store/logs/"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/store/state_machine/memory/"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/store/state_machine/memory/"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/store/state_machine/sqlite/"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/store/state_machine/sqlite/"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/app_state.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/app_state.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/backup.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/backup.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/config.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/config.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/dashboard/handlers.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/dashboard/handlers.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/dashboard/middleware.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/dashboard/middleware.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/dashboard/mod.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/dashboard/mod.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/dashboard/query.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/dashboard/query.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/dashboard/session.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/dashboard/session.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/dashboard/static_files.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/dashboard/static_files.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/membership_gate.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/membership_gate.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/migration.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/migration.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/s3.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/s3.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/server/config.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/server/config.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/server/password.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/server/password.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/server/proxy/handlers.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/server/proxy/handlers.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/server/proxy/state.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/server/proxy/state.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/split_brain_check.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/split_brain_check.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/start.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/start.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/storage_lock.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/storage_lock.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/tls.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/tls.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/upgrade_exclusion.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/upgrade_exclusion.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/tests/cluster/cache.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/tests/cluster/cache.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/tests/cluster/check.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/tests/cluster/check.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/tests/cluster/learner_only.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/tests/cluster/learner_only.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/tests/cluster/remote_only.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/tests/cluster/remote_only.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/tests/recovery_readiness.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/tests/recovery_readiness.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/tests/tls_env.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/tests/tls_env.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/tests/upgrade_exclusion.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/tests/upgrade_exclusion.rs"
+        }
+      }
+    ],
+    "specId": "042-ci-code-debt",
+    "specStatus": "draft"
+  },
+  "schemaVersion": "1.1.0",
+  "shardHash": "cb9149d2456abc28b5f22eed5f93732657dc11b68682e9b5d77062890fab6e92"
+}
