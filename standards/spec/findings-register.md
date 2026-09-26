@@ -3537,3 +3537,20 @@ concurrent reproduction. The same pattern existed in the `upgrade_exclusion`
 and cache-compatibility lib tests. Repaired by `043`. The `hiqlite-wal` lib
 tests use cwd-relative `test_data/` paths with the same exposure; they are
 recorded as `043` KD-1 and left unrepaired.
+
+### F-141 `defect`, confidence `medium`
+
+**Two `upgrade_exclusion` integration tests failed on CI Linux amd64 because
+their fixed RPC port was already in use.** `Check` on #53 (`52223d1`, run
+36215829784, 2026-09-26): `the_consent_move_completes_once` and
+`f130_an_interrupted_published_move_is_refused_then_finished` both failed
+their start with "the internal RPC endpoint could not bind to `0.0.0.0:38612`:
+Address already in use"; the other three tests of the binary passed. A refused
+start cannot have held it: `start_node_inner` acquires storage before it binds
+anything. The same tree passed 9 of 9 runs of the binary in a Linux arm64
+container (three in file order, six in random order) and 20 of 20 on macOS.
+Every fork integration test used fixed ports in 38611 to 38752, inside Linux's
+default ephemeral range (32768 to 60999), where any outbound connection on the
+host can hold the port; macOS's range starts at 49152, which is why it never
+failed there. The cause on the runner is inferred, not observed: what held
+38612 was not captured. Test isolation only. Repaired by `043` B-2.

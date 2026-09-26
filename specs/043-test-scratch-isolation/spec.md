@@ -26,6 +26,16 @@ extends:
   - spec: "005-adoption-assessment-and-plan"
     unit: { kind: file, path: "standards/spec/findings-register.md" }
     nature: additive
+  # B-2: the fixed ports of the fork's integration tests.
+  - spec: "035-n1-upgrade-exclusion"
+    unit: { kind: file, path: "hiqlite/tests/upgrade_exclusion.rs" }
+    nature: additive
+  - spec: "037-startup-recovery-readiness"
+    unit: { kind: file, path: "hiqlite/tests/recovery_readiness.rs" }
+    nature: additive
+  - spec: "039-lock-after-restart-evidence"
+    unit: { kind: file, path: "hiqlite/tests/lease_wake.rs" }
+    nature: additive
 summary: >
   Repairs F-139 and F-140, two lib tests that failed once on a loaded host. The
   cause was not timing: the tests' scratch directories were fixed paths under
@@ -59,6 +69,12 @@ tests build their directories under it. A child process a `storage_lock` test
 spawns receives its directory through `HQL_TEST_OWNER_DIR`, so it uses the
 parent's directory, not its own process id.
 
+**B-2.** The fork's integration tests bind fixed ports below Linux's default
+ephemeral range (32768 to 60999): `upgrade_exclusion` 28611 and 28612,
+`recovery_readiness` 28711 to 28722, `lease_wake` 28741 to 28752 (each test
+uses its API port and the next one for Raft). Before, they were the same
+numbers plus 10000, inside that range (F-141).
+
 ## 4. Evidence and its limits
 
 Measured on macOS arm64 from one checkout, with the lib test binary built with
@@ -79,6 +95,14 @@ failures were most likely a suite beside another run in the same worktree
 observed directly. The per-process directories are not removed after the run;
 they live under `target/`.
 
+For B-2 (F-141): the failure was seen once, on CI Linux amd64 (run
+36215829784, both failing tests at `0.0.0.0:38612`, "Address already in use"),
+and not reproduced: the same tree passed 9 of 9 runs in a Linux arm64
+container and 20 of 20 on macOS. That the port was held by an ephemeral
+connection on the runner is an inference from the port ranges, not an
+observation. Ports below 32768 are outside the range the kernel hands out by
+default; they can still be taken by a listener another process chose.
+
 ## 5. Known defects
 
 **KD-1.** The `hiqlite-wal` lib tests use cwd-relative `test_data/...` paths
@@ -86,6 +110,10 @@ they live under `target/`.
 `log_store_impl.rs`), with the same exposure to a concurrent run from the same
 crate directory. Not repaired here; the workaround is one run at a time per
 checkout, or an isolated working directory.
+
+**KD-2.** The upstream-derived `cluster` suite binds 35001 to 35003 and 36001
+to 36003, also inside Linux's ephemeral range. Not moved here: those tests are
+upstream's, and no failure of theirs has been attributed to it.
 
 ## 6. Out of scope
 
@@ -98,6 +126,11 @@ Integration tests under `hiqlite/tests/`, which use their own directories, and
 name, because the tests in one process already use distinct case names and
 only cross-process sharing collided; a stable per-process root keeps paths
 readable in failure messages.
+
+**D-2 (2026-09-26).** Fixed ports moved below the ephemeral range rather than
+ports chosen at run time: the tests restart a node on the same address, so a
+port the kernel picked for the first start could be taken by the time of the
+second; and `lease_wake` is `039`'s evidence, whose text names its setup.
 
 ## Verification
 

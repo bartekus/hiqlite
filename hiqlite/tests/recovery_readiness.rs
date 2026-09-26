@@ -103,7 +103,7 @@ async fn count(client: &hiqlite::Client) -> Result<i64, hiqlite::Error> {
 #[cfg(feature = "auto-heal")]
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn f134_unclean_stop_rebuild_is_not_healthy_before_the_replay() {
-    let port = 38711;
+    let port = 28711;
     let dir = fresh("unclean_stop");
 
     let client = start(&dir, port).await;
@@ -154,7 +154,7 @@ async fn f134_unclean_stop_rebuild_is_not_healthy_before_the_replay() {
 /// From the first moment the cache reports healthy, every acknowledged key must be readable.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn f134_cache_replay_is_not_healthy_before_the_replay() {
-    let port = 38721;
+    let port = 28721;
     let dir = fresh("cache_replay");
 
     let client = start(&dir, port).await;
