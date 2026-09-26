@@ -2,25 +2,23 @@
   "mapping": {
     "dependsOn": [
       "000-hiqlite-ownership-bootstrap",
-      "002-snapshot-publication-and-recovery",
-      "009-configuration-contract",
-      "012-cluster-integration-evidence"
+      "005-adoption-assessment-and-plan"
     ],
     "implementingPaths": [
       {
-        "path": "hiqlite/src/backup.rs",
+        "path": "hiqlite/src/storage_lock.rs",
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite/src/s3.rs",
+        "path": "hiqlite/src/store/logs/",
         "source": "spec-edge"
       },
       {
-        "path": "spec-spine.toml",
+        "path": "hiqlite/src/store/state_machine/memory/",
         "source": "spec-edge"
       },
       {
-        "path": "standards/spec/adoption-plan.md",
+        "path": "hiqlite/src/upgrade_exclusion.rs",
         "source": "spec-edge"
       },
       {
@@ -32,53 +30,53 @@
       {
         "locations": [
           {
-            "file": "hiqlite/src/backup.rs"
+            "file": "hiqlite/src/store/logs/"
           }
         ],
         "ownership": true,
-        "sourceField": "establishes",
+        "sourceField": "extends",
         "unit": {
-          "kind": "file",
-          "path": "hiqlite/src/backup.rs"
+          "kind": "directory",
+          "path": "hiqlite/src/store/logs/"
         }
       },
       {
         "locations": [
           {
-            "file": "hiqlite/src/s3.rs"
+            "file": "hiqlite/src/store/state_machine/memory/"
           }
         ],
         "ownership": true,
-        "sourceField": "establishes",
+        "sourceField": "extends",
         "unit": {
-          "kind": "file",
-          "path": "hiqlite/src/s3.rs"
+          "kind": "directory",
+          "path": "hiqlite/src/store/state_machine/memory/"
         }
       },
       {
         "locations": [
           {
-            "file": "spec-spine.toml"
+            "file": "hiqlite/src/storage_lock.rs"
           }
         ],
         "ownership": true,
         "sourceField": "extends",
         "unit": {
           "kind": "file",
-          "path": "spec-spine.toml"
+          "path": "hiqlite/src/storage_lock.rs"
         }
       },
       {
         "locations": [
           {
-            "file": "standards/spec/adoption-plan.md"
+            "file": "hiqlite/src/upgrade_exclusion.rs"
           }
         ],
         "ownership": true,
         "sourceField": "extends",
         "unit": {
           "kind": "file",
-          "path": "standards/spec/adoption-plan.md"
+          "path": "hiqlite/src/upgrade_exclusion.rs"
         }
       },
       {
@@ -95,9 +93,9 @@
         }
       }
     ],
-    "specId": "013-backup-retention-and-object-storage",
+    "specId": "043-test-scratch-isolation",
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "7415086f1aa5e4e2a4c31d3eb9bbc1e4f343b73c861d7ec5985d85054a1c5865"
+  "shardHash": "f0d5b2bb9da7599f01792d846f9b1ecc1b5251c77dc53b2b0419394fbdb53186"
 }
