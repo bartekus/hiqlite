@@ -5,7 +5,7 @@ status: draft
 created: "2026-09-23"
 owner: "hiqlite maintainers"
 risk: critical
-implementation: pending
+implementation: in-progress
 depends_on:
   - "000-hiqlite-ownership-bootstrap"
   - "013-backup-retention-and-object-storage"
@@ -14,10 +14,15 @@ depends_on:
   - "033-n3-topology-qualification"
 origin:
   retroactive: false
+# D-6: B-4 changes what a follower does with a restore instruction it has already honoured
+# (`026` B-4's quarantine) and what `restore_backup_finish` returns. `026`'s file is not edited;
+# its acceptance block is unchanged and still passes.
+amends: ["026-backup-and-restore-integrity"]
 establishes:
   # D-3: the public export and restore entry points, which do not exist yet. `backup` is a
   # private module, and a new module keeps the public surface out of it.
   - { kind: file, path: "hiqlite/src/restore.rs", planned: true }
+# Added by the lane B change that implements B-4 (F-119, F-120), in the range that changes them.
 extends:
   - spec: "013-backup-retention-and-object-storage"
     unit: { kind: file, path: "hiqlite/src/backup.rs" }
@@ -28,12 +33,15 @@ extends:
   - spec: "010-node-lifecycle-and-split-brain"
     unit: { kind: file, path: "hiqlite/src/app_state.rs" }
     nature: additive
+  # D-7: the membership hold while node 1 finishes a restore.
   - spec: "003-client-consistency-and-retry-outcomes"
     unit: { kind: directory, path: "hiqlite/src/network/" }
     nature: additive
+  # D-9: the dashboard's writes are held while a restore is finished.
   - spec: "018-dashboard-service-and-ui"
     unit: { kind: file, path: "hiqlite/src/dashboard/query.rs" }
     nature: additive
+  # D-7: the in-process suite's second file restore names its own copy of the image.
   - spec: "012-cluster-integration-evidence"
     unit: { kind: file, path: "hiqlite/tests/cluster/backup_restore.rs" }
     nature: additive
@@ -41,10 +49,6 @@ extends:
     unit: { kind: file, path: "standards/spec/findings-register.md" }
     nature: additive
 references:
-  - unit: { kind: file, path: "hiqlite/src/backup.rs" }
-    role: "context"
-  - unit: { kind: file, path: "hiqlite/src/start.rs" }
-    role: "context"
   - unit: { kind: file, path: "hiqlite/src/init.rs" }
     role: "context"
   - unit: { kind: file, path: "standards/spec/n3-topology-proposal.md" }
@@ -59,8 +63,9 @@ summary: >
   and KD-8 for that procedure. The export's currency rule is a proposal whose
   safety argument and alternatives are in the topology proposal's section 13;
   the committed index it first relied on is not persisted (F-124). In-place
-  multi-node restore (F-058) stays unsupported. Changes no code until an
-  implementing change lands.
+  multi-node restore (F-058) stays unsupported. Lane B (2026-09-23)
+  implements B-4 on a branch, each repair with a test observed failing without
+  it; B-1 to B-3 and B-5 to B-7 are not implemented.
 ---
 
 # 034: Restore a backup into a fresh three-voter cell, once, from an image that proves whose it is
@@ -92,6 +97,13 @@ That path still needs things hiqlite does not provide:
 **Establishes** `hiqlite/src/restore.rs`, planned: the public export (B-2) and
 restore (B-3) entry points, in a module of their own because `backup` is private
 and `027` B-7 froze the public surface this release exposes (D-3).
+
+**Extends, since lane B** (D-6, D-7): `013`'s `hiqlite/src/backup.rs` and
+`010`'s `start.rs` (superseding: the restore start and finish are replaced),
+`010`'s `app_state.rs`, `003`'s `hiqlite/src/network/`, `018`'s
+`hiqlite/src/dashboard/query.rs` (D-9), `012`'s
+`hiqlite/tests/cluster/backup_restore.rs` and `005`'s findings register; and
+**amends** `026` for the follower quarantine.
 
 Everything else is referenced, for the reason `033` D-1 gives: the
 implementing change adds `extends` on `hiqlite/src/backup.rs` (owned by `013`,
@@ -301,7 +313,35 @@ consumer feature sets) unless it is a unit test, which says so.
 
 ## 5. Evidence and its limits
 
-**Nothing here has been executed; nothing here is implemented.** What the
+**Lane B (2026-09-23), B-4 only, unit level.** Each repair's test was run first
+on the unrepaired behavior and observed failing, with the unrepaired bodies
+moved verbatim behind two seams (the instruction as a parameter of
+`restore_backup_start_from`, the raft behind the `RestoreRaft` trait), which is
+what let a stand-in raft and a temporary directory drive them:
+`f119_node_1_applies_an_instruction_at_most_once` (restored again),
+`f119_a_follower_quarantines_once_per_instruction` (moved the rejoined state
+aside), `f120_a_cell_that_is_not_fresh_is_refused_before_anything_moves`
+(restored), `f120_a_raft_that_never_initializes_is_a_bounded_error`,
+`f120_no_leader_is_a_bounded_error` and
+`f120_a_snapshot_that_is_never_built_is_a_bounded_error` (each still waiting at
+the test's 5 s bound), and `f120_a_leader_other_than_this_node_is_an_error`
+(the `debug_assert!` panicked). The crash tests construct the on-disk state an
+interruption leaves at each point (after the record, after the staged commit,
+before completion, during the record's own replacement, during a follower's
+quarantine); they do not kill a process. The reordering in `start.rs` and the
+membership hold are exercised only by the in-process cluster suite's restore
+phases, not by a test that fails without them. R-1 to R-8 have not run.
+
+**After review (2026-09-23, D-9).** Observed failing on the first lane B
+commit, then passing: `f119_a_committed_but_unfinished_restore_is_finished_without_the_instruction`
+(the start without the instruction returned "nothing to do") and
+`f120_at_n1_a_missing_snapshot_or_purge_does_not_fail_the_restore` (a startup
+error), the latter behind a seam that added `RestoreRaft::has_peers` unused.
+`app_state::restore_hold_tests` failed only by not compiling, since the check did
+not exist; it tests the check, not the three places that call it. The teardown's
+drain, bounds and aborts have no test that fails without them.
+
+**Before lane B: nothing here had been executed.** What the
 acceptance would establish when it passes: the hiqlite half of the procedure,
 on one host, against a local S3 double. It would not establish the consumer
 archive's coherence, the cell-level fence between old and new, key custody,
@@ -337,6 +377,10 @@ the owner to accept the proposal's 13.7 assumptions, or independent evidence
 (13.7 (a) or (b)), under D-9 and D-12.
 
 ## 7. Resolved decisions
+
+The D-numbers below are this spec's own. A decision of the proposal's section 11
+is always cited as "the proposal's D-n" (its D-7 names the manifest fields, its
+D-8 the stale-backup controls); this spec's D-7 and D-8 are unrelated to them.
 
 **D-1 (2026-09-23, fresh cell, not coordinated followers).** The alternative
 was to repair F-058 directly: a coordination point through which followers wait
@@ -374,6 +418,88 @@ rule restated against the fields a stopped directory holds. R-6b extended and
 R-6c added. KD-4 corrected. No decision taken: D-12, D-7 and the D-8
 subdivisions stay pending in the proposal's section 11.
 
+**D-6 (2026-09-23, lane B: the at-most-once record of B-4).** Owner
+authorization of lane B, 2026-09-23. B-3's "record the applied manifest digest"
+needs B-1's manifest, which lane C adds; lane B records what exists now. The
+record is `hiqlite-restore.record` at the data directory root, JSON with a
+format number, a state (`pending` or `applied`), the instruction as
+`HQL_BACKUP_RESTORE` spells it (`s3:<object>` or `file:<path>`), and on node 1
+the SHA-256 of the image it applied. Node 1 writes it `pending` (temporary name,
+fsync, rename, directory fsync) after the image is fetched and validated and
+before anything of its own is staged or removed; the start that applied it marks
+it `applied` only after `restore_backup_finish` returned `Ok`. A follower writes
+it `pending` before its quarantine and `applied` after. A later start skips an
+instruction that is `applied` and **equal** to the one given, and applies one
+that is `pending` or different. Decided, because the spec is silent: the
+identity compared is the instruction, and the digest is recorded, not compared,
+since comparing it would pull the image from S3 on every start; an object
+replaced under the same name is therefore treated as already applied, which
+errs toward not destroying data. A different instruction is applied, as before
+this change, so N=1 behavior changes only by removing the repeat; B-3's refusal
+of a different image without an explicit override is lane C's. An unreadable
+record is a startup error, since it alone says whether a destructive restore
+happened. The quarantine never moves the record. Re-applying the same image on
+purpose needs a different instruction (another name or path) or the record's
+removal, an operator act.
+
+**D-7 (2026-09-23, lane B: F-120's ordering, and what the reordering needed).**
+`restore_backup_finish` runs after both listeners serve and after both
+`become_cluster_member` tasks returned, as B-4 requires, and is bounded: 60 s
+each for initialization, a leader and the applied index, and 30 minutes for the
+snapshot build, which grows with the database. Expiry, a leader other than node
+1 (the former `debug_assert!`), a snapshot that cannot be triggered and a purge
+that gives up are each an `Error::Startup`; the last two were only logged
+before, and are errors now because the snapshot and the purge are what carry the
+restored database to a follower. Serving the listeners first opened a hazard the
+old order hid: a follower could be added as a learner before the snapshot and
+the purge, and catch up from a log that does not contain the restored data. Node
+1 therefore refuses membership changes of its SQLite group while it finishes a
+restore (`AppState::restore_hold`, checked in `admit_membership_change`); a
+joining node retries that refusal as it retries any other. A start that fails
+after its listeners serve now stops the listeners, both raft groups and both
+writers, and releases storage ownership (`024`, with `035`'s WAL locks) only if
+every component acknowledged its stop; before, it returned with all of them
+running. The in-process suite restores the same `file:` image twice under
+`TEST_SKIP_S3_RESTORE`, which is now a no-op the second time, so its restore
+helper names a fresh copy per restore.
+
+**D-8 (2026-09-23, lane B: the fresh-cell precondition applies to every node-1
+restore with peers).** B-4 states it for a fresh cell; the code cannot tell a
+fresh-cell restore from `026`'s in-place one, so it applies to both. In an
+in-place restore at N>1 node 1 now waits, bounded by `init_peer_wait_secs`, for
+enough restarted followers to answer that they are empty, and refuses if any
+answers with an initialized group; a follower left running used to be restored
+around, silently. That in-place topology stays unsupported (`026` B-7).
+
+**D-9 (2026-09-23, lane B: an independent review's corrections to D-6 and
+D-7).**
+
+- *The record has three states, not two.* `pending` is written before anything
+  moves; `committed` once the image is in place; `applied` once the start that
+  finished it completed. D-6's two states forgot a committed image as soon as the
+  operator removed `HQL_BACKUP_RESTORE`: the next start took the ordinary path,
+  with no hold, no snapshot and no purge, and a follower then caught up from a log
+  without the restored data. A `committed` record now makes node 1 finish the
+  restore **whatever the environment says**, without pulling the image again;
+  only a different instruction replaces it. A `pending` record without the
+  instruction is abandoned with a warning, since nothing had moved.
+- *Not ready, and no client writes, while a restore is finished.*
+  `become_cluster_member` marks the start finished before the finish runs, so
+  `/ready` answered ready and client streams were accepted for as long as the
+  finish took (up to 60 s + 60 s + 30 min). `restore_hold` now also refuses
+  readiness, the client stream and the dashboard's writes: a write acknowledged
+  there would be lost if the finish failed.
+- *N=1.* A snapshot that is not built, or a purge that gives up, is logged and
+  the restore completes: no follower can catch up from the log at N=1, and D-7's
+  fatal treatment made every restart apply the image again while the instruction
+  stayed set.
+- *The failed-start teardown.* It aborts both join tasks (one left running kept
+  retrying and kept the node's state, and its storage ownership, alive), drains
+  the membership gate with `SHUTDOWN_DRAIN` before stopping anything (F-107: if
+  the drain times out nothing is stopped), and bounds each component's stop at
+  10 s. Storage ownership is released only after a drain and every stop within
+  its bound.
+
 **D-10 (2026-09-25, owner decision: revert lane B for patched.4).** The owner
 decided 2026-09-25 night, verbatim: "Revert lane B for patched.4". Reverted #39
 (merge `ce04e64`) on trunk before the release commit so trunk equals what ships.
@@ -382,6 +508,10 @@ This resolves 041 D-4. The reland is prepared as a draft PR that waits for
 ratification for it. The lane B entries D-6 to D-9 leave with the revert and
 return with the reland; this entry is numbered after them so the reland does
 not collide with it.
+
+**D-11 (2026-09-25, reland, not merged).** This change relands lane B, the revert of the
+revert in D-10, on a branch that waits for `033`'s N=3 qualification. It merges only
+after that qualification passes and the owner decides to ship lane B.
 
 ## Verification
 
@@ -393,4 +523,16 @@ grep -q '^### F-124 ' standards/spec/findings-register.md
 grep -q '^## 13. Export currency' standards/spec/n3-topology-proposal.md
 grep -q '^### F-132 ' standards/spec/findings-register.md
 grep -q '13.10 The clean-stop marker' standards/spec/n3-topology-proposal.md
+sh -c 'spec-spine index owner hiqlite/src/backup.rs | grep -q 034-fresh-cell-restore'
+grep -q 'const RESTORE_RECORD_FILE: &str = "hiqlite-restore.record";' hiqlite/src/backup.rs
+sh -c '! grep -q "debug_assert!(" hiqlite/src/backup.rs'
+sh -c 'a=$(grep -n "member_db.await??;" hiqlite/src/start.rs | head -1 | cut -d: -f1); b=$(grep -n "backup::restore_backup_finish(" hiqlite/src/start.rs | head -1 | cut -d: -f1); c=$(grep -n "\"the external API endpoint\"," hiqlite/src/start.rs | tail -1 | cut -d: -f1); test -n "$a" && test -n "$b" && test -n "$c" && test "$c" -lt "$a" && test "$a" -lt "$b"'
+grep -q 'fn teardown_started_node' hiqlite/src/start.rs
+cargo test -p hiqlite-patched --lib backup::lane_b_tests
+cargo test -p hiqlite-patched --lib app_state::restore_hold_tests
+grep -q 'Committed,' hiqlite/src/backup.rs
+sh -c 'test "$(grep -c "ensure_not_restoring(&state.restore_hold)?;" hiqlite/src/network/api.rs)" -eq 2'
+grep -q 'ensure_not_restoring(&state.restore_hold)?;' hiqlite/src/dashboard/query.rs
+sh -c 'grep -A40 "async fn teardown_started_node" hiqlite/src/start.rs | grep -q "SHUTDOWN_DRAIN"'
+grep -q 'abort_member_cache.abort();' hiqlite/src/start.rs
 ```

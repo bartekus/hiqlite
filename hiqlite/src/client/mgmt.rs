@@ -305,15 +305,23 @@ impl Client {
     /// Perform a graceful shutdown for this Raft node.
     /// Works on local clients only and can't shut down remote nodes.
     ///
-    /// The shutdown adds a 10 delay on purpose for smoothing out Kubernetes rolling releases and
-    /// make the whole process more graceful, because a whole new leader election might be necessary.
+    /// When this node is one of several members, the shutdown first waits
+    /// `NodeConfig::pre_shutdown_delay_ms` (9.5 s by default) on purpose for smoothing out
+    /// Kubernetes rolling releases, because a whole new leader election might be necessary.
+    ///
+    /// Three outcomes (`033` B-4): `Ok(())` is a **confirmed** completion, every component
+    /// stopped and storage ownership released. An error for which
+    /// [`Error::is_shutdown_unconfirmed`] is `true` means the wait ran out while the sequence
+    /// was still going: it continues in the background and nothing reports whether it
+    /// finished. Any other error is a shutdown that finished without stopping everything.
     ///
     /// In future versions, there will be the possibility to trigger a graceful leader election
     /// upfront, but this has not been stabilized in this version.
     pub async fn shutdown(&self) -> Result<(), Error> {
         if let Some(state) = &self.inner.state {
+            let bound = shutdown_wait(state.pre_shutdown_delay);
             match tokio::time::timeout(
-                SHUTDOWN_WAIT,
+                bound,
                 Self::shutdown_execute(
                     state,
                     #[cfg(feature = "cache")]
@@ -332,7 +340,7 @@ impl Client {
                 // The shutdown's own result: a drain timeout that stopped nothing, or a component
                 // that did not stop, used to be discarded here and reported as success.
                 Ok(res) => res,
-                Err(_) => Err(shutdown_wait_elapsed()),
+                Err(_) => Err(shutdown_wait_elapsed(bound)),
             }
         } else {
             Err(Error::Error(
@@ -419,8 +427,12 @@ impl Client {
         // smoother, especially with ephemeral storage. It also allows to set a ready check
         // interval of 3 seconds while it will still catch it before it actually starts the
         // shutdown, so services can stop sending requests to this node.
-        if !is_single_instance {
-            time::sleep(Duration::from_millis(9500)).await;
+        //
+        // `033` B-4: the length is `NodeConfig::pre_shutdown_delay_ms`, 9.5 s unless configured.
+        let delay = pre_shutdown_delay(is_single_instance, state.pre_shutdown_delay);
+        if !delay.is_zero() {
+            info!("Waiting {delay:?} before the shutdown starts (pre_shutdown_delay_ms)");
+            time::sleep(delay).await;
         }
 
         // F-107: wait, bounded, for a membership change admitted before `close` to finish, and
@@ -640,8 +652,33 @@ impl Client {
     }
 }
 
-/// How long `Client::shutdown` and `ShutdownHandle::wait` wait for the shutdown sequence.
+/// How long `Client::shutdown` and `ShutdownHandle::wait` wait for the shutdown sequence, with
+/// the default pre-shutdown delay. See [`shutdown_wait`].
 pub(crate) const SHUTDOWN_WAIT: Duration = Duration::from_secs(15);
+
+/// The pre-shutdown delay's default, the constant `033` B-4 made configurable.
+const DEFAULT_PRE_SHUTDOWN_DELAY: Duration =
+    Duration::from_millis(crate::config::DEFAULT_PRE_SHUTDOWN_DELAY_MS as u64);
+
+/// The delay a shutdown takes before it starts: the configured one, unless this node is the
+/// only member, where there is nobody to smooth a rollout for.
+pub(crate) fn pre_shutdown_delay(is_single_instance: bool, configured: Duration) -> Duration {
+    if is_single_instance {
+        Duration::ZERO
+    } else {
+        configured
+    }
+}
+
+/// How long a caller waits for the shutdown sequence: `SHUTDOWN_WAIT`, lengthened by however
+/// much the configured pre-shutdown delay exceeds its 9.5 s default, and never shortened.
+///
+/// The default therefore keeps the 15 s a consumer's grace was composed from (the proposal's
+/// section 4). A longer delay does not eat into the time the components have to stop, and a
+/// shorter one does not make the caller give up sooner on stops that were already allowed 15 s.
+pub(crate) fn shutdown_wait(configured_delay: Duration) -> Duration {
+    SHUTDOWN_WAIT + configured_delay.saturating_sub(DEFAULT_PRE_SHUTDOWN_DELAY)
+}
 
 /// How long a shutting-down node spends leaving an in-memory cache cluster through a peer.
 #[cfg(feature = "cache")]
@@ -650,11 +687,12 @@ const REMOTE_LEAVE_BOUND: Duration = Duration::from_secs(10);
 /// What a caller that stopped waiting is told. The sequence goes on in its own task for as long
 /// as the runtime does; ending the process before it finishes is a crash for whatever had not
 /// stopped yet, which the Raft log and the WAL are built to recover from.
-pub(crate) fn shutdown_wait_elapsed() -> Error {
+pub(crate) fn shutdown_wait_elapsed(bound: Duration) -> Error {
     Error::Timeout(format!(
-        "the shutdown did not finish within {SHUTDOWN_WAIT:?}. It continues in the background \
-         while this runtime lives; ending the process now is a crash for any component it had \
-         not stopped yet"
+        "{}the shutdown did not finish within {bound:?}. It continues in the \
+         background while this runtime lives, and whether it completes is not reported; ending \
+         the process now is a crash for any component it had not stopped yet",
+        crate::error::SHUTDOWN_UNCONFIRMED
     ))
 }
 
@@ -664,5 +702,51 @@ fn note_stop<E: Into<Error>>(first: &mut Option<Error>, what: &str, res: Result<
         let err = err.into();
         error!("Shutdown: {what} did not stop cleanly: {err}");
         first.get_or_insert(err);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `033` B-4: the delay is the configured value whenever there are peers, and none alone.
+    #[test]
+    fn the_configured_pre_shutdown_delay_is_the_one_taken() {
+        let configured = Duration::from_millis(1_500);
+        assert_eq!(pre_shutdown_delay(false, configured), configured);
+        assert_eq!(pre_shutdown_delay(true, configured), Duration::ZERO);
+        assert_eq!(DEFAULT_PRE_SHUTDOWN_DELAY, Duration::from_millis(9_500));
+    }
+
+    /// The caller's wait is 15 s at the default delay, as before; it grows with a longer delay
+    /// and never shrinks below 15 s.
+    #[test]
+    fn the_shutdown_wait_keeps_its_default_and_follows_a_longer_delay() {
+        assert_eq!(
+            shutdown_wait(DEFAULT_PRE_SHUTDOWN_DELAY),
+            Duration::from_secs(15)
+        );
+        assert_eq!(shutdown_wait(Duration::ZERO), Duration::from_secs(15));
+        assert_eq!(
+            shutdown_wait(Duration::from_millis(19_500)),
+            Duration::from_secs(25)
+        );
+    }
+
+    /// `033` B-4: an unconfirmed completion can be told apart from every other shutdown error,
+    /// including the drain timeout, which is also a `Timeout` but stopped nothing.
+    #[test]
+    fn an_unconfirmed_shutdown_is_distinguishable() {
+        let unconfirmed = shutdown_wait_elapsed(Duration::from_secs(15));
+        assert!(matches!(unconfirmed, Error::Timeout(_)));
+        assert!(unconfirmed.is_shutdown_unconfirmed());
+        assert!(
+            unconfirmed.to_string().contains("15s"),
+            "names its bound: {unconfirmed}"
+        );
+
+        let drain = Error::Timeout("a membership change did not finish within 5s".into());
+        assert!(!drain.is_shutdown_unconfirmed());
+        assert!(!Error::Error("the SQLite writer ended".into()).is_shutdown_unconfirmed());
     }
 }

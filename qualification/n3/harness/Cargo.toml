@@ -1,0 +1,16 @@
+[package]
+name = "n3-harness"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "The real-node N=3 harness of spec 033 B-2: processes, proxies, signals, bounds"
+
+# The harness does not link hiqlite. It drives `n3-node` processes and reads what they report.
+[dependencies]
+n3-proto = { path = "../proto" }
+clap = { version = "4.1.11", features = ["derive"] }
+libc = "0.2"
+serde = { version = "1.0.114", features = ["derive"] }
+serde_json = "1.0.57"
+tokio = { version = "1.43.1", features = ["fs", "io-util", "macros", "net", "process", "rt-multi-thread", "signal", "sync", "time"] }

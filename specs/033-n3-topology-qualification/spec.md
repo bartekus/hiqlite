@@ -5,7 +5,7 @@ status: draft
 created: "2026-09-23"
 owner: "hiqlite maintainers"
 risk: high
-implementation: pending
+implementation: in-progress
 depends_on:
   - "000-hiqlite-ownership-bootstrap"
   - "012-cluster-integration-evidence"
@@ -22,13 +22,15 @@ establishes:
   # D-6: the request to Rauthy's maintainer, with what each item blocks. It sends nothing
   # and asserts nothing about Rauthy's repository beyond what it cites.
   - "standards/spec/n3-rauthy-request.md"
-  # D-2: the real-node harness does not exist yet. It is a workspace-excluded crate so its
-  # release builds and consumer feature sets never enter the library's own graph.
-  - { kind: directory, path: "qualification/n3/", planned: true }
+  # D-2: the real-node harness, built by lane D (2026-09-23). A workspace of its own, so its
+  # release builds and consumer feature sets never enter the library's graph.
+  - { kind: directory, path: "qualification/n3/" }
 extends:
   - spec: "005-adoption-assessment-and-plan"
     unit: { kind: file, path: "standards/spec/findings-register.md" }
     nature: additive
+  # D-1, D-8: added by the lane B change that implements B-3 (the positive-evidence decision
+  # for both raft groups) and B-4 (the pre-shutdown option), in the range that changes them.
   - spec: "010-node-lifecycle-and-split-brain"
     unit: { kind: file, path: "hiqlite/src/init.rs" }
     nature: superseding
@@ -38,12 +40,15 @@ extends:
   - spec: "010-node-lifecycle-and-split-brain"
     unit: { kind: file, path: "hiqlite/src/app_state.rs" }
     nature: additive
+  # D-8: the peer's explicit "not initialized" answer, served by `get_membership`.
   - spec: "003-client-consistency-and-retry-outcomes"
     unit: { kind: directory, path: "hiqlite/src/network/" }
     nature: additive
+  # D-9: `client/mgmt.rs` and `client/shutdown_handle.rs` are `003`'s, not `010`'s.
   - spec: "003-client-consistency-and-retry-outcomes"
     unit: { kind: directory, path: "hiqlite/src/client/" }
     nature: additive
+  # D-9: the two options are recorded in `009`'s configuration contract.
   - spec: "001-wal-durability-and-completion"
     unit: { kind: file, path: "hiqlite/src/config.rs" }
     nature: additive
@@ -56,15 +61,17 @@ extends:
   - spec: "009-configuration-contract"
     unit: { kind: file, path: "hiqlite.env" }
     nature: additive
+  # D-9: the server binary's generated configuration documents the same two keys, so F-071's
+  # pinned drift between it and `hiqlite.toml` does not widen.
   - spec: "015-server-binary-and-proxy"
     unit: { kind: file, path: "hiqlite/src/server/config.rs" }
     nature: additive
 references:
-  - unit: { kind: file, path: "hiqlite/src/init.rs" }
-    role: "context"
-  - unit: { kind: file, path: "hiqlite/src/client/mgmt.rs" }
-    role: "context"
   - unit: { kind: file, path: "hiqlite/src/membership_gate.rs" }
+    role: "context"
+  - unit: { kind: file, path: "hiqlite/src/store/mod.rs" }
+    role: "context"
+  - unit: { kind: file, path: "hiqlite/src/error.rs" }
     role: "context"
   - unit: { kind: file, path: "hiqlite/Cargo.toml" }
     role: "context"
@@ -81,7 +88,9 @@ summary: >
   claim of N=3 support. Records the owner's decision D-14: at N=3 the cell is
   two StatefulSets, one hiqlite node per pod, and the single-container
   composition stays the N=1 profile. It changes no code, supports nothing, and
-  claims no consumer territory.
+  claims no consumer territory. Lane B (2026-09-23) implements B-3 and B-4
+  on a branch, each with a test observed failing without it; nothing of it is
+  merged, released or run in a harness.
 ---
 
 # 033: Qualify a three-voter topology on Kubernetes before anyone calls it supported
@@ -112,7 +121,7 @@ own test and adds its own edges (D-1).
 - **Establishes** `standards/spec/n3-topology-proposal.md`,
   `standards/spec/n3-rahi-reconciliation-handoff.md` and
   `standards/spec/n3-rauthy-request.md`, new documents, and
-  `qualification/n3/`, a planned directory for the real-node harness (B-2).
+  `qualification/n3/`, the real-node harness (B-2), built by lane D.
 - **Extends** `005`'s findings register, additively, with F-118 to F-125 and
   F-132. The N=1 upgrade-exclusion findings (F-126 to F-131, F-133) are `035`'s.
 - **References**, without claiming, the files the planned repairs would touch.
@@ -120,6 +129,14 @@ own test and adds its own edges (D-1).
   `membership_gate.rs`) and `031` (`hiqlite/Cargo.toml`). A change that
   implements B-3 or B-4 adds the `extends` edge on the unit it changes, in the
   same range, so the coupling gate binds it then (D-1).
+- **Extends, since lane B** (D-8, D-9): `010`'s `init.rs` (superseding: the
+  node-1 decision is replaced), `start.rs` and `app_state.rs`; `003`'s
+  `hiqlite/src/network/` (the explicit answer) and `hiqlite/src/client/` (the
+  shutdown option and its outcome); `001`'s `config.rs` and `009`'s
+  `config_toml.rs`, `hiqlite.toml` and `hiqlite.env`, which is how the two new
+  options are recorded in `009`'s configuration contract; `015`'s
+  `server/config.rs`, whose generated file lists the same keys. `store/mod.rs` and
+  `error.rs`, which no spec owns, are referenced.
 
 **Boundaries.** OpenRaft owns elections, quorum, log matching, the
 joint-consensus membership protocol and the meaning of its feature flags.
@@ -258,6 +275,21 @@ names.
 were read from source at `72e09a6`, with the pinned `spec-spine` revision
 confirmed before any gate was trusted.
 
+**The harness exists; nothing it ran is qualification** (lane D, 2026-09-23).
+`qualification/n3/` implements B-2's mechanisms (own process per node, release
+build with `panic = "abort"`, both feature sets, split and co-located layouts, a
+harness-owned proxy, its own `SIGTERM`/`SIGKILL` with recorded outcomes, bounded
+waits on observed state, stop at the first failure). Its one scenario is
+`smoke`; A-1 to A-10 are registered and refuse to run. Three smoke runs were
+allowed and used, on macOS arm64 with the Rahi feature set and
+`LogSync::Immediate`: split and co-located each passed (four groups formed with
+voters `{1,2,3}`, writes acknowledged and read back, full stops confirmed `Ok`
+on six nodes, restart with the membership log id unchanged), and a run with an
+injected `SIGKILL` failed as it must and kept its directory. What this does not
+show: any A-scenario, any Linux run, the Rauthy node build under load, a
+partition applied through the proxy (unit-tested only), or anything about N=3
+support.
+
 What already exists, and what it is worth for N=3 (F-122): the in-process
 cluster suite starts three nodes in one debug process, TLS off, in-memory
 cache, with sleeps. It is evidence that the join, restart, volume-loss and
@@ -266,6 +298,22 @@ release builds, separate processes, a disk-backed cache at N=3, a real
 partition, `SIGKILL`, or any consumer's configuration. `031`'s external
 consumer checks ran at N=1. `027`'s gate tests drive the gate with a stand-in
 for the raft.
+
+**Lane B evidence (2026-09-23), unit level only.** B-3 and B-4 are
+implemented on the lane B branch. Each repair's test was first run against the
+unrepaired tree and observed failing: `init::tests::f118_unreachable_peers_are_not_evidence_of_a_fresh_cluster`,
+`..._an_unauthenticated_answer_is_not_evidence` and
+`..._a_stopped_peer_answer_is_not_evidence` each returned "initialize"; and
+`config_toml::tests::the_lane_b_options_are_accepted_toml_keys` was refused
+as an unknown key. The peers in those tests are stub HTTP/2 listeners on
+ephemeral ports serving the production route shape, not hiqlite nodes, so they
+show the decision's reading of each answer and its bound, not that a real peer
+gives those answers at the right moments; the server half is exercised only by
+the in-process cluster suite, whose every N=3 bootstrap now depends on it. No
+harness scenario (A-1, A-6) has run. After review (D-10),
+`init::tests::f118_a_black_holed_peer_does_not_hold_the_decision` took 20 s on
+the first lane B commit, where the peers were asked one after another, and
+passes within the 5 s cap now.
 
 What B-6 would add, when implemented, and what it still would not: one host,
 so no kernel crash and no real disk loss, which is where `ImmediateAsync` and
@@ -307,6 +355,9 @@ offline export can prove is therefore conditional; the proposal's section 13
 states the conditions and the alternatives, and `034` B-2 was rewritten.
 
 ## 6. Resolved decisions
+
+The D-numbers below are this spec's own. A decision of the proposal's section 11
+is always cited as "the proposal's D-n"; the two numberings are unrelated.
 
 **D-1 (2026-09-23, territory is declared by the change that moves it).** This
 spec references the source files its planned repairs would touch instead of
@@ -383,6 +434,126 @@ inside each qualification run, restore scenarios included. The Rahi handoff is
 rewritten with the answer to Rahi's H-7, and the Rauthy request gains a producer
 notice. Nothing in this pass decides anything or supports N=3.
 
+**D-8 (2026-09-23, lane B: how B-3 is implemented).** Owner authorization of
+lane B, 2026-09-23. B-3 is imprecise on four points, decided here:
+
+- *What "answered not initialized" is.* An authenticated `200` from `GET
+  /cluster/membership/{raft_type}` whose body decodes to an **empty**
+  membership. Before this change no peer could give that answer: a peer
+  returned one `400 Config("Raft node has not been initialized")` both when its
+  group was pristine and when it was initialized but its raft was still stopped
+  (a start before `set_raft_running`, or a shutdown), so the only explicit
+  signal was ambiguous and counting it would let an initialized peer vote
+  "fresh". `get_membership` now answers `200` with an empty membership when, and
+  only when, the group is not initialized, and a different `400` when it is
+  initialized and stopped. That is why the change extends `003`'s
+  `hiqlite/src/network/`, which the proposal's section 16 table did not list.
+- *Who counts.* Only distinct peers other than node 1; node 1 is never seeded.
+  The peers are asked in full rounds, and an initialized answer from any of them
+  ends the decision as "join" before the count is looked at, so an initialized
+  peer that answers is never outvoted by fresh ones in the same round.
+- *The bound.* `NodeConfig::init_peer_wait_secs`, code, TOML
+  (`init_peer_wait_secs`) and environment (`HQL_INIT_PEER_WAIT_SECS`), default
+  120 s, which is also the per-request bound's ceiling. The node holds no
+  listener while it waits (the decision runs inside `store::start_raft_db`,
+  before the listeners are bound), so "reports not-ready" is met by `/ready`
+  being unreachable, and `/health` is unreachable too: a liveness probe shorter
+  than the bound restarts node 1 before it can report the error. Recorded, not
+  changed: moving the decision after the listeners is a larger reordering than
+  B-3 asks for.
+- *What the rule costs.* A new cluster can only bootstrap when its peers run
+  alongside node 1; with a StatefulSet's `OrderedReady` policy node 1 waits for
+  peers that are not started until it is ready, and fails at the bound. And the
+  answer changed shape: an unrepaired node 1 panics ("initialized but has no
+  configured members") on a repaired pristine peer's `200`, and a repaired node 1
+  never counts an unrepaired pristine peer's ambiguous `400`, so a fresh
+  bootstrap needs every node on a repaired build. *Corrected by D-10:* the
+  first sentence above also holds for a full restart of an **existing** cluster
+  whose cache group is in memory (`cache_storage_disk = false`), whose cache
+  group is pristine on every start.
+
+The rule is B-3's and is not changed here. Its limit, stated rather than
+repaired: at N=3 one pristine peer is enough, so a cell that lost two of its
+three volumes forms a new cluster beside the survivor; the survivor alone holds
+no majority of the old membership and cannot accept writes.
+
+**D-9 (2026-09-23, lane B: how B-4 is implemented).** The option is
+`NodeConfig::pre_shutdown_delay_ms` (TOML `pre_shutdown_delay_ms`, environment
+`HQL_PRE_SHUTDOWN_DELAY_MS`), default 9500, and is still skipped when the node
+is the only member. B-4 does not say what happens to the caller's 15 s wait
+(`SHUTDOWN_WAIT`) when the delay is changed; decided: it becomes 15 s plus
+however much the delay exceeds 9.5 s, and never less than 15 s, so the default
+keeps the bound Rahi 043 B-9 composed its grace from, and a longer delay does
+not take time from the stops. The three outcomes of the proposal's section 4 are
+now distinguishable in what shutdown returns: `Ok(())` is confirmed completion;
+an error for which the new `Error::is_shutdown_unconfirmed()` is `true` is an
+unconfirmed completion; any other error is a shutdown that returned without
+stopping everything, including a membership drain that timed out and stopped
+nothing, which is also an `Error::Timeout` and was indistinguishable before. The
+method is an addition to the public surface `027` B-7 describes. *Corrected by
+D-10:* it is not the only one. Corrected here, not in the proposal: `client/mgmt.rs` is owned by `003`'s
+`hiqlite/src/client/` directory, not by `010` as section 16's table says. The
+two options are recorded in `009`'s contract through the reference files it
+establishes, `hiqlite.toml` and `hiqlite.env`; `009`'s own text is not edited.
+The server binary's generated configuration (`015`'s
+`hiqlite/src/server/config.rs`) lists both keys as well, so the
+drift `011`, `029` and `030` pin between it and `hiqlite.toml` stays as it was.
+
+**D-10 (2026-09-23, lane B: an independent review's corrections to D-8 and D-9).**
+
+- *Bootstrap under `OrderedReady`, and the in-memory cache.* The node-1 decision
+  runs before the listeners are bound, so while node 1 waits it serves neither
+  `/ready` nor `/health`. A StatefulSet with the default `OrderedReady` policy
+  creates pods 1 and 2 only once pod 0 is ready, so node 1 waits out
+  `init_peer_wait_secs`, fails and restarts, for ever: a new cluster never forms.
+  D-8 said that cannot happen to an existing cluster; it can, when the cache group
+  is in memory, because that group is pristine after every start, so a full
+  restart of such a cluster under `OrderedReady` crashloops node 1 in the cache
+  decision. Before lane B, `/ready` answered ready for a pristine node 1 after ten
+  seconds, and at N=3 node 1 had already initialized itself on no evidence
+  (F-118), so neither showed. **`podManagementPolicy: Parallel` is required**,
+  and is now said where the option is documented and in the README's StatefulSet
+  example. The review's preferred repair, taking the decision after the listeners
+  and answering ready meanwhile, is **not** made: B-3 says node 1 "reports
+  not-ready" while its evidence is missing, and answering ready is the opposite.
+  Which of the two B-3 should say is the owner's decision, reported with lane B
+  and not taken here.
+- *A second cache cluster at N=3 with an in-memory cache.* A peer's in-memory
+  cache group is pristine after every restart, so when node 1 and node 2 restart
+  together and node 3 is silent, node 2's "not initialized" is true and is enough
+  evidence at N=3: node 1 forms a new cache cluster while node 3 still holds the
+  old one. The old one cannot commit on its own, having one voter of three, but
+  its votes and the new cluster's may mix (inferred from openraft's protocol, not
+  observed), which is the in-memory hazard
+  `NodeConfig::cache_storage_disk` already warns of. The rule cannot tell this
+  apart: the peer does not know it was a member, because nothing of its cache
+  group survives its restart. Not repaired; recorded here and in the F-118
+  register note. The proposal's D-3 (`cache_storage_disk = true` at N=3) removes
+  the case.
+- *The public surface.* Besides `Error::is_shutdown_unconfirmed()`, `NodeConfig`
+  gains two public fields, `pre_shutdown_delay_ms` and `init_peer_wait_secs`.
+  `NodeConfig` is not `#[non_exhaustive]`, so a consumer that builds it with a
+  struct literal and no `..Default::default()` no longer compiles; one built from
+  `Default`, `from_env` or `from_toml` is unaffected.
+- *The HTTP API.* `GET /cluster/membership/{raft_type}` answers `200` with an
+  empty membership for a group that is not initialized, where it answered `400`;
+  for an initialized group that is not running it answers a `400` with new text.
+  The route is internal to the cluster, but its answer changed.
+- *The peers are asked concurrently.* Each round asks every peer still without an
+  explicit answer at once, each request capped at 5 s and at what is left of the
+  wait, so a peer that never answers no longer takes the whole wait from the
+  peers after it.
+
+**D-11 (2026-09-24, owner decision: B-3 stays as written).** The owner
+decided the question D-10 left open. B-3 keeps node 1 not ready while it waits
+for peer evidence, and `podManagementPolicy: Parallel` stays documented as
+required. Rationale, as the owner gave it: readiness must mean able to serve,
+which is the same rule the owner set for readiness after crash recovery
+(recorded by `037`), and `Parallel` is the standard pod management policy for
+Raft StatefulSets. The review's preferred repair (decide after the listeners,
+answer ready meanwhile) is therefore declined, and the high review finding on
+lane B is resolved by this decision rather than by a code change.
+
 **D-12 (2026-09-25, owner decision: revert lane B for patched.4).** The owner
 decided 2026-09-25 night, verbatim: "Revert lane B for patched.4". Reverted #39
 (merge `ce04e64`) on trunk before the release commit so trunk equals what ships.
@@ -391,6 +562,10 @@ This resolves 041 D-4. The reland is prepared as a draft PR that waits for
 ratification for it. The lane B entries D-8 to D-11 leave with the revert and
 return with the reland; this entry is numbered after them so the reland does
 not collide with it.
+
+**D-13 (2026-09-25, reland, not merged).** This change relands lane B, the revert of the
+revert in D-12, on a branch that waits for `033`'s N=3 qualification. It merges only
+after that qualification passes and the owner decides to ship lane B.
 
 **Owner decisions pending.** D-1 to D-13, D-8a to D-8e and D-15 to D-19 of the
 proposal's section 11 are not decided by this spec. Each will be dated here
@@ -429,4 +604,19 @@ grep -q '^## 17. A producer-side downgrade fence' standards/spec/n3-topology-pro
 grep -q '^## 3. H-7: an adversarial reading' standards/spec/n3-rahi-reconciliation-handoff.md
 grep -q '^## Third pass (2026-09-23): producer notice' standards/spec/n3-rauthy-request.md
 sh -c '! grep -rl "$(printf "\342\200\224")" specs/033-n3-topology-qualification standards/spec/n3-topology-proposal.md standards/spec/n3-rahi-reconciliation-handoff.md standards/spec/n3-rauthy-request.md'
+sh -c 'spec-spine index owner hiqlite/src/init.rs | grep -q 033-n3-topology-qualification'
+grep -q 'pub(crate) async fn peer_init_evidence' hiqlite/src/init.rs
+sh -c '! grep -q "let mut skip_nodes = vec!\[1\];" hiqlite/src/init.rs'
+grep -q 'return fmt_ok(headers, Membership::<NodeId, Node>::default());' hiqlite/src/network/management.rs
+grep -q 'HQL_PRE_SHUTDOWN_DELAY_MS' hiqlite.env
+grep -q 'HQL_INIT_PEER_WAIT_SECS' hiqlite.env
+grep -q 'pre_shutdown_delay_ms = 9500' hiqlite.toml
+grep -q 'init_peer_wait_secs = 120' hiqlite.toml
+grep -q 'podManagementPolicy: Parallel' README.md
+grep -q 'const PEER_REQUEST_CAP' hiqlite/src/init.rs
+sh -c '! grep -q "Duration::from_millis(9500)" hiqlite/src/client/mgmt.rs'
+cargo test -p hiqlite-patched --lib init::tests::f118
+cargo test -p hiqlite-patched --lib --no-default-features --features cache init::tests::f118
+cargo test -p hiqlite-patched --lib config_toml::tests::the_lane_b_options
+cargo test -p hiqlite-patched --lib client::mgmt::tests
 ```
