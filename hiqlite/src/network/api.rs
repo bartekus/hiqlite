@@ -115,6 +115,9 @@ pub async fn ready(state: AppStateExt) -> Result<(), Error> {
     if state.is_shutting_down.load(Ordering::Relaxed) {
         return Err(Error::Error("Node is shutting down".into()));
     }
+    // `034` B-4: not ready while a restore it applied is being finished.
+    #[cfg(all(feature = "backup", feature = "sqlite"))]
+    crate::app_state::ensure_not_restoring(&state.restore_hold)?;
 
     // `037`: ready means able to serve, and a node still applying the log it started with is not.
     state.ensure_recovered()?;
@@ -393,6 +396,9 @@ pub async fn stream(
     ws: upgrade::IncomingUpgrade,
 ) -> Result<impl IntoResponse, Error> {
     raft_type.selected()?;
+    // `034` B-4: no client stream, and so no client write, while a restore is being finished.
+    #[cfg(all(feature = "backup", feature = "sqlite"))]
+    crate::app_state::ensure_not_restoring(&state.restore_hold)?;
     let (response, socket) = ws.upgrade()?;
     debug!("New Raft Stream for {:?}", raft_type);
 

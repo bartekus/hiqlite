@@ -5,7 +5,7 @@ use crate::store::state_machine::sqlite::state_machine::{
     PathBackups, PathDb, PathLockFile, PathSnapshots, QueryWrite, StateMachineData,
     StateMachineSqlite,
 };
-use crate::{Client, Error, NodeConfig};
+use crate::{Client, Error, NodeConfig, NodeId};
 use chrono::{DateTime, Utc};
 use std::env;
 use std::ops::Sub;
@@ -63,7 +63,7 @@ impl BackupConfig {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum BackupSource {
     S3(String),
     File(String),
@@ -87,6 +87,15 @@ impl BackupSource {
             var
         );
         None
+    }
+
+    /// The instruction as `HQL_BACKUP_RESTORE` spells it, which is what the restore record
+    /// (`034` B-4) keys on.
+    fn instruction(&self) -> String {
+        match self {
+            Self::S3(obj) => format!("s3:{obj}"),
+            Self::File(path) => format!("file:{path}"),
+        }
     }
 }
 
@@ -350,6 +359,11 @@ async fn quarantine_data_dir_contents(data_dir: &str) -> Result<(), Error> {
         if crate::storage_lock::StorageOwnership::is_owner_lock_file(&path) {
             continue;
         }
+        // `034` B-4: the record of which instruction this directory has honoured stays with the
+        // directory, or the next start could not tell that it had.
+        if is_restore_record_file(&path) {
+            continue;
+        }
         let name = entry.file_name();
         let name = name.to_string_lossy().to_string();
         // An earlier quarantine is left where it is rather than nested inside a new one.
@@ -391,40 +405,184 @@ async fn quarantine_data_dir_contents(data_dir: &str) -> Result<(), Error> {
 /// Returns `Ok(true)` if backup has been applied.
 /// This will only run if the current node ID is `1`.
 pub(crate) async fn restore_backup_start(node_config: &NodeConfig) -> Result<bool, Error> {
-    // A restore that was interrupted after its image was staged is finished before anything
-    // else, whether or not the environment still asks for one: the previous database may
-    // already be missing its write-ahead log, and starting on it is not an option.
+    restore_backup_start_from(node_config, BackupSource::from_env()).await
+}
+
+/// `restore_backup_start` with the instruction as a parameter, so it can be driven without the
+/// process environment.
+///
+/// `034` B-4 (F-119): an instruction is applied **at most once** per data directory. Its identity
+/// is the instruction as written (`s3:<object>` or `file:<path>`); node 1 also records the
+/// SHA-256 of the image it applied. The record moves through three states, each written
+/// durably:
+///
+/// - `pending`, **before** anything of the node's own state is moved. A start that finds it with
+///   the same instruction applies the instruction again; without the instruction nothing had
+///   moved, and it is abandoned with a warning.
+/// - `committed`, once the image is in place. From here the post-restore sequence is owed
+///   **whatever the environment says**: the next start of node 1 finishes it (the hold, the
+///   snapshot, the purge) without pulling the image again, and a start without the instruction
+///   does not forget it (review finding 2).
+/// - `applied`, once the start that finished it completed (`restore_instruction_completed`). The
+///   same instruction is then skipped.
+///
+/// A crash anywhere therefore never leaves an incomplete restore marked done.
+pub(crate) async fn restore_backup_start_from(
+    node_config: &NodeConfig,
+    src: Option<BackupSource>,
+) -> Result<bool, Error> {
     if finish_staged_restore(node_config).await? {
+        // A restore that was interrupted after its image was staged is finished before
+        // anything else, whether or not the environment still asks for one: the previous
+        // database may already be missing its write-ahead log, and starting on it is not an
+        // option.
         warn!("Completed a database restore that had been interrupted");
+        mark_record(
+            node_config.data_dir.as_ref(),
+            RecordState::Pending,
+            RecordState::Committed,
+        )
+        .await?;
         return Ok(true);
     }
 
-    if let Some(src) = BackupSource::from_env() {
-        info!("Found backup restore request {:?}", src);
+    let data_dir: &str = node_config.data_dir.as_ref();
+    let record = read_record(data_dir).await?;
 
-        if node_config.node_id == 1 {
-            restore_backup(node_config, src).await?;
-            return Ok(true);
-        } else {
-            warn!("Moving existing files aside and starting the restore cluster join");
-            // Two reasons this is not `remove_dir_all(data_dir)`.
-            //
-            // The storage owner lock lives at the data directory root, and unlinking it while
-            // this process holds it would leave the holder locking an inode nobody can reach,
-            // so the next process would create a different file and both would believe they
-            // owned the storage.
-            //
-            // And this branch runs on an environment variable alone, before node 1 has pulled,
-            // validated or copied anything. A restore that then fails on node 1, because the
-            // `file:` path does not exist or the object is not in the bucket, used to have
-            // already destroyed every other node's state. Moving it aside instead keeps that
-            // recoverable; the two are still not coordinated, which is why `N > 1` restore is
-            // not a supported topology for this release.
-            quarantine_data_dir_contents(node_config.data_dir.as_ref()).await?;
-        }
+    // Review finding 2: an image already in place is owed its post-restore sequence, with or
+    // without the instruction. Only a *different* instruction replaces it, and the sequence
+    // then runs for that one.
+    if let Some(rec) = &record
+        && rec.state == RecordState::Committed
+        && src
+            .as_ref()
+            .is_none_or(|s| s.instruction() == rec.instruction)
+    {
+        warn!(
+            "The restore {} was applied to this data directory but its post-restore sequence \
+             never completed; finishing it now",
+            rec.instruction
+        );
+        return Ok(true);
     }
 
-    Ok(false)
+    let Some(src) = src else {
+        if let Some(rec) = &record
+            && rec.state == RecordState::Pending
+        {
+            warn!(
+                "The restore instruction {} was recorded but never applied, and it is no longer \
+                 given; nothing of this node's state was moved for it, so it is abandoned",
+                rec.instruction
+            );
+        }
+        return Ok(false);
+    };
+    info!("Found backup restore request {:?}", src);
+    let instruction = src.instruction();
+
+    if let Some(record) = &record
+        && record.state == RecordState::Applied
+        && record.instruction == instruction
+    {
+        info!(
+            "The restore instruction {instruction} was already applied to this data directory \
+             (image sha256 {}); it is not applied again. Remove HQL_BACKUP_RESTORE to silence \
+             this, or name another image to restore again",
+            record
+                .sha256
+                .as_deref()
+                .unwrap_or("not recorded on this node")
+        );
+        return Ok(false);
+    }
+
+    if node_config.node_id == 1 {
+        // `034` B-4: the fresh-cell precondition, before anything is pulled or moved.
+        ensure_fresh_cell(node_config).await?;
+
+        let (path_backup, remove_src) = fetch_backup(node_config, src).await?;
+        let digest = sha256_file(&path_backup).await?;
+        write_record(
+            data_dir,
+            &RestoreRecord {
+                format: RECORD_FORMAT,
+                state: RecordState::Pending,
+                instruction,
+                sha256: Some(digest),
+            },
+        )
+        .await?;
+        apply_fetched_backup(node_config, path_backup, remove_src).await?;
+        mark_record(data_dir, RecordState::Pending, RecordState::Committed).await?;
+        Ok(true)
+    } else {
+        warn!("Moving existing files aside and starting the restore cluster join");
+        // Two reasons this is not `remove_dir_all(data_dir)`.
+        //
+        // The storage owner lock lives at the data directory root, and unlinking it while
+        // this process holds it would leave the holder locking an inode nobody can reach,
+        // so the next process would create a different file and both would believe they
+        // owned the storage.
+        //
+        // And this branch runs on an environment variable alone, before node 1 has pulled,
+        // validated or copied anything. A restore that then fails on node 1, because the
+        // `file:` path does not exist or the object is not in the bucket, used to have
+        // already destroyed every other node's state. Moving it aside instead keeps that
+        // recoverable; the two are still not coordinated, which is why `N > 1` restore is
+        // not a supported topology for this release.
+        //
+        // `034` B-4: recorded `pending` first and `applied` once the state is aside, so a start
+        // that honoured this instruction does not move a rejoined state aside again, and one
+        // interrupted in between does.
+        write_record(data_dir, &RestoreRecord::pending(&src, None)).await?;
+        quarantine_data_dir_contents(node_config.data_dir.as_ref()).await?;
+        write_record(
+            data_dir,
+            &RestoreRecord {
+                state: RecordState::Applied,
+                ..RestoreRecord::pending(&src, None)
+            },
+        )
+        .await?;
+        Ok(false)
+    }
+}
+
+/// `034` B-4: a node-1 restore in a configuration with peers requires a fresh cell, decided by
+/// `033` B-3's positive-evidence rule. A peer holding an initialized group is a startup error
+/// before anything is pulled, moved or initialized, so the operator has nothing to undo.
+async fn ensure_fresh_cell(node_config: &NodeConfig) -> Result<(), Error> {
+    if node_config.nodes.len() < 2 {
+        return Ok(());
+    }
+    let evidence = crate::init::peer_init_evidence(
+        &crate::app_state::RaftType::Sqlite,
+        node_config.node_id,
+        &node_config.nodes,
+        &node_config.secret_api,
+        node_config.tls_api.is_some(),
+        node_config
+            .tls_api
+            .as_ref()
+            .map(|c| c.danger_tls_no_verify())
+            .unwrap_or(false),
+        Duration::from_secs(node_config.init_peer_wait_secs as u64),
+    )
+    .await?;
+    match evidence {
+        crate::init::PeerInitEvidence::Fresh => Ok(()),
+        crate::init::PeerInitEvidence::Initialized { peer } => Err(Error::Startup(
+            format!(
+                "node {} was given a restore instruction, but node {peer} holds an initialized \
+                 SQLite raft group, so the cell is not fresh (034 B-4). Nothing was pulled, \
+                 moved or initialized. Restore into a cell whose other nodes are empty, or \
+                 remove the instruction",
+                node_config.node_id
+            )
+            .into(),
+        )),
+    }
 }
 
 /// Apply the given backup from S3 storage.
@@ -433,7 +591,22 @@ pub(crate) async fn restore_backup_start(node_config: &NodeConfig) -> Result<boo
 ///
 /// You only need to invoke this manually if you want to apply a backup in another
 /// way than with the `HQL_BACKUP_RESTORE` env var, which is being done automatically.
+///
+/// Unreachable from outside this crate (`backup` is private) and, since `034` B-4 split it into
+/// `fetch_backup` and `apply_fetched_backup`, not called by the start either. Kept whole for its
+/// tests and for the public entry point `034` B-3 plans.
+#[allow(dead_code)]
 pub async fn restore_backup(node_config: &NodeConfig, src: BackupSource) -> Result<(), Error> {
+    let (path_backup, remove_src) = fetch_backup(node_config, src).await?;
+    apply_fetched_backup(node_config, path_backup, remove_src).await
+}
+
+/// Pull or copy the image into the backups directory and validate it. Moves nothing of the
+/// node's own state.
+async fn fetch_backup(
+    node_config: &NodeConfig,
+    src: BackupSource,
+) -> Result<(String, bool), Error> {
     info!("Starting database restore from backup {:?}", src);
 
     if let BackupSource::S3(_) = &src
@@ -444,7 +617,7 @@ pub async fn restore_backup(node_config: &NodeConfig, src: BackupSource) -> Resu
         ));
     }
 
-    let (PathDb(path_db), PathBackups(path_backups), _, _) =
+    let (_, PathBackups(path_backups), _, _) =
         StateMachineSqlite::build_folders(&node_config.data_dir, false).await;
 
     fs::create_dir_all(&path_backups).await?;
@@ -480,6 +653,17 @@ pub async fn restore_backup(node_config: &NodeConfig, src: BackupSource) -> Resu
 
     is_metadata_ok(path_backup.clone()).await?;
     debug!("Database backup metadata is ok");
+    Ok((path_backup, remove_src))
+}
+
+/// The destructive half of a restore: stage the fetched image and apply it.
+async fn apply_fetched_backup(
+    node_config: &NodeConfig,
+    path_backup: String,
+    remove_src: bool,
+) -> Result<(), Error> {
+    let (PathDb(path_db), _, _, _) =
+        StateMachineSqlite::build_folders(&node_config.data_dir, false).await;
 
     // Stage first, destroy last.
     //
@@ -720,104 +904,416 @@ async fn sync_parent_dir(dir: &str) -> Result<(), Error> {
     }
 }
 
-// pub fn restore_backup_finish(state: Arc<AppState>, nodes_count: usize) {
-//     task::spawn(restore_backup_cleanup_task(state, nodes_count));
-// }
+/// The file, at the data directory root, that records which restore instruction this directory
+/// has honoured (`034` B-4). Never moved by a follower's quarantine.
+const RESTORE_RECORD_FILE: &str = "hiqlite-restore.record";
+const RECORD_FORMAT: u32 = 1;
+
+pub(crate) fn record_path(data_dir: &str) -> String {
+    format!("{data_dir}/{RESTORE_RECORD_FILE}")
+}
+
+fn is_restore_record_file(path: &Path) -> bool {
+    path.file_name().is_some_and(|n| {
+        n == RESTORE_RECORD_FILE || n.to_string_lossy() == format!("{RESTORE_RECORD_FILE}.tmp")
+    })
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum RecordState {
+    /// Recorded before anything was moved; the image may not be in place.
+    Pending,
+    /// The image is in place and its post-restore sequence is owed.
+    Committed,
+    /// The start that applied it completed; the same instruction is not applied again.
+    Applied,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct RestoreRecord {
+    pub(crate) format: u32,
+    pub(crate) state: RecordState,
+    /// The instruction as `HQL_BACKUP_RESTORE` spells it.
+    pub(crate) instruction: String,
+    /// SHA-256 of the image node 1 applied, hex. `None` on a follower, which applies no image.
+    pub(crate) sha256: Option<String>,
+}
+
+impl RestoreRecord {
+    pub(crate) fn pending(src: &BackupSource, sha256: Option<String>) -> Self {
+        Self {
+            format: RECORD_FORMAT,
+            state: RecordState::Pending,
+            instruction: src.instruction(),
+            sha256,
+        }
+    }
+}
+
+/// The durable record, or `None` if this directory never honoured an instruction.
+///
+/// A leftover temporary file is a replacement that never completed and is discarded; the record
+/// that was durable before it governs. A record that exists and does not parse is a startup
+/// error: it is the one thing that says whether a destructive restore already happened here, so
+/// neither restoring nor skipping is a safe guess.
+pub(crate) async fn read_record(data_dir: &str) -> Result<Option<RestoreRecord>, Error> {
+    let path = record_path(data_dir);
+    let _ = fs::remove_file(format!("{path}.tmp")).await;
+    let bytes = match fs::read(&path).await {
+        Ok(bytes) => bytes,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(err) => {
+            return Err(Error::Startup(
+                format!("cannot read the restore record {path}: {err}").into(),
+            ));
+        }
+    };
+    match serde_json::from_slice::<RestoreRecord>(&bytes) {
+        Ok(rec) if rec.format == RECORD_FORMAT => Ok(Some(rec)),
+        Ok(rec) => Err(Error::Startup(
+            format!(
+                "the restore record {path} has format {}, which this build does not read",
+                rec.format
+            )
+            .into(),
+        )),
+        Err(err) => Err(Error::Startup(
+            format!(
+                "the restore record {path} cannot be read ({err}). It says which restore \
+                 instruction this data directory has honoured; inspect it, and remove it only \
+                 if no restore is pending here"
+            )
+            .into(),
+        )),
+    }
+}
+
+/// Replace the record durably: temporary name, fsync, rename, directory fsync.
+pub(crate) async fn write_record(data_dir: &str, record: &RestoreRecord) -> Result<(), Error> {
+    let path = record_path(data_dir);
+    let tmp = format!("{path}.tmp");
+    let bytes = serde_json::to_vec(record)?;
+    let dir = data_dir.to_string();
+    task::spawn_blocking(move || {
+        use std::io::Write;
+        let fail = |what: &str, err: std::io::Error| {
+            Error::Error(format!("cannot {what} the restore record {path}: {err}").into())
+        };
+        std::fs::create_dir_all(&dir).map_err(|e| fail("create the directory of", e))?;
+        let mut f = std::fs::File::create(&tmp).map_err(|e| fail("create", e))?;
+        f.write_all(&bytes).map_err(|e| fail("write", e))?;
+        f.sync_all().map_err(|e| fail("sync", e))?;
+        drop(f);
+        std::fs::rename(&tmp, &path).map_err(|e| fail("publish", e))?;
+        #[cfg(unix)]
+        std::fs::File::open(&dir)
+            .and_then(|d| d.sync_all())
+            .map_err(|e| fail("sync the directory of", e))?;
+        Ok::<(), Error>(())
+    })
+    .await?
+}
+
+/// Move the record from `from` to `to`, if it is in `from`.
+async fn mark_record(data_dir: &str, from: RecordState, to: RecordState) -> Result<(), Error> {
+    if let Some(mut record) = read_record(data_dir).await?
+        && record.state == from
+    {
+        record.state = to;
+        write_record(data_dir, &record).await?;
+    }
+    Ok(())
+}
+
+/// Mark the restore instruction complete (`034` B-4). Called by the start that applied it, only
+/// after `restore_backup_finish` returned `Ok`: until then a crash leaves it `committed` and the
+/// next start of node 1 finishes it, with or without the instruction.
+pub(crate) async fn restore_instruction_completed(data_dir: &str) -> Result<(), Error> {
+    match read_record(data_dir).await? {
+        Some(mut record)
+            if matches!(record.state, RecordState::Pending | RecordState::Committed) =>
+        {
+            record.state = RecordState::Applied;
+            write_record(data_dir, &record).await?;
+            info!(
+                "Restore instruction {} recorded as applied",
+                record.instruction
+            );
+        }
+        Some(_) => {}
+        None => {
+            // A staged restore rolled forward from a build that kept no record.
+            info!("A restore completed with no instruction on record; nothing to mark");
+        }
+    }
+    Ok(())
+}
+
+async fn sha256_file(path: &str) -> Result<String, Error> {
+    let path = path.to_string();
+    task::spawn_blocking(move || {
+        use sha2::Digest;
+        use std::io::Read;
+        let mut f = std::fs::File::open(&path).map_err(|err| {
+            Error::Error(format!("cannot open {path} to digest it: {err}").into())
+        })?;
+        let mut hasher = sha2::Sha256::new();
+        let mut buf = vec![0u8; 64 * 1024];
+        loop {
+            let n = f.read(&mut buf).map_err(|err| {
+                Error::Error(format!("cannot read {path} to digest it: {err}").into())
+            })?;
+            if n == 0 {
+                break;
+            }
+            hasher.update(&buf[..n]);
+        }
+        Ok::<String, Error>(hex::encode(hasher.finalize()))
+    })
+    .await?
+}
+
+/// The raft operations `restore_backup_finish` needs, so the sequence can be driven by a
+/// stand-in in tests.
+pub(crate) trait RestoreRaft {
+    fn node_id(&self) -> NodeId;
+    /// Whether the configuration names peers: at N=1 no follower can ever catch up from the
+    /// log, so the snapshot and the purge are housekeeping rather than what carries the data.
+    fn has_peers(&self) -> bool;
+    async fn is_initialized(&self) -> Result<bool, Error>;
+    async fn current_leader(&self) -> Option<NodeId>;
+    async fn write_rtt(&self) -> Result<(), Error>;
+    fn last_applied_index(&self) -> Option<u64>;
+    async fn trigger_snapshot(&self) -> Result<(), Error>;
+    fn has_snapshot(&self) -> bool;
+    async fn purge_log(&self, upto: u64) -> Result<(), Error>;
+}
+
+struct DbRaft<'a>(&'a AppState, bool);
+
+impl RestoreRaft for DbRaft<'_> {
+    fn node_id(&self) -> NodeId {
+        self.0.id
+    }
+    fn has_peers(&self) -> bool {
+        self.1
+    }
+    async fn is_initialized(&self) -> Result<bool, Error> {
+        Ok(self.0.raft_db.raft.is_initialized().await?)
+    }
+    async fn current_leader(&self) -> Option<NodeId> {
+        self.0.raft_db.raft.current_leader().await
+    }
+    async fn write_rtt(&self) -> Result<(), Error> {
+        self.0.raft_db.raft.client_write(QueryWrite::RTT).await?;
+        Ok(())
+    }
+    fn last_applied_index(&self) -> Option<u64> {
+        self.0
+            .raft_db
+            .raft
+            .metrics()
+            .borrow()
+            .last_applied
+            .map(|l| l.index)
+    }
+    async fn trigger_snapshot(&self) -> Result<(), Error> {
+        self.0
+            .raft_db
+            .raft
+            .trigger()
+            .snapshot()
+            .await
+            .map_err(|err| Error::Error(format!("cannot trigger a snapshot: {err}").into()))
+    }
+    fn has_snapshot(&self) -> bool {
+        self.0.raft_db.raft.metrics().borrow().snapshot.is_some()
+    }
+    async fn purge_log(&self, upto: u64) -> Result<(), Error> {
+        self.0
+            .raft_db
+            .raft
+            .trigger()
+            .purge_log(upto)
+            .await
+            .map_err(|err| Error::Error(format!("cannot purge the log: {err}").into()))
+    }
+}
+
+/// How long each wait of `restore_backup_finish` may take. `raft` bounds the waits for
+/// initialization, a leader and the applied index; `snapshot` bounds the snapshot build, which
+/// grows with the database.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct RestoreFinishBounds {
+    pub(crate) raft: Duration,
+    pub(crate) snapshot: Duration,
+}
+
+pub(crate) const RESTORE_FINISH_BOUNDS: RestoreFinishBounds = RestoreFinishBounds {
+    raft: Duration::from_secs(60),
+    snapshot: Duration::from_secs(30 * 60),
+};
+
+/// What node 1 does after it applied a restore: prove it leads a raft group that holds the
+/// restored database, and make a snapshot of it the only way a follower can catch up.
+///
+/// `034` B-4 (F-120): runs after the listeners are bound and after `become_cluster_member`, so
+/// no wait in it depends on something the start had not done yet, and every wait is bounded;
+/// expiry, a leader other than this node, and a snapshot or purge that does not complete are
+/// returned as `Error::Startup`. The restore instruction is recorded complete (F-119) only after
+/// this returns `Ok`.
+#[cfg(feature = "backup")]
+pub(crate) async fn restore_backup_finish(
+    state: &Arc<AppState>,
+    has_peers: bool,
+    bounds: RestoreFinishBounds,
+) -> Result<(), Error> {
+    restore_finish_with(&DbRaft(state, has_peers), bounds).await
+}
 
 #[tracing::instrument(level = "debug", skip_all)]
-#[cfg(feature = "backup")]
-pub async fn restore_backup_finish(state: &Arc<AppState>) {
+async fn restore_finish_with<R: RestoreRaft>(
+    raft: &R,
+    bounds: RestoreFinishBounds,
+) -> Result<(), Error> {
+    let this = raft.node_id();
+    let startup = |msg: String| Error::Startup(msg.into());
+
+    let deadline = Instant::now() + bounds.raft;
     loop {
-        match state.raft_db.raft.is_initialized().await {
-            Ok(res) => {
-                if res {
-                    break;
-                }
-            }
-            Err(err) => {
-                error!("{}", err);
-            }
+        match raft.is_initialized().await {
+            Ok(true) => break,
+            Ok(false) => {}
+            Err(err) => error!("{}", err),
+        }
+        if Instant::now() >= deadline {
+            return Err(startup(format!(
+                "node {this} applied a restore, but its SQLite raft was not initialized within \
+                 {:?} (034 B-4). The restore is not recorded complete, and the next start of \
+                 this node finishes it",
+                bounds.raft
+            )));
         }
         debug!("Waiting for Raft init");
         time::sleep(Duration::from_millis(50)).await;
     }
 
-    while state.raft_db.raft.current_leader().await.is_none() {
+    let leader = loop {
+        if let Some(leader) = raft.current_leader().await {
+            break leader;
+        }
+        if Instant::now() >= deadline {
+            return Err(startup(format!(
+                "node {this} applied a restore, but its SQLite raft had no leader within {:?} \
+                 (034 B-4)",
+                bounds.raft
+            )));
+        }
         time::sleep(Duration::from_millis(50)).await;
+    };
+    // This was a `debug_assert!`: a debug build panicked, and a release build went on under
+    // another node's leadership, whose state then replaced the restored database.
+    if leader != this {
+        return Err(startup(format!(
+            "node {this} applied a restore, but node {leader} leads its SQLite raft group, whose \
+             state would replace the restored database (034 B-4). The restore is not recorded \
+             complete"
+        )));
     }
 
-    debug_assert!(
-        state.raft_db.raft.current_leader().await == Some(state.id),
-        "It should never happen that node 1 is not the raft leader during backup restore"
-    );
-
+    let deadline = Instant::now() + bounds.raft;
     let reqs = 10;
     for _ in 0..reqs {
         let start = Instant::now();
-        match state.raft_db.raft.client_write(QueryWrite::RTT).await {
-            Ok(_) => {
-                info!("Raft RTT: {} micros", start.elapsed().as_micros());
-            }
-            Err(err) => {
-                error!("Raft RTT request error: {}", err);
-            }
+        let left = deadline.saturating_duration_since(Instant::now());
+        match time::timeout(left, raft.write_rtt()).await {
+            Ok(Ok(_)) => info!("Raft RTT: {} micros", start.elapsed().as_micros()),
+            Ok(Err(err)) => error!("Raft RTT request error: {}", err),
+            Err(_) => break,
         }
     }
 
-    let last_log;
-    loop {
-        let metrics = state.raft_db.raft.metrics().borrow().clone();
-        if let Some(last_applied) = metrics.last_applied
-            && last_applied.index >= reqs
+    let last_log = loop {
+        if let Some(last_applied) = raft.last_applied_index()
+            && last_applied >= reqs
         {
             debug!("Found high enough last_applied log id");
-            last_log = last_applied.index;
-            break;
+            break last_applied;
+        }
+        if Instant::now() >= deadline {
+            return Err(startup(format!(
+                "node {this} applied a restore, but its SQLite raft did not apply {reqs} entries \
+                 within {:?} (034 B-4)",
+                bounds.raft
+            )));
         }
         time::sleep(Duration::from_millis(50)).await;
-    }
+    };
 
+    // The snapshot is what carries the restored database to a follower; the purge below makes
+    // it the only way a follower can catch up. Neither is optional, so neither failure is only
+    // logged any more when there are peers: the restore is not recorded complete and the next
+    // start finishes it. At N=1 no follower can catch up from the log, so there they are
+    // housekeeping, logged, and the restore completes (review finding 5).
     debug!("Taking snapshot now");
-    if let Err(err) = state.raft_db.raft.trigger().snapshot().await {
-        // e.g. the raft is shutting down: do not panic the task, just bail out - the
-        // wait-for-snapshot loop below would never finish anyway
-        error!("Error triggering snapshot: {err}");
-        return;
+    if let Err(err) = raft.trigger_snapshot().await {
+        if !raft.has_peers() {
+            warn!("Could not trigger the post-restore snapshot ({err}); at N=1 this is not fatal");
+            return Ok(());
+        }
+        return Err(startup(format!(
+            "node {this} applied a restore, but could not trigger its snapshot: {err}"
+        )));
     }
 
-    // while let Err(_err) = state.raft_db.raft.trigger().snapshot().await {
-    //     debug_assert!("")
-    //     time::sleep(Duration::from_millis(500)).await;
-    // }
-
-    // wait until snapshot has been built
-    while state.raft_db.raft.metrics().borrow().snapshot.is_none() {
+    let deadline = Instant::now() + bounds.snapshot;
+    while !raft.has_snapshot() {
+        if Instant::now() >= deadline {
+            if !raft.has_peers() {
+                warn!(
+                    "The post-restore snapshot was not built within {:?}; at N=1 this is not \
+                     fatal, and the log is kept",
+                    bounds.snapshot
+                );
+                return Ok(());
+            }
+            return Err(startup(format!(
+                "node {this} applied a restore, but its snapshot was not built within {:?} \
+                 (034 B-4)",
+                bounds.snapshot
+            )));
+        }
         info!("Waiting for snapshot build to finish");
         time::sleep(Duration::from_millis(100)).await;
     }
 
     debug!("Purging logs");
-    // Bounded, and it bails out for the same reason the snapshot trigger twelve lines above
-    // does: a purge that keeps failing means the raft is going away, and the old
-    // `while let Err(..)` had no sleep, no attempt bound and no exit, so it spun the task at
-    // full CPU emitting an error line per iteration.
+    // Bounded, and it bails out rather than spinning: the old `while let Err(..)` had no sleep,
+    // no attempt bound and no exit.
     for attempt in 1..=10u32 {
-        match state.raft_db.raft.trigger().purge_log(last_log).await {
+        match raft.purge_log(last_log).await {
             Ok(()) => break,
             Err(err) => {
                 error!("Error during logs purge (attempt {attempt} of 10): {err}");
                 if attempt == 10 {
-                    error!(
-                        "Giving up on the post-restore log purge; the logs stay until the next one"
-                    );
-                    return;
+                    if !raft.has_peers() {
+                        warn!("Giving up on the post-restore log purge; at N=1 this is not fatal");
+                        break;
+                    }
+                    return Err(startup(format!(
+                        "node {this} applied a restore, but could not purge its log up to \
+                         {last_log}: {err}. A follower could then catch up from the log instead \
+                         of the snapshot that holds the restored data"
+                    )));
                 }
                 time::sleep(Duration::from_millis(100)).await;
             }
         }
     }
 
-    info!("restore_backup_finish task successful");
+    info!("restore_backup_finish successful");
+    Ok(())
 }
 
 #[cfg(test)]
@@ -1317,5 +1813,643 @@ mod tests {
         let err =
             cfg(&with_bad_style).expect_err("an unparsable path style is a configuration error");
         assert!(err.to_string().contains("HQL_S3_PATH_STYLE"), "got: {err}");
+    }
+}
+
+/// Lane B: `034` B-4's at-most-once restore instruction (F-119), the fresh-cell precondition and
+/// the bounded `restore_backup_finish` (F-120).
+#[cfg(all(test, feature = "sqlite"))]
+mod lane_b_tests {
+    use super::*;
+    use crate::Node;
+    use crate::init::test_peers::{Answer, SECRET, closed_addr, peer, stub_peer};
+    use std::sync::Mutex;
+    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+
+    struct Dir {
+        base: std::path::PathBuf,
+    }
+
+    impl Dir {
+        async fn new(tag: &str) -> Self {
+            let base = std::env::temp_dir().join(format!(
+                "hiqlite-lane-b-{tag}-{}",
+                Utc::now().timestamp_nanos_opt().unwrap()
+            ));
+            fs::create_dir_all(base.join("data/state_machine/db"))
+                .await
+                .unwrap();
+            Self { base }
+        }
+        fn data(&self) -> String {
+            self.base.join("data").to_string_lossy().into_owned()
+        }
+        fn db(&self) -> std::path::PathBuf {
+            self.base.join("data/state_machine/db/hiqlite.db")
+        }
+        /// A backup that passes validation on its own merits, holding `label` in a table.
+        async fn backup(&self, name: &str, label: &str) -> String {
+            let path = self.base.join(name).to_string_lossy().into_owned();
+            let p = path.clone();
+            let label = label.to_string();
+            task::spawn_blocking(move || {
+                let conn = rusqlite::Connection::open(p).unwrap();
+                conn.execute(
+                    "CREATE TABLE _metadata (key TEXT PRIMARY KEY, data BLOB)",
+                    (),
+                )
+                .unwrap();
+                conn.execute(
+                    "INSERT INTO _metadata VALUES ('meta', ?1)",
+                    [crate::helpers::serialize(&StateMachineData::default()).unwrap()],
+                )
+                .unwrap();
+                conn.execute("CREATE TABLE label (v TEXT)", ()).unwrap();
+                conn.execute("INSERT INTO label VALUES (?1)", [label])
+                    .unwrap();
+            })
+            .await
+            .unwrap();
+            path
+        }
+    }
+
+    impl Drop for Dir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.base);
+        }
+    }
+
+    fn config(dir: &Dir, node_id: u64, nodes: Vec<Node>) -> NodeConfig {
+        NodeConfig {
+            data_dir: dir.data().into(),
+            filename_db: "hiqlite.db".into(),
+            node_id,
+            nodes,
+            secret_api: SECRET.to_string(),
+            init_peer_wait_secs: 1,
+            ..Default::default()
+        }
+    }
+
+    fn n1(dir: &Dir) -> NodeConfig {
+        config(dir, 1, vec![peer(1, &closed_addr())])
+    }
+
+    /// F-119, `034` B-4: the same instruction on a later start of node 1 is a logged no-op.
+    /// Unrepaired, every start with `HQL_BACKUP_RESTORE` set restored again and discarded every
+    /// write since the previous restore.
+    #[tokio::test]
+    async fn f119_node_1_applies_an_instruction_at_most_once() {
+        let dir = Dir::new("once").await;
+        let backup = dir.backup("b1.sqlite", "the backup").await;
+        let cfg = n1(&dir);
+        let src = || Some(BackupSource::File(backup.clone()));
+
+        assert!(
+            restore_backup_start_from(&cfg, src()).await.unwrap(),
+            "the first start restores"
+        );
+        restore_instruction_completed(cfg.data_dir.as_ref())
+            .await
+            .unwrap();
+
+        // What the node wrote after the restore.
+        fs::write(dir.db(), b"written after the restore")
+            .await
+            .unwrap();
+
+        assert!(
+            !restore_backup_start_from(&cfg, src()).await.unwrap(),
+            "a second start with the same instruction must not restore again"
+        );
+        assert_eq!(
+            fs::read(dir.db()).await.unwrap(),
+            b"written after the restore"
+        );
+    }
+
+    /// F-119, `034` B-4: a follower does not move its state aside again for an instruction it
+    /// has already honoured. Unrepaired, each start quarantined the rejoined state again and
+    /// forced a full re-join by snapshot.
+    #[tokio::test]
+    async fn f119_a_follower_quarantines_once_per_instruction() {
+        let dir = Dir::new("follower").await;
+        let cfg = config(
+            &dir,
+            2,
+            vec![
+                peer(1, &closed_addr()),
+                peer(2, &closed_addr()),
+                peer(3, &closed_addr()),
+            ],
+        );
+        let src = || Some(BackupSource::S3("backup_node_1_1800000000.sqlite".into()));
+        fs::write(dir.db(), b"the state before the restore")
+            .await
+            .unwrap();
+
+        assert!(!restore_backup_start_from(&cfg, src()).await.unwrap());
+        assert!(!dir.db().exists(), "the first start moves the state aside");
+
+        // The state the follower rejoined with.
+        fs::create_dir_all(dir.db().parent().unwrap())
+            .await
+            .unwrap();
+        fs::write(dir.db(), b"the rejoined state").await.unwrap();
+        // The quarantine directory is named by the second; a repeat within the same second
+        // would collide with the first instead of repeating it.
+        time::sleep(Duration::from_millis(1100)).await;
+
+        assert!(!restore_backup_start_from(&cfg, src()).await.unwrap());
+        assert_eq!(
+            fs::read(dir.db()).await.unwrap(),
+            b"the rejoined state",
+            "an honoured instruction does not quarantine again"
+        );
+    }
+
+    /// `034` B-4: a node 1 whose peer reports an initialized group refuses the restore with a
+    /// startup error before it moves anything. Unrepaired, it restored, and then either waited
+    /// forever for an initialization that the join it had not yet run would provide (F-120) or
+    /// joined the existing cluster and lost the restore.
+    #[tokio::test]
+    async fn f120_a_cell_that_is_not_fresh_is_refused_before_anything_moves() {
+        let dir = Dir::new("not-fresh").await;
+        let backup = dir.backup("b1.sqlite", "the backup").await;
+        let p2 = stub_peer(Answer::Initialized).await;
+        let cfg = config(
+            &dir,
+            1,
+            vec![
+                peer(1, &closed_addr()),
+                peer(2, &p2),
+                peer(3, &closed_addr()),
+            ],
+        );
+        fs::write(dir.db(), b"the live database").await.unwrap();
+
+        let err = restore_backup_start_from(&cfg, Some(BackupSource::File(backup)))
+            .await
+            .expect_err("a peer holds an initialized group: the cell is not fresh");
+        let text = err.to_string();
+        assert!(text.starts_with("Startup: "), "got: {text}");
+        assert!(text.contains("node 2"), "names the peer: {text}");
+        assert_eq!(
+            fs::read(dir.db()).await.unwrap(),
+            b"the live database",
+            "nothing moved"
+        );
+        assert!(
+            !Path::new(&record_path(cfg.data_dir.as_ref())).exists(),
+            "and nothing recorded"
+        );
+    }
+
+    /// `034` B-4: with the peers answering that they are not initialized, node 1 restores.
+    #[tokio::test]
+    async fn f120_a_fresh_cell_restores() {
+        let dir = Dir::new("fresh").await;
+        let backup = dir.backup("b1.sqlite", "the backup").await;
+        let p2 = stub_peer(Answer::NotInitialized).await;
+        let p3 = stub_peer(Answer::NotInitialized).await;
+        let cfg = config(
+            &dir,
+            1,
+            vec![peer(1, &closed_addr()), peer(2, &p2), peer(3, &p3)],
+        );
+        assert!(
+            restore_backup_start_from(&cfg, Some(BackupSource::File(backup)))
+                .await
+                .unwrap()
+        );
+    }
+
+    /// `034` B-4 fault injection: interrupted after the instruction was recorded and before the
+    /// staged image was committed. The record says `pending`, the old database is intact, and
+    /// the next start with the same instruction applies it again rather than skipping it.
+    #[tokio::test]
+    async fn f119_interrupted_after_the_record_restores_again() {
+        let dir = Dir::new("crash-record").await;
+        let backup = dir.backup("b1.sqlite", "the backup").await;
+        let cfg = n1(&dir);
+        let src = BackupSource::File(backup.clone());
+        fs::write(dir.db(), b"the database before").await.unwrap();
+
+        write_record(
+            cfg.data_dir.as_ref(),
+            &RestoreRecord::pending(&src, Some("0".repeat(64))),
+        )
+        .await
+        .unwrap();
+        // A staging copy that never completed, as the crash left it.
+        fs::write(dir.db().with_extension("db.restoring.tmp"), b"half a copy")
+            .await
+            .unwrap();
+
+        assert!(
+            restore_backup_start_from(&cfg, Some(src.clone()))
+                .await
+                .unwrap()
+        );
+        assert_ne!(fs::read(dir.db()).await.unwrap(), b"the database before");
+        let rec = read_record(cfg.data_dir.as_ref()).await.unwrap().unwrap();
+        assert_eq!(
+            rec.state,
+            RecordState::Committed,
+            "not done until the start completes it"
+        );
+
+        restore_instruction_completed(cfg.data_dir.as_ref())
+            .await
+            .unwrap();
+        assert!(!restore_backup_start_from(&cfg, Some(src)).await.unwrap());
+    }
+
+    /// `034` B-4 fault injection: interrupted after the staged image was committed, during the
+    /// removals. The roll-forward completes it and the record becomes `committed`: a crash before
+    /// the start completes leaves a restore that the next start finishes, never one marked done
+    /// and never one pulled and applied again.
+    #[tokio::test]
+    async fn f119_interrupted_after_the_staged_commit_is_rolled_forward_and_not_marked_done() {
+        let dir = Dir::new("crash-staged").await;
+        let backup = dir.backup("b1.sqlite", "the backup").await;
+        let cfg = n1(&dir);
+        let src = BackupSource::File(backup.clone());
+
+        write_record(cfg.data_dir.as_ref(), &RestoreRecord::pending(&src, None))
+            .await
+            .unwrap();
+        fs::write(dir.db(), b"the old database, WAL already gone")
+            .await
+            .unwrap();
+        fs::copy(&backup, dir.db().with_extension("db.restoring"))
+            .await
+            .unwrap();
+
+        assert!(
+            restore_backup_start_from(&cfg, Some(src.clone()))
+                .await
+                .unwrap()
+        );
+        assert_eq!(
+            fs::read(dir.db()).await.unwrap(),
+            fs::read(&backup).await.unwrap()
+        );
+        assert_eq!(
+            read_record(cfg.data_dir.as_ref())
+                .await
+                .unwrap()
+                .unwrap()
+                .state,
+            RecordState::Committed
+        );
+
+        // Interrupted again, before the post-restore sequence completed: finished, with or
+        // without the instruction, and the image is not applied a second time.
+        fs::write(dir.db(), b"a partly finished restore")
+            .await
+            .unwrap();
+        assert!(restore_backup_start_from(&cfg, Some(src)).await.unwrap());
+        assert!(restore_backup_start_from(&cfg, None).await.unwrap());
+        assert_eq!(
+            fs::read(dir.db()).await.unwrap(),
+            b"a partly finished restore"
+        );
+    }
+
+    /// `034` B-4 fault injection: interrupted while the record itself was being replaced. The
+    /// temporary file is ignored and removed; the record that was durable before governs.
+    #[tokio::test]
+    async fn f119_an_interrupted_record_write_leaves_the_previous_record_in_force() {
+        let dir = Dir::new("crash-tmp").await;
+        let backup = dir.backup("b1.sqlite", "the backup").await;
+        let cfg = n1(&dir);
+        let src = BackupSource::File(backup.clone());
+
+        assert!(
+            restore_backup_start_from(&cfg, Some(src.clone()))
+                .await
+                .unwrap()
+        );
+        restore_instruction_completed(cfg.data_dir.as_ref())
+            .await
+            .unwrap();
+        let tmp = format!("{}.tmp", record_path(cfg.data_dir.as_ref()));
+        fs::write(&tmp, b"{\"torn").await.unwrap();
+        fs::write(dir.db(), b"written after the restore")
+            .await
+            .unwrap();
+
+        assert!(!restore_backup_start_from(&cfg, Some(src)).await.unwrap());
+        assert_eq!(
+            fs::read(dir.db()).await.unwrap(),
+            b"written after the restore"
+        );
+        assert!(!Path::new(&tmp).exists());
+    }
+
+    /// A record that cannot be read is a startup error, not a reason to restore or to skip: it
+    /// is the one thing that says whether a destructive action already happened.
+    #[tokio::test]
+    async fn f119_an_unreadable_record_is_a_startup_error() {
+        let dir = Dir::new("bad-record").await;
+        let backup = dir.backup("b1.sqlite", "the backup").await;
+        let cfg = n1(&dir);
+        fs::write(record_path(cfg.data_dir.as_ref()), b"not a record")
+            .await
+            .unwrap();
+        fs::write(dir.db(), b"the live database").await.unwrap();
+
+        let err = restore_backup_start_from(&cfg, Some(BackupSource::File(backup)))
+            .await
+            .expect_err("an unreadable record");
+        assert!(err.to_string().starts_with("Startup: "), "got: {err}");
+        assert_eq!(fs::read(dir.db()).await.unwrap(), b"the live database");
+    }
+
+    /// A different instruction after an applied one is applied, as before this repair; the
+    /// record then names the new one. (`034` B-3's refusal of a different image, with an
+    /// explicit override, is lane C.)
+    #[tokio::test]
+    async fn f119_a_different_instruction_is_applied() {
+        let dir = Dir::new("different").await;
+        let b1 = dir.backup("b1.sqlite", "first").await;
+        let b2 = dir.backup("b2.sqlite", "second").await;
+        let cfg = n1(&dir);
+
+        assert!(
+            restore_backup_start_from(&cfg, Some(BackupSource::File(b1)))
+                .await
+                .unwrap()
+        );
+        restore_instruction_completed(cfg.data_dir.as_ref())
+            .await
+            .unwrap();
+        assert!(
+            restore_backup_start_from(&cfg, Some(BackupSource::File(b2.clone())))
+                .await
+                .unwrap()
+        );
+        assert_eq!(
+            fs::read(dir.db()).await.unwrap(),
+            fs::read(&b2).await.unwrap()
+        );
+        let rec = read_record(cfg.data_dir.as_ref()).await.unwrap().unwrap();
+        assert_eq!(rec.instruction, format!("file:{b2}"));
+        assert_eq!(
+            rec.sha256.as_deref().map(str::len),
+            Some(64),
+            "the image digest is recorded"
+        );
+    }
+
+    /// Fault injection on a follower: interrupted between its record and the end of its
+    /// quarantine. The instruction is still `pending`, so the next start moves aside again.
+    #[tokio::test]
+    async fn f119_an_interrupted_follower_quarantine_is_repeated() {
+        let dir = Dir::new("follower-crash").await;
+        let cfg = config(
+            &dir,
+            3,
+            vec![
+                peer(1, &closed_addr()),
+                peer(2, &closed_addr()),
+                peer(3, &closed_addr()),
+            ],
+        );
+        let src = BackupSource::S3("backup_node_1_1800000000.sqlite".into());
+        write_record(cfg.data_dir.as_ref(), &RestoreRecord::pending(&src, None))
+            .await
+            .unwrap();
+        fs::write(dir.db(), b"not yet moved aside").await.unwrap();
+
+        assert!(!restore_backup_start_from(&cfg, Some(src)).await.unwrap());
+        assert!(!dir.db().exists(), "the quarantine ran");
+        assert_eq!(
+            read_record(cfg.data_dir.as_ref())
+                .await
+                .unwrap()
+                .unwrap()
+                .state,
+            RecordState::Applied
+        );
+        assert!(
+            Path::new(&record_path(cfg.data_dir.as_ref())).exists(),
+            "the record is never moved aside with the state"
+        );
+    }
+
+    /// A stand-in raft for `restore_backup_finish`.
+    #[derive(Default)]
+    struct StubRaft {
+        initialized: AtomicBool,
+        leader: Mutex<Option<NodeId>>,
+        applied: AtomicU64,
+        rtt_applies: AtomicBool,
+        snapshot_builds: AtomicBool,
+        snapshot: AtomicBool,
+        purged: Mutex<Option<u64>>,
+        single: bool,
+        purge_fails: bool,
+    }
+
+    impl RestoreRaft for StubRaft {
+        fn node_id(&self) -> NodeId {
+            1
+        }
+        fn has_peers(&self) -> bool {
+            !self.single
+        }
+        async fn is_initialized(&self) -> Result<bool, Error> {
+            Ok(self.initialized.load(Ordering::SeqCst))
+        }
+        async fn current_leader(&self) -> Option<NodeId> {
+            *self.leader.lock().unwrap()
+        }
+        async fn write_rtt(&self) -> Result<(), Error> {
+            if self.rtt_applies.load(Ordering::SeqCst) {
+                self.applied.fetch_add(1, Ordering::SeqCst);
+            }
+            Ok(())
+        }
+        fn last_applied_index(&self) -> Option<u64> {
+            Some(self.applied.load(Ordering::SeqCst))
+        }
+        async fn trigger_snapshot(&self) -> Result<(), Error> {
+            if self.snapshot_builds.load(Ordering::SeqCst) {
+                self.snapshot.store(true, Ordering::SeqCst);
+            }
+            Ok(())
+        }
+        fn has_snapshot(&self) -> bool {
+            self.snapshot.load(Ordering::SeqCst)
+        }
+        async fn purge_log(&self, upto: u64) -> Result<(), Error> {
+            if self.purge_fails {
+                return Err(Error::Error("the purge fails".into()));
+            }
+            *self.purged.lock().unwrap() = Some(upto);
+            Ok(())
+        }
+    }
+
+    const SHORT: RestoreFinishBounds = RestoreFinishBounds {
+        raft: Duration::from_millis(300),
+        snapshot: Duration::from_millis(300),
+    };
+
+    async fn finish_bounded(raft: &StubRaft) -> Result<(), Error> {
+        time::timeout(Duration::from_secs(5), restore_finish_with(raft, SHORT))
+            .await
+            .expect("restore_backup_finish must return within its bound, not wait forever")
+    }
+
+    /// F-120: a raft that never initializes is a returned error within the bound. Unrepaired,
+    /// the loop had no bound, so the start never returned and never bound a listener.
+    #[tokio::test]
+    async fn f120_a_raft_that_never_initializes_is_a_bounded_error() {
+        let raft = StubRaft::default();
+        let err = finish_bounded(&raft).await.expect_err("never initialized");
+        assert!(err.to_string().starts_with("Startup: "), "got: {err}");
+        assert!(
+            err.to_string().contains("initialized"),
+            "says which wait: {err}"
+        );
+    }
+
+    /// F-120: no leader is a returned error within the bound.
+    #[tokio::test]
+    async fn f120_no_leader_is_a_bounded_error() {
+        let raft = StubRaft::default();
+        raft.initialized.store(true, Ordering::SeqCst);
+        let err = finish_bounded(&raft).await.expect_err("no leader");
+        assert!(err.to_string().contains("leader"), "got: {err}");
+    }
+
+    /// F-120: the `debug_assert!` on the leader is a returned error. Unrepaired, a debug build
+    /// panicked here and a release build went on to restore under another node's leadership.
+    #[tokio::test]
+    async fn f120_a_leader_other_than_this_node_is_an_error() {
+        let raft = StubRaft::default();
+        raft.initialized.store(true, Ordering::SeqCst);
+        *raft.leader.lock().unwrap() = Some(2);
+        let err = finish_bounded(&raft).await.expect_err("node 2 leads");
+        assert!(err.to_string().contains("node 2"), "got: {err}");
+    }
+
+    /// F-120: a snapshot that is never built is a returned error, so the restore is not recorded
+    /// as complete (F-119) and is applied again on the next start.
+    #[tokio::test]
+    async fn f120_a_snapshot_that_is_never_built_is_a_bounded_error() {
+        let raft = StubRaft::default();
+        raft.initialized.store(true, Ordering::SeqCst);
+        *raft.leader.lock().unwrap() = Some(1);
+        raft.rtt_applies.store(true, Ordering::SeqCst);
+        let err = finish_bounded(&raft).await.expect_err("no snapshot");
+        assert!(err.to_string().contains("snapshot"), "got: {err}");
+    }
+
+    /// Review finding 5: at N=1 no follower can catch up from the log, so a snapshot that is
+    /// not built or a purge that fails is logged and the restore completes. Treating them as
+    /// fatal made every restart apply the image again while the instruction stayed set.
+    #[tokio::test]
+    async fn f120_at_n1_a_missing_snapshot_or_purge_does_not_fail_the_restore() {
+        let raft = StubRaft {
+            single: true,
+            ..Default::default()
+        };
+        raft.initialized.store(true, Ordering::SeqCst);
+        *raft.leader.lock().unwrap() = Some(1);
+        raft.rtt_applies.store(true, Ordering::SeqCst);
+        finish_bounded(&raft)
+            .await
+            .expect("at N=1 an unbuilt snapshot is logged, not fatal");
+
+        let raft = StubRaft {
+            single: true,
+            purge_fails: true,
+            ..Default::default()
+        };
+        raft.initialized.store(true, Ordering::SeqCst);
+        *raft.leader.lock().unwrap() = Some(1);
+        raft.rtt_applies.store(true, Ordering::SeqCst);
+        raft.snapshot_builds.store(true, Ordering::SeqCst);
+        finish_bounded(&raft)
+            .await
+            .expect("at N=1 a failed purge is logged, not fatal");
+
+        // With peers the same failure stays an error: a follower would catch up from the log.
+        let raft = StubRaft {
+            purge_fails: true,
+            ..Default::default()
+        };
+        raft.initialized.store(true, Ordering::SeqCst);
+        *raft.leader.lock().unwrap() = Some(1);
+        raft.rtt_applies.store(true, Ordering::SeqCst);
+        raft.snapshot_builds.store(true, Ordering::SeqCst);
+        finish_bounded(&raft)
+            .await
+            .expect_err("with peers a failed purge is fatal");
+    }
+
+    /// Review finding 2: an image already committed whose post-restore sequence never
+    /// completed is finished by the next start **whether or not the instruction is still set**.
+    /// Before, removing `HQL_BACKUP_RESTORE` made the start forget it: no hold, no snapshot, no
+    /// purge, and followers caught up from a log without the restored data.
+    #[tokio::test]
+    async fn f119_a_committed_but_unfinished_restore_is_finished_without_the_instruction() {
+        let dir = Dir::new("committed").await;
+        let backup = dir.backup("b1.sqlite", "the backup").await;
+        let cfg = n1(&dir);
+        let src = BackupSource::File(backup.clone());
+
+        assert!(
+            restore_backup_start_from(&cfg, Some(src.clone()))
+                .await
+                .unwrap()
+        );
+        // The finish failed or the process died here; the operator removes the instruction.
+        assert!(
+            restore_backup_start_from(&cfg, None).await.unwrap(),
+            "the committed image still needs its post-restore sequence"
+        );
+        assert_eq!(
+            fs::read(dir.db()).await.unwrap(),
+            fs::read(&backup).await.unwrap()
+        );
+
+        // With the instruction still set it is finished, not applied again.
+        fs::write(dir.db(), b"written by the unfinished start")
+            .await
+            .unwrap();
+        assert!(
+            restore_backup_start_from(&cfg, Some(src.clone()))
+                .await
+                .unwrap()
+        );
+        assert_eq!(
+            fs::read(dir.db()).await.unwrap(),
+            b"written by the unfinished start",
+            "a committed image is not pulled and applied again"
+        );
+
+        restore_instruction_completed(cfg.data_dir.as_ref())
+            .await
+            .unwrap();
+        assert!(!restore_backup_start_from(&cfg, None).await.unwrap());
+        assert!(!restore_backup_start_from(&cfg, Some(src)).await.unwrap());
+    }
+
+    /// The sequence completes when every step does, and purges up to what it applied.
+    #[tokio::test]
+    async fn f120_the_finish_completes_and_purges() {
+        let raft = StubRaft::default();
+        raft.initialized.store(true, Ordering::SeqCst);
+        *raft.leader.lock().unwrap() = Some(1);
+        raft.rtt_applies.store(true, Ordering::SeqCst);
+        raft.snapshot_builds.store(true, Ordering::SeqCst);
+        finish_bounded(&raft).await.expect("every step completes");
+        assert_eq!(*raft.purged.lock().unwrap(), Some(10));
     }
 }

@@ -49,6 +49,10 @@
         "source": "spec-edge"
       },
       {
+        "path": "qualification/n3/",
+        "source": "spec-edge"
+      },
+      {
         "path": "standards/spec/findings-register.md",
         "source": "spec-edge"
       },
@@ -67,7 +71,11 @@
     ],
     "resolvedUnits": [
       {
-        "locations": [],
+        "locations": [
+          {
+            "file": "qualification/n3/"
+          }
+        ],
         "ownership": true,
         "sourceField": "establishes",
         "unit": {
@@ -273,27 +281,14 @@
       {
         "locations": [
           {
-            "file": "hiqlite/src/client/mgmt.rs"
+            "file": "hiqlite/src/error.rs"
           }
         ],
         "ownership": false,
         "sourceField": "references",
         "unit": {
           "kind": "file",
-          "path": "hiqlite/src/client/mgmt.rs"
-        }
-      },
-      {
-        "locations": [
-          {
-            "file": "hiqlite/src/init.rs"
-          }
-        ],
-        "ownership": false,
-        "sourceField": "references",
-        "unit": {
-          "kind": "file",
-          "path": "hiqlite/src/init.rs"
+          "path": "hiqlite/src/error.rs"
         }
       },
       {
@@ -307,6 +302,19 @@
         "unit": {
           "kind": "file",
           "path": "hiqlite/src/membership_gate.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/store/mod.rs"
+          }
+        ],
+        "ownership": false,
+        "sourceField": "references",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/store/mod.rs"
         }
       },
       {
@@ -327,5 +335,5 @@
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "fa0f4b26fd1d80c2e7d0574a79a565d1e04e580b9a7495bb31de7878d711ae26"
+  "shardHash": "32be5d0b6de9382c0733d985291f75141a31512a69fb27c03e3ad9c376c07e7f"
 }

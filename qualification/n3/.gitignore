@@ -1,0 +1,4 @@
+# Build output and per-run directories. The committed Cargo.lock is tracked with `git add -f`
+# because the repository root ignores every Cargo.lock.
+/target/
+/runs/
