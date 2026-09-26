@@ -383,12 +383,14 @@ inside each qualification run, restore scenarios included. The Rahi handoff is
 rewritten with the answer to Rahi's H-7, and the Rauthy request gains a producer
 notice. Nothing in this pass decides anything or supports N=3.
 
-**D-8 (2026-09-25, owner decision: revert lane B for patched.4).** The owner
+**D-12 (2026-09-25, owner decision: revert lane B for patched.4).** The owner
 decided 2026-09-25 night, verbatim: "Revert lane B for patched.4". Reverted #39
 (merge `ce04e64`) on trunk before the release commit so trunk equals what ships.
 This resolves 041 D-4. The reland is prepared as a draft PR that waits for
 033's N=3 qualification. 033 does not ship in patched.4 and needs no
-ratification for it.
+ratification for it. The lane B entries D-8 to D-11 leave with the revert and
+return with the reland; this entry is numbered after them so the reland does
+not collide with it.
 
 **Owner decisions pending.** D-1 to D-13, D-8a to D-8e and D-15 to D-19 of the
 proposal's section 11 are not decided by this spec. Each will be dated here

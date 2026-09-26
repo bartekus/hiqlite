@@ -111,14 +111,14 @@
     ],
     "risk": "critical",
     "sectionDigests": {
-      "034-restore-a-backup-into-a-fresh-three-voter-cell-once-from-an-image-that-proves-whose-it-is": "aee715790b35e4448eb3158f41686b4318169a38d0172dc19ca5e060ac6131fa",
+      "034-restore-a-backup-into-a-fresh-three-voter-cell-once-from-an-image-that-proves-whose-it-is": "e439fca1ad8c452cd02ddb96ef8b1ec0e42ab909e859cd545e3ecbc4b90afbcb",
       "1-purpose": "d73a340d4210749e206b89b69595ef514b064b959db1127b8472de77f024fe77",
       "2-territory": "f6d1f1376bc173d9449eeaf024fd95b370c59434e1ce4195023c4e08e81b96e1",
       "3-behavior": "f31e23a43cffd9d6516c278b87e241a22b573152acb3e8b9b9acfa37b46a7aa6",
       "4-acceptance-to-be-implemented": "43e16146246ad6dcd7f9edb7f23000facc766c0f270d3af41a538ef6d1907008",
       "5-evidence-and-its-limits": "20f313136982cdd8ee6b1798710873fcc6958b015076db846601e26b58462203",
       "6-known-defects": "21e0d337638a86dadd7069a6e64d56e9f38ded191bc570b268cecf95b6fc1c36",
-      "7-resolved-decisions": "f91f64ededa7f9dbccdc6e5fc2e3fa1325a4cbf3322e2f5d98c436264c6d7ac2",
+      "7-resolved-decisions": "26b2fcba29360580c14557eb0f02174a91313f433836365725ece4c5f4eb5932",
       "b-1-an-image-carries-its-manifest": "a8fa89432ac2e1672d9ab95b6069ae3a6a9ef04a69abc142c0d110fdd1f926b9",
       "b-2-an-offline-export-from-a-stopped-data-directory": "ab9bbc9663c2ed0c7b84334cf46f7f003097ff9e28dcd1398c564c5740ae52c4",
       "b-3-restore-is-callable-checked-and-applied-at-most-once": "af4c368a6526dddc6ee14140a52771f5ca78b5d991e59f60c6e0f17878612beb",
@@ -151,6 +151,6 @@
     "summary": "Proposes the hiqlite half of the migration and disaster-recovery procedure in 033's proposal: a backup image that carries its own identity and digest, an offline export from a stopped data directory, a callable restore that is applied at most once and refuses the wrong image before it destroys anything, and a node-1 restore into an empty cell that either initializes or fails with an error, never waits forever. Addresses F-119, F-120, 026 KD-5 and KD-8 for that procedure. The export's currency rule is a proposal whose safety argument and alternatives are in the topology proposal's section 13; the committed index it first relied on is not persisted (F-124). In-place multi-node restore (F-058) stays unsupported. Changes no code until an implementing change lands.\n",
     "title": "Restore a backup into a fresh three-voter cell, once, from an image that proves whose it is"
   },
-  "shardHash": "b13b38a2a3ec6eacbb580f1949e12cb36ccd3381aebddbad64239d2921466e4b",
+  "shardHash": "e0a0e75feb877f3d48e3b68e3c9ff69a9b588695589bd20ae99ca06fcdcab5d1",
   "specVersion": "1.8.0"
 }

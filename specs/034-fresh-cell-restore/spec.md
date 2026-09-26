@@ -374,12 +374,14 @@ rule restated against the fields a stopped directory holds. R-6b extended and
 R-6c added. KD-4 corrected. No decision taken: D-12, D-7 and the D-8
 subdivisions stay pending in the proposal's section 11.
 
-**D-6 (2026-09-25, owner decision: revert lane B for patched.4).** The owner
+**D-10 (2026-09-25, owner decision: revert lane B for patched.4).** The owner
 decided 2026-09-25 night, verbatim: "Revert lane B for patched.4". Reverted #39
 (merge `ce04e64`) on trunk before the release commit so trunk equals what ships.
 This resolves 041 D-4. The reland is prepared as a draft PR that waits for
 033's N=3 qualification. 034 does not ship in patched.4 and needs no
-ratification for it.
+ratification for it. The lane B entries D-6 to D-9 leave with the revert and
+return with the reland; this entry is numbered after them so the reland does
+not collide with it.
 
 ## Verification
 
