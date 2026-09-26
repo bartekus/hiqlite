@@ -47,8 +47,8 @@
       }
     ],
     "specId": "040-wal-file-creation-durability",
-    "specStatus": "draft"
+    "specStatus": "approved"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "b2adf88151f39b8ffb7c05926478cd47776814aefe1c4ed6448e261a70a8f5d1"
+  "shardHash": "18f3f7e34411608cebbb3f5c9353912cf11fac5e08855e25185b041721345ed2"
 }

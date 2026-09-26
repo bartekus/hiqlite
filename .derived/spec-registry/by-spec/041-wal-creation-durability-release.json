@@ -118,10 +118,10 @@
       "Verification"
     ],
     "specPath": "specs/041-wal-creation-durability-release/spec.md",
-    "status": "draft",
+    "status": "approved",
     "summary": "The release identity of `040`'s repair (F-135): all three packages at 0.15.0-patched.4, in lockstep, with exact internal requirements and openraft still =0.9.25. It also carries what merged after patched.3: `039`'s lock-after-restart evidence and the F-136 and F-137 corrections. Lane B of the N=3 proposal (#39) is not in it: the owner reverted it on trunk before the release commit (D-4). Publication waits for the owner's ratification of every spec the release contains (D-3).\n",
     "title": "Release the WAL file-creation durability repair as 0.15.0-patched.4"
   },
-  "shardHash": "40ba500686269ab8b1a71cb6acab54775ee998c905b02a8198bf444b0c8b3579",
+  "shardHash": "735772bb797f6c25b16e8013c466e23cf5ef518e0d590269f33110665e3c13e2",
   "specVersion": "1.8.0"
 }

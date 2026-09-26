@@ -1,7 +1,7 @@
 ---
 id: "040-wal-file-creation-durability"
 title: "Make a new WAL file's header, length and name durable before anything is appended to it"
-status: draft
+status: approved
 created: "2026-09-25"
 owner: "hiqlite maintainers"
 risk: high

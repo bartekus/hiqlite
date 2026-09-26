@@ -1,7 +1,7 @@
 ---
 id: "041-wal-creation-durability-release"
 title: "Release the WAL file-creation durability repair as 0.15.0-patched.4"
-status: draft
+status: approved
 created: "2026-09-25"
 owner: "hiqlite maintainers"
 risk: critical

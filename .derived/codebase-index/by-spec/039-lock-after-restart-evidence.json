@@ -61,8 +61,8 @@
       }
     ],
     "specId": "039-lock-after-restart-evidence",
-    "specStatus": "draft"
+    "specStatus": "approved"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "1479d0694ef02191edb100c46392cfe95f009d926e55f2a1d1f8524f25069635"
+  "shardHash": "dcce1b604549933755641425c4e69290c035ccf6566537063dc53aaf31c95706"
 }

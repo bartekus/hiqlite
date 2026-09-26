@@ -1,7 +1,7 @@
 ---
 id: "039-lock-after-restart-evidence"
 title: "A lock left held by a restart is granted to the next caller within one lease and a bounded margin"
-status: draft
+status: approved
 created: "2026-09-25"
 owner: "hiqlite maintainers"
 risk: medium
