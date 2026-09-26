@@ -501,7 +501,10 @@ mod tests {
     #[cfg(unix)]
     fn an_aliased_path_to_the_same_directory_is_refused() {
         let dir = scratch("aliased_path");
-        let alias = format!("{}/storage_lock/aliased_path_link", crate::test_scratch_root());
+        let alias = format!(
+            "{}/storage_lock/aliased_path_link",
+            crate::test_scratch_root()
+        );
         let _ = std::fs::remove_file(&alias);
         std::os::unix::fs::symlink(
             std::fs::canonicalize(&dir).unwrap(),
