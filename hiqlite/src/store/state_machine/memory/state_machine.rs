@@ -1462,7 +1462,7 @@ mod cache_compatibility_tests {
     }
 
     async fn state_machine(name: &str) -> Arc<StateMachineMemory> {
-        let base = format!("../target/test_data/cache_compat/{name}");
+        let base = format!("{}/cache_compat/{name}", crate::test_scratch_root());
         let _ = fs::remove_dir_all(&base).await;
         fs::create_dir_all(&base).await.unwrap();
         Arc::new(

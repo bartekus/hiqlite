@@ -239,3 +239,15 @@ where
 {
     start::start_node_inner::<C>(Box::new(node_config)).await
 }
+
+/// The root for a lib test's scratch directories, one per test process.
+///
+/// Fixed paths under `../target/test_data` were shared by every process running these tests
+/// from the same checkout, so two concurrent runs (a suite and an acceptance block, say)
+/// deleted and locked each other's directories (F-139, F-140). A child process a test spawns
+/// is handed its directory explicitly, so it does not need to derive the same root.
+#[cfg(test)]
+#[allow(dead_code)]
+pub(crate) fn test_scratch_root() -> String {
+    format!("../target/test_data/{}", std::process::id())
+}
