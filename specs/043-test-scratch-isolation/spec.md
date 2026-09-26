@@ -1,7 +1,7 @@
 ---
 id: "043-test-scratch-isolation"
 title: "Give each lib test process its own scratch root, so concurrent runs from one checkout do not collide"
-status: draft
+status: approved
 created: "2026-09-25"
 owner: "hiqlite maintainers"
 risk: low

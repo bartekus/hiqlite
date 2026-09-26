@@ -314,10 +314,10 @@
       "Verification"
     ],
     "specPath": "specs/042-ci-code-debt/spec.md",
-    "status": "draft",
+    "status": "approved",
     "summary": "The Statecraft CI profile's `code` job (`004` D-8, PR #47) runs `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings` and `cargo test --workspace --locked` with default features, and the trunk failed all three. This spec records why and removes the debt in three separate changes, so `ci-gate` can become the required check. It changes no runtime behavior.\n",
     "title": "Make the workspace pass the CI profile's code job: rustfmt, clippy on all targets, and a featureless workspace test"
   },
-  "shardHash": "d23368c7111965bdbb365c6f84de00c2a960aeab0f281771a9f9dca54d526e87",
+  "shardHash": "28553e6d03c5beed30e7db6d5abc47254fe6ab6147c2aaeb82a7a8dc07b77c4c",
   "specVersion": "1.8.0"
 }

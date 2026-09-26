@@ -604,8 +604,8 @@
       }
     ],
     "specId": "042-ci-code-debt",
-    "specStatus": "draft"
+    "specStatus": "approved"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "165d15d960abcbe1fdaa91737a4d7695924738fbdd76392f8f02a66dfa9b5303"
+  "shardHash": "61a6a631ab1b0adc966ce8f50efd77de8612a6922d5b3aa05a7d595323142f8c"
 }
