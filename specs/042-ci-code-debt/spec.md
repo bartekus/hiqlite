@@ -5,7 +5,7 @@ status: draft
 created: "2026-09-25"
 owner: "hiqlite maintainers"
 risk: low
-implementation: in-progress
+implementation: complete
 depends_on:
   - "000-hiqlite-ownership-bootstrap"
   - "004-governance-harness"
@@ -196,6 +196,14 @@ Why the files differed (measured 2026-09-25, rustfmt from toolchain 1.95.0, no
 The limit: formatting is checked by rustfmt, not by a test. That the reformat
 changed no behavior rests on rustfmt's own guarantee and on the full suite
 passing before and after, not on a semantic diff.
+
+The three changes merged as #53 (A1), #56 (A3) and #57 (A2). On the merged
+trunk `a305996` (2026-09-26, macOS arm64, toolchain 1.95.0), the profile's
+`sh scripts/statecraft/gate.sh code` (revision 7, copied from #47) exits 0:
+`cargo build --workspace --locked`, `cargo test --workspace --locked` (default
+features; `cluster` skipped), `cargo clippy --workspace --all-targets --locked
+-- -D warnings` and `cargo fmt --all --check` all pass. The limit: the `code`
+job checks default features only; the feature matrix stays `Check`'s.
 
 ## 5. Known defects
 
