@@ -265,9 +265,14 @@ Measured on macOS arm64, `cargo +1.95.0`, from this spec's worktree.
 - **B-9's environment route is tested through its value parsers**, not by setting
   process variables, for `009` D-3's reason (the lib test binary shares one
   environment).
-- **B-2 changes startup.** The `cluster` suite was run over it (section 7 of the
-  pull request records the result); ids in that suite are `1..=3` in order, so it
-  exercises the unchanged case, not the repaired one.
+- **B-2 changes startup.** The `cluster` suite (`TEST_SKIP_S3_RESTORE=true`,
+  features `cache,counters,dlock,listen_notify,macros,toml,external-state-machine`)
+  exited `0` over this change on 2026-09-27, printing "All tests successful". Ids
+  in that suite are `1..=3` in order, so it exercises the unchanged case, not the
+  repaired one.
+- **The acceptance block passed whole** on 2026-09-27 (437 commands), with one
+  local accommodation: this worktree's cargo target directory is shared outside
+  it, so `./target/release` was linked to it for `035`'s abort probe command.
 
 ## 5. Known defects
 
@@ -547,7 +552,7 @@ sh -c 'grep -q "index_matches.push(quote! {Self::#id => #idx,});" hiqlite-derive
 # was `unimplemented!()` for a non-enum input, which is a panic with no diagnostic
 sh -c 'grep -q "can only be applied to an enum" hiqlite-derive/src/into_cache_data.rs'
 # `044`: was `Data::Enum(_) => unimplemented!(),`, the panic F-080 recorded
-sh -c '! grep -q "unimplemented!()" hiqlite-derive/src/from_row.rs'
+sh -c '! grep -q "=> unimplemented!()" hiqlite-derive/src/from_row.rs'
 grep -q 'Data::Enum(_) | Data::Union(_) => {' hiqlite-derive/src/from_row.rs
 grep -q '.to_compile_error();' hiqlite-derive/src/from_row.rs
 sh -c 'grep -q "if s == \"std\" || s == \"core\" {" hiqlite-derive/src/from_row.rs'

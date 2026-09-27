@@ -137,11 +137,11 @@
     "owner": "hiqlite maintainers",
     "risk": "high",
     "sectionDigests": {
-      "044-port-the-upstream-0-15-0-fixes-the-fork-lacked": "333a69220068455a090206e21d902726321d8b3a8efa1fe59ce0b52047065851",
+      "044-port-the-upstream-0-15-0-fixes-the-fork-lacked": "a8a3cd017308755b61fc86304d365e4563ae3a536445b32150f4c573b808ff1d",
       "1-purpose": "f70b14f7372942d5dcfb30bf864465115c1dcc1e172015955dfe4f57ad6ad792",
       "2-territory": "f564015d38449fb7f20b6bfe7a37747b45d6f7bd1fc898ef818cec11968722f0",
       "3-behavior": "3af7fe9575d364d34d7458c9a8f58dbeb2714923195149ba584e9de5141ebe53",
-      "4-evidence-and-its-limits": "8fa7c07b201706535aeae6149c6795b84d89a68b240351445c833757b733daf5",
+      "4-evidence-and-its-limits": "6db59cba28146b2e5444ad22b5050e34ea6c025d8ee12c5d089cf11fb0eb3338",
       "5-known-defects": "031a205f07c850fd9b7e8d615da2698e09578067ca71a8c0b5b0ecddb66937a8",
       "6-resolved-decisions": "6b399b4312968986a8d831856739b5e82a6de956c09684037ae9114bd62ce594",
       "7-out-of-scope": "533cc2632f89967b1be99a9090511d7ff3c5254cbe38d830a9c8cd483d887424",
@@ -155,7 +155,7 @@
       "b-7-no-global-login-cooldown-one-hashing-permit-and-a-per-failure-delay-f-087-f-095-f-084": "26d94df8c65e02146131857554e1a88de9201576044ce0d0d37c1e78c416709f",
       "b-8-a-remote-listener-cannot-park-the-notify-handler-f-117": "43f34e1d0ea54b72546065e760f90fee8db41d0d4fac1fc843e3bb07d2b9f6ef",
       "b-9-the-environment-constructor-reads-hql-log-sync-and-hql-wal-size-f-035": "0d038c24d039d9f4364047a0fac9f021767c69d075ee90219f53125f0a24f406",
-      "verification": "e366869044f0e179b3f7d58b5ed48c894db5884be3c07bbdaef6346809b874b5"
+      "verification": "1e31a9e36e23c811c02d30073e9c94dcfc98b83ffcd8647648d393a94dbe5202"
     },
     "sectionHeadings": [
       "044: Port the upstream 0.15.0 fixes the fork lacked",
@@ -183,6 +183,6 @@
     "summary": "Ports, by hand, the fixes upstream hiqlite 0.15.0 made for ten findings this fork still carried open: an IPv6 advertised address, `node_id` read as a position, the proxy's unloadable default file and two of its panics, a dead module, a panicking derive, the dashboard's global login cooldown that let an unauthenticated client lock the operator out, a notify channel that could park the handler thread, and `HQL_LOG_SYNC` on the environment route. Accepts upstream's `HQL_HEALTH_CHECK_DELAY` / `health_check_delay` names and duration syntax, keeping the old `_SECS` spellings as deprecated aliases and the public Rust field unchanged. Must not merge before `v0.15.0-patched.4` is tagged.\n",
     "title": "Port the upstream 0.15.0 fixes the fork lacked, and accept upstream's health-check delay names"
   },
-  "shardHash": "d79156287e1d4cf31e7fe0cc59f6568f20a7ec51dfd7bd9552fe43795c33aba5",
+  "shardHash": "58f7906c8ffd4be22b9e4afd3df54476d5c857ead8f24c9335b7e0329cdf3773",
   "specVersion": "1.8.0"
 }
