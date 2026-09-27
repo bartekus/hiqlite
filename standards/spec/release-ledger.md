@@ -148,3 +148,32 @@ release carries one repair, `037` (F-134), alone; its identity and evidence are
 **Not established by this release:** the Rauthy image, a Rahi cell, N>1, a
 real `SIGKILL` leg. Each consumer's re-pin, rebuild and release is its owner's
 act.
+
+## 0.15.0-patched.4 (published 2026-09-27)
+
+Added by `041-wal-creation-durability-release`. The rows above are not edited.
+This release carries one library repair, `040` (F-135), with `039`'s evidence
+and the F-136 and F-137 corrections; its identity and evidence are `041`
+section 4.
+
+| | |
+|---|---|
+| version | `0.15.0-patched.4`, all three packages; `hiqlite-patched` requires the other two at `=0.15.0-patched.4` |
+| release commit | `df9023c6f3bc59c076dbd0a594f32e051ed3e186` on `spec-spine` (merge of #61), tree `e9efea91` |
+| supported topology | `N = 1`, unchanged |
+
+| id | subject | state | evidence |
+|---|---|---|---|
+| R-43 | `040`: a new WAL file, its header and its directory entry are synced before use | published | `040`'s regression passes in release builds on native Linux arm64 and amd64 |
+| R-44 | `036` B-5 and `037` on this tree | qualified | X-1 to X-5 30 of 30, the failed-start regression 3 of 3, and `037`'s regression under both applications' sets, on native Linux arm64 and amd64, release builds |
+| R-45 | `039`: a lock left held by a restart is granted within one lease plus two seconds | qualified | both `lease_wake` tests under Rahi's set on native Linux arm64 and amd64, release builds; Rauthy's set has no `dlock` |
+| R-46 | exact internal requirements (`=0.15.0-patched.4`) | published | the registry's `hiqlite-patched` manifest; a registry-only consumer resolved all three at `0.15.0-patched.4` |
+| R-47 | AI review | reviewed | run 36347866056 on `df9023c`; two findings predate this release and are F-142 and F-143 (`041` D-5), not repaired here |
+| R-48 | publication to crates.io | published | signed tag `v0.15.0-patched.4`; publish run 36351992275; checksums in the handoff's section 14, byte-identical to the locally packaged `.crate` files |
+| R-49 | external consumer verification | consumer-verified | a consumer outside this checkout, registry only, both applications' feature sets: built, exercised the alias and both derives, started, restarted and wrote an N=1 node |
+| R-50 | the fork release | published | https://github.com/bartekus/hiqlite/releases/tag/v0.15.0-patched.4 |
+| R-51 | the consumer handoff | published | `standards/spec/consumer-handoff.md` section 14 |
+
+**Not established by this release:** the Rauthy image, a Rahi cell, N>1, a
+real `SIGKILL` leg. Each consumer's re-pin, rebuild and release is its owner's
+act.
