@@ -11,6 +11,30 @@
 
 The release ledger and each release's consumer handoff list every other change of the `0.15.0-patched.*` releases.
 
+### Unreleased: fixes ported from upstream 0.15.0 (spec `044`)
+
+Not in `v0.15.0-patched.4`; this lands after that tag.
+
+- **Configuration, deprecation.** The health-check delay takes upstream 0.15.0's names and syntax:
+  `HQL_HEALTH_CHECK_DELAY` and the TOML key `health_check_delay`, as an integer number of seconds or a whole number
+  with one unit of `s`, `m`, `h`, `d`, `w`, `y` (for example `120s` or `2m`). `HQL_HEALTH_CHECK_DELAY_SECS` and
+  `health_check_delay_secs` still work as deprecated aliases and log a warning; if both spellings are set, the new
+  one wins and a warning says so. The Rust field `NodeConfig::health_check_delay_secs: u32` is unchanged.
+- **Configuration.** `NodeConfig::from_env` reads `HQL_LOG_SYNC` and `HQL_WAL_SIZE`; before, it hardcoded both. A
+  malformed `HQL_LOG_SYNC`, and `interval_0` on any route, is refused at startup naming the variable.
+- **Node identity.** `node_id` is looked up by id everywhere. A `nodes` list whose ids are not `1..=n` in order now
+  works, and a `node_id` that no node carries is a configuration error instead of a panic.
+- **IPv6.** A bracketed IPv6 advertised address (`[fd00::1]:8100`) produces a valid listen address.
+- **Dashboard.** The process-global five-second login cooldown after any failed login is removed: it let one
+  unauthenticated request every five seconds lock the operator out. A failed login is now answered after a
+  three-second delay that only the failing caller waits out, and password hashing is limited to one at a time. The
+  dashboard no longer answers a login with `429`.
+- **Listen / notify.** A remote `listen_notify` subscriber that does not drain its events no longer stalls the node's
+  notification handler.
+- **Server binary.** `hiqlite proxy` finds its documented default file `~/.hiqlite/hiqlite.env`, and `start_proxy`
+  returns an error for an invalid listen address instead of panicking. `#[derive(FromRow)]` on an enum or a union is a
+  compile error naming the supported shape instead of a proc-macro panic.
+
 ## v0.14.0
 
 ### Breaking
