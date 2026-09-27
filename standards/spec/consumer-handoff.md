@@ -478,9 +478,24 @@ adopting this release is its own governed decision.
 
 ## 14. 0.15.0-patched.4: WAL file-creation durability
 
-Added by `041-wal-creation-durability-release`. **Not published.** The registry
-coordinates are recorded here by the change that records the publication, if
-the owner's condition (`041` D-3) is met.
+Added by `041-wal-creation-durability-release`. The registry coordinates below
+are recorded from the registry's and the forge's own responses (`041`
+section 4).
+
+| | |
+|---|---|
+| tag | `v0.15.0-patched.4` (signed), on `df9023c6f3bc59c076dbd0a594f32e051ed3e186` |
+| GitHub release | https://github.com/bartekus/hiqlite/releases/tag/v0.15.0-patched.4 |
+| publish run | https://github.com/bartekus/hiqlite/actions/runs/36351992275 |
+| `hiqlite-patched` | `0.15.0-patched.4`, sha256 `0d5b7f4f44408434e5b0ae4366c7a8c01e5b93ef2b5b3b568ab0febda8c2ac4c` |
+| `hiqlite-wal-patched` | `0.15.0-patched.4`, sha256 `02f21bfc2836a087a5445d28296ca03858e41efc110ce272974da6eb3bfd53c7` |
+| `hiqlite-derive-patched` | `0.15.0-patched.4`, sha256 `25f07207c75b38a9bc058649c39e1700dfbfaf7ac9f6aee5bb6f30596243ea4f` |
+
+**Known and not changed by this release** (F-142 and F-143, `041` D-5): a
+replica kept current by installed snapshots does not apply snapshot retention
+on that path (not reachable at N=1); when a lock's lease has expired, a new
+lock request can evict live queued waiters, who are answered and re-request
+(no two holders at once).
 
 **What 0.15.0-patched.4 changes** (`040`, F-135): creating a WAL file, the
 first one in an empty directory or a new one at rollover, now flushes its

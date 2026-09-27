@@ -5,7 +5,7 @@ status: approved
 created: "2026-09-25"
 owner: "hiqlite maintainers"
 risk: critical
-implementation: in-progress
+implementation: complete
 depends_on:
   - "000-hiqlite-ownership-bootstrap"
   - "031-downstream-release-qualification"
@@ -29,6 +29,14 @@ extends:
   # Section 14 is added; no earlier section is changed.
   - spec: "031-downstream-release-qualification"
     unit: { kind: file, path: "standards/spec/consumer-handoff.md" }
+    nature: additive
+  # The ledger's section for this release, added by the change that recorded the publication.
+  - spec: "031-downstream-release-qualification"
+    unit: { kind: file, path: "standards/spec/release-ledger.md" }
+    nature: additive
+  # D-5: the release review's findings, recorded as F-142 and F-143.
+  - spec: "005-adoption-assessment-and-plan"
+    unit: { kind: file, path: "standards/spec/findings-register.md" }
     nature: additive
   - spec: "017-examples-as-documentation"
     unit: { kind: directory, path: "examples/" }
@@ -75,6 +83,9 @@ on the qualification bar of `0.15.0-patched.3` (`038` B-4 and B-5),
 - **Extends** `016`'s derive crate (its version line), `035`'s harness
   directory (its lockfile), `017`'s examples (their lockfiles) and
   `031`'s consumer handoff (section 14, additive).
+- **Extends** `031`'s release ledger with this release's section and `005`'s
+  findings register with F-142 and F-143, both written by the change that
+  recorded the publication (D-5).
 - **References**, without claiming, the unowned manifests, the root lockfile
   and the packaged README.
 
@@ -127,14 +138,34 @@ named in D-3 reads `status: approved` at the release commit.
 
 ## 4. Evidence and its limits
 
-Not yet produced. This change prepares the release; the qualification legs of
-B-4 run on the frozen candidate once the owner's condition (D-3) is met,
-and their results are recorded here by that change. The raw logs will be under
-`~/DevDep/hiqlite-release-artifacts/0.15.0-patched.4/` (`CANDIDATE.md`).
+Recorded after the tag (`036` D-3). The raw logs, digests, package
+inventories and consumer builds are outside the repository under
+`~/DevDep/hiqlite-release-artifacts/0.15.0-patched.4/` (`CANDIDATE.md` is the
+index), as `038`'s were.
 
-Local, on this branch (macOS arm64, spec-spine 0.26.0): every lockfile still
-satisfies its manifest (`cargo metadata --locked`, root, four examples, the N=1
-harness; the N=3 harness left the tree with lane B, D-4).
+**Trees.** D-3's condition was met at `df9023c` (#61 approved `042` and `043`;
+#58 had approved `039`, `040` and `041`). The runs used that commit as the
+frozen candidate, tree `e9efea91`, and the tag is on the same commit, so every
+package and harness input is the one qualified. No release branch was needed:
+`041`'s preparation (#51) had already set the versions on `spec-spine`.
+
+| item (B-1, B-4, B-5) | where | result |
+|---|---|---|
+| gates and acceptance | post-merge runs on `df9023c` | Acceptance 36260208364 and statecraft-ci 36260208590 success |
+| packages (B-1) | macOS arm64, `cargo package` of the three together from `df9023c`, with verification | 175, 17 and 7 files; exact `=0.15.0-patched.4` internal requirements; `openraft =0.9.25`; the three `.crate` files are byte-identical to the registry's |
+| `036` B-5 harness | native Linux arm64 (Docker Desktop) and native Linux amd64 (run 36347667431, tree hash checked in the job) | X-1 to X-5: 30 of 30 pass on each; X-7 recorded; release builds |
+| failed-start regression (`035` D-11) | same two | 3 of 3 pass on each |
+| `037` regression, release build | same two, Rauthy's and Rahi's feature sets | passes on each |
+| `040` regression, release build | same two | `creating_a_wal_file_syncs_its_directory` passes on each |
+| `039` regressions, release build | same two | both `lease_wake` tests pass under Rahi's set on each; Rauthy's set has no `dlock`, so that target lists zero tests there, which the leg asserts |
+| AI review of the release commit | run 36347866056 on `df9023c` (tag `review-v0.15.0-patched.4`) | a report; two findings predate this release and are F-142 and F-143, the third does not hold (D-5) |
+| publication | signed tag `v0.15.0-patched.4`; publish run 36351992275 | the three packages published; checksums in the handoff's section 14 |
+| registry read-back | anonymous, crates.io API, 2026-09-27 | all three served at `0.15.0-patched.4`, not yanked |
+| fresh consumer | macOS arm64, registry only (no path, Git or patch) | built, exercised the alias and both derives; an N=1 node under Rauthy's and Rahi's feature sets started, restarted and wrote immediately after the restart; both resolved all three at `0.15.0-patched.4` and `openraft 0.9.25` |
+| fork release | https://github.com/bartekus/hiqlite/releases/tag/v0.15.0-patched.4 | pre-release |
+
+**Not run:** a Rauthy image, a Rahi cell, any N>1 topology, a real `SIGKILL`
+leg.
 
 ## 5. Known defects
 
@@ -186,6 +217,22 @@ qualification. This spec takes none of the three.
 `033` D-12 and `034` D-10 record it. The reland (the revert of that revert) is
 a draft pull request that waits for `033`'s N=3 qualification. `033` and `034`
 need no ratification for this release. KD-2 is withdrawn.
+
+**D-5 (2026-09-27, the release review's findings do not block this release).**
+The AI review of `df9023c` reported two defects in code this release does not
+change: snapshot retention is not applied on the install path, and an expired
+lease lets a new lock request evict live queued waiters. Both are in the
+published `0.15.0-patched.1` to `.3`, the first is not reachable at N=1, and
+neither is made worse here, so the release proceeded as `038` D-5 did and they
+are recorded as F-142 and F-143, each for a separate change. Its third item,
+that CI enforces the committed lockfile only at the start of the check job,
+does not hold for the root lockfile: the job's last step,
+`git diff --exit-code -- Cargo.lock`, fails the job if any step changed it
+(F-108). The examples' lockfiles, which that step does not cover, are F-083.
+The review also noted that `020`'s inventory says only `purge` takes both
+locks while `get_log_state` does too, in the same order; that is a wording
+error in `020`, not a defect, and is left to the next change that touches
+`020`.
 
 ## 7. Out of scope
 

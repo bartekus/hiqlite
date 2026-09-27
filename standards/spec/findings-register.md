@@ -3554,3 +3554,42 @@ default ephemeral range (32768 to 60999), where any outbound connection on the
 host can hold the port; macOS's range starts at 49152, which is why it never
 failed there. The cause on the runner is inferred, not observed: what held
 38612 was not captured. Test isolation only. Repaired by `043` B-2.
+
+## Found by the AI review of the 0.15.0-patched.4 release commit (2026-09-27)
+
+Recorded by `041-wal-creation-durability-release` (D-5), from run 36347866056
+on `df9023c`. Each was read at source here; none was executed. Both are in the
+published `0.15.0-patched.1` to `.4`, and neither is repaired by `041`. The
+review's third item (the qualification lockfile enforced only at the start of
+the check job) does not hold for the root lockfile, whose last step fails the
+job on any change (F-108); the examples' lockfiles are F-083.
+
+### F-142 `defect`, confidence `high`
+
+**Snapshot retention is not applied on the install path.** `snapshots_cleanup`
+(`hiqlite/src/store/state_machine/sqlite/snapshot_builder.rs`) is called from
+one place, `build_snapshot`. `install_snapshot` (`state_machine.rs`) stages,
+validates, restores and publishes a received snapshot (`025` B-1 to B-4) and
+never prunes, so `025`'s "the newest two are kept" holds only for snapshots a
+node builds itself. A replica kept current by installed snapshots (a lagging
+follower, a learner) accumulates one database-sized file per install until its
+volume fills, which on a volume shared with the WAL is a durability incident.
+Not reachable at N=1, where a node never receives a snapshot; it is an N=3
+exposure (`033`).
+
+### F-143 `defect`, confidence `medium`
+
+**An expired lease lets a new lock request evict live waiters.** In the
+distributed-lock handler (`hiqlite/src/store/state_machine/memory/dlock_handler.rs`),
+when the lock's single `exp` has passed, the `Lock` arm pops queue tickets
+`while` the front is not the request's own `log_id`, answering each with
+`Released`. A brand-new request's ticket is not in the queue yet, so the loop
+drains every queued waiter, including ones never promoted, which had no lease
+window of their own; the `Acquire` arm does the same for every ticket ahead of
+a re-requester. Evicted waiters re-request and are served, and no two tickets
+hold the lock at once, so this is ordering and fairness, not safety: a new
+caller can take the lock ahead of a whole live backlog after a holder dies.
+`023` KD-6 records that order is not preserved among re-requesters after a
+dead holder; it does not say that a fresh caller can overtake waiters that
+never had a window. Read at source; the consequence is inferred and has not
+been executed.

@@ -41,6 +41,22 @@
       },
       {
         "nature": "additive",
+        "spec": "031-downstream-release-qualification",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/release-ledger.md"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "005-adoption-assessment-and-plan",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/findings-register.md"
+        }
+      },
+      {
+        "nature": "additive",
         "spec": "017-examples-as-documentation",
         "unit": {
           "kind": "directory",
@@ -49,7 +65,7 @@
       }
     ],
     "id": "041-wal-creation-durability-release",
-    "implementation": "in-progress",
+    "implementation": "complete",
     "origin": {
       "retroactive": false
     },
@@ -86,13 +102,13 @@
     ],
     "risk": "critical",
     "sectionDigests": {
-      "041-release-the-wal-file-creation-durability-repair-as-0-15-0-patched-4": "fa71f55f06a14a43681f1ac4b9d576dcb0d98ab27b5418dea09613a6deb2d019",
+      "041-release-the-wal-file-creation-durability-repair-as-0-15-0-patched-4": "9ec6972db58f3260d3153ff9064a4ae91cb27d4d57421d61d7cdbca9d2b94baf",
       "1-purpose": "6cfbb8963cfa0dc8294e397e967e8be52880bc6d03f9d079e8d85eb335092af5",
-      "2-territory": "4f6ff3b25c53140df915dca195c2a9917b74d53e514f3b9963fe67ee0dba616e",
+      "2-territory": "36e9bd47ec0fe077e83ba2926f0486e05e66b2fa91d412c0b9012c22a7bb855c",
       "3-behavior": "816858d53573c52b4c165aed12894cfcf0af140a8fb28ed63edccbc262f0eb88",
-      "4-evidence-and-its-limits": "024cacf19569e40988c9ac059dbbff5ee537f7a07295d4ee6f2105b90a2d049e",
+      "4-evidence-and-its-limits": "dca5645f7debbf19f446b206c06e4f3a96a3f64344f7f70c117c8c90c816b962",
       "5-known-defects": "9886dfa1a5b0890b9c151c4485e5dde6c8961726db6712012d80b5af49045fe2",
-      "6-resolved-decisions": "35de18b12b6b5c8c293f0a3902f4b01762f4159d28eec0eded68ae6ac72a7fa5",
+      "6-resolved-decisions": "27d1ca2824d6a2de21158503a4ba5b1f41c8d8baa0eaa44b3a0914fda5ca20b8",
       "7-out-of-scope": "01f373d94b0ad571782f82e6b1c5fb0832ba61a584d69cfd721f1c14fa95b541",
       "b-1-one-version-three-packages-in-lockstep-exact": "571d49f65b084b12f4e425b5c5418de9adf07683cfb58773af90300602f748b3",
       "b-2-what-this-release-carries": "29f52020ef43af9409831e3b0d8fe005bd7a6a367b1ebc7d8350221338e2f946",
@@ -122,6 +138,6 @@
     "summary": "The release identity of `040`'s repair (F-135): all three packages at 0.15.0-patched.4, in lockstep, with exact internal requirements and openraft still =0.9.25. It also carries what merged after patched.3: `039`'s lock-after-restart evidence and the F-136 and F-137 corrections. Lane B of the N=3 proposal (#39) is not in it: the owner reverted it on trunk before the release commit (D-4). Publication waits for the owner's ratification of every spec the release contains (D-3).\n",
     "title": "Release the WAL file-creation durability repair as 0.15.0-patched.4"
   },
-  "shardHash": "735772bb797f6c25b16e8013c466e23cf5ef518e0d590269f33110665e3c13e2",
+  "shardHash": "2358ccc11a8c3e1a233eff0ef042f6820e7e0bf8e0027ee98b0e71a7a228bb99",
   "specVersion": "1.8.0"
 }
