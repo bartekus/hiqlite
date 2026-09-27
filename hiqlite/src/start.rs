@@ -215,6 +215,26 @@ where
     let tls_api_client_config = node_config.tls_api.clone().map(|c| c.client_config());
     let tls_raft = node_config.tls_raft.is_some();
 
+    // F-038 (`044` B-2): this node's addresses were taken from `nodes[node_id - 1]`, a
+    // position, while `init` registers the node whose `id` is `node_id`. Both now look the node
+    // up by id. `is_valid` above already refuses an absent id; this is resolved here, before
+    // either raft group starts, so it can never need a partial-start teardown, and it is a
+    // returned error rather than an `expect` if the two ever disagree.
+    let this_node = node_config
+        .nodes
+        .iter()
+        .find(|node| node.id == node_config.node_id)
+        .cloned()
+        .ok_or_else(|| {
+            Error::Config(
+                format!(
+                    "NodeConfig.node_id {} not found in NodeConfig.nodes",
+                    node_config.node_id
+                )
+                .into(),
+            )
+        })?;
+
     // F-044: `tls_no_verify` was derived from `node_config.tls_raft` and then handed to every
     // caller that talks to `addr_api`, which is the **API** endpoint and has its own TLS
     // configuration. Two of the four consumers of that value therefore took the raft channel's
@@ -337,10 +357,7 @@ where
     };
 
     let (api_addr, rpc_addr) = {
-        let node = node_config
-            .nodes
-            .get(node_config.node_id as usize - 1)
-            .expect("NodeConfig.node_id not found in NodeConfig.nodes");
+        let node = &this_node;
 
         let api_addr = build_listen_addr(
             &node_config.listen_addr_api,
@@ -606,15 +623,38 @@ where
 }
 
 /// The port will be split off from the `node_addr`
+///
+/// F-037 (`044` B-1): this split at the **first** `:`, so a bracketed IPv6 advertised address
+/// such as `[fd00::1]:8100` yielded the "port" `:1]:8100`. The port is what follows the last
+/// `:` outside the brackets, as upstream 0.15.0 does with `rsplit_once(':')`, and a bracketed
+/// address with no port falls back to the scheme default instead of taking part of the address.
+/// A bare IPv6 listen host such as `::` is bracketed, because `:::8100` is not a socket address.
 fn build_listen_addr(listen_addr: &str, node_addr: &str, tls: bool) -> String {
-    let port = if let Some((_, port)) = node_addr.split_once(':') {
+    let port = if let Some(port) = advertised_port(node_addr) {
         port
     } else if tls {
         "443"
     } else {
         "80"
     };
-    format!("{listen_addr}:{port}")
+    if listen_addr.contains(':') && !listen_addr.starts_with('[') {
+        format!("[{listen_addr}]:{port}")
+    } else {
+        format!("{listen_addr}:{port}")
+    }
+}
+
+/// The port of an advertised `host:port`, `[v6]:port` or bare host, if it carries one.
+fn advertised_port(node_addr: &str) -> Option<&str> {
+    if node_addr.starts_with('[') {
+        // Bracketed IPv6: only a `:` after the closing bracket separates a port.
+        node_addr
+            .split_once("]:")
+            .map(|(_, port)| port)
+            .filter(|port| !port.is_empty())
+    } else {
+        node_addr.rsplit_once(':').map(|(_, port)| port)
+    }
 }
 
 async fn shutdown_signal(mut rx: tokio::sync::watch::Receiver<bool>) {
@@ -647,20 +687,30 @@ mod tests {
         assert_eq!(build_listen_addr("0.0.0.0", "node1", false), "0.0.0.0:80");
     }
 
-    /// 010 KD-1. `split_once(':')` splits a bracketed IPv6 advertised address at
-    /// the first colon inside the brackets, so the "port" carries the rest of
-    /// the address and the result is not a socket address at all. The caller
-    /// then `expect`s it inside a detached task, so the node keeps running with
-    /// no listener on that address.
+    /// Replaces `ipv6_advertised_address_produces_an_unparsable_listen_address`, which pinned
+    /// F-037 (010 KD-1): `split_once(':')` split a bracketed IPv6 advertised address at the
+    /// first colon inside the brackets, so the result was `::::1]:8100`. `044` B-1.
     #[test]
-    fn ipv6_advertised_address_produces_an_unparsable_listen_address() {
+    fn an_ipv6_advertised_address_yields_a_parsable_listen_address() {
         let addr = build_listen_addr("::", "[fd00::1]:8100", false);
-        assert_eq!(addr, "::::1]:8100");
-        assert!(SocketAddr::from_str(&addr).is_err());
+        assert_eq!(addr, "[::]:8100");
+        assert!(SocketAddr::from_str(&addr).is_ok(), "got {addr}");
 
+        let bracketed = build_listen_addr("[::]", "[fd00::1]:8100", false);
+        assert_eq!(bracketed, "[::]:8100");
+        assert!(SocketAddr::from_str(&bracketed).is_ok(), "got {bracketed}");
+
+        // No port on a bracketed address: the scheme default, not a piece of the address.
         let no_port = build_listen_addr("::", "[fd00::1]", false);
-        assert_eq!(no_port, "::::1]");
-        assert!(SocketAddr::from_str(&no_port).is_err());
+        assert_eq!(no_port, "[::]:80");
+        assert!(SocketAddr::from_str(&no_port).is_ok(), "got {no_port}");
+        assert_eq!(build_listen_addr("::", "[fd00::1]", true), "[::]:443");
+
+        // IPv4 and host names are unchanged.
+        assert_eq!(
+            build_listen_addr("0.0.0.0", "10.0.0.1:8100", false),
+            "0.0.0.0:8100"
+        );
     }
 
     /// F-040: the address parse and the bind were `expect`/`unwrap` inside tasks whose

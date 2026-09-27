@@ -6,7 +6,6 @@ use clap::Parser;
 use tracing::info;
 
 mod args;
-mod cache;
 pub mod config;
 mod logging;
 mod password;
@@ -31,7 +30,7 @@ pub async fn server() -> Result<(), Error> {
             logging::init_logging(&args.log_level, None);
             info!("Hiqlite Proxy v{}", APP_VERSION);
 
-            let config = Config::parse(args.config_file);
+            let config = Config::parse(config::proxy_config_file_path(args.config_file));
             config.is_valid()?;
 
             proxy::start_proxy(config).await?;

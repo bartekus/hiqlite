@@ -22,7 +22,7 @@ establishes:
   - "hiqlite/src/main.rs"
   - "hiqlite/src/server/mod.rs"
   - "hiqlite/src/server/args.rs"
-  - "hiqlite/src/server/cache.rs"
+  # `hiqlite/src/server/cache.rs` was listed here; `044` removed the file (F-075, `044` D-3).
   - "hiqlite/src/server/config.rs"
   - "hiqlite/src/server/logging.rs"
   - "hiqlite/src/server/password.rs"

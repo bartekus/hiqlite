@@ -1,0 +1,188 @@
+{
+  "record": {
+    "amends": [
+      "009-configuration-contract",
+      "010-node-lifecycle-and-split-brain",
+      "015-server-binary-and-proxy",
+      "016-derive-macros",
+      "018-dashboard-service-and-ui",
+      "029-consumer-surface-repairs",
+      "030-transport-security-and-dashboard-repairs",
+      "035-n1-upgrade-exclusion"
+    ],
+    "amendsVerification": [
+      "029-consumer-surface-repairs",
+      "030-transport-security-and-dashboard-repairs",
+      "035-n1-upgrade-exclusion"
+    ],
+    "created": "2026-09-27",
+    "dependsOn": [
+      "000-hiqlite-ownership-bootstrap",
+      "005-adoption-assessment-and-plan",
+      "009-configuration-contract",
+      "010-node-lifecycle-and-split-brain",
+      "015-server-binary-and-proxy",
+      "016-derive-macros",
+      "018-dashboard-service-and-ui",
+      "027-node-lifecycle-and-startup-errors",
+      "029-consumer-surface-repairs",
+      "030-transport-security-and-dashboard-repairs",
+      "032-listen-notify-subscription-readiness",
+      "035-n1-upgrade-exclusion",
+      "041-wal-creation-durability-release"
+    ],
+    "extends": [
+      {
+        "nature": "superseding",
+        "spec": "010-node-lifecycle-and-split-brain",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/start.rs"
+        }
+      },
+      {
+        "nature": "superseding",
+        "spec": "010-node-lifecycle-and-split-brain",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/init.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "001-wal-durability-and-completion",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/config.rs"
+        }
+      },
+      {
+        "nature": "superseding",
+        "spec": "009-configuration-contract",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/config_toml.rs"
+        }
+      },
+      {
+        "nature": "superseding",
+        "spec": "009-configuration-contract",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite.env"
+        }
+      },
+      {
+        "nature": "superseding",
+        "spec": "009-configuration-contract",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite.toml"
+        }
+      },
+      {
+        "nature": "superseding",
+        "spec": "015-server-binary-and-proxy",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/server/"
+        }
+      },
+      {
+        "nature": "superseding",
+        "spec": "016-derive-macros",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite-derive/src/from_row.rs"
+        }
+      },
+      {
+        "nature": "superseding",
+        "spec": "018-dashboard-service-and-ui",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/dashboard/"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "003-client-consistency-and-retry-outcomes",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/network/"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "006-cache-state-machine",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/store/state_machine/memory/"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "005-adoption-assessment-and-plan",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/findings-register.md"
+        }
+      }
+    ],
+    "id": "044-port-upstream-015-fixes",
+    "implementation": "complete",
+    "origin": {
+      "retroactive": false
+    },
+    "owner": "hiqlite maintainers",
+    "risk": "high",
+    "sectionDigests": {
+      "044-port-the-upstream-0-15-0-fixes-the-fork-lacked": "333a69220068455a090206e21d902726321d8b3a8efa1fe59ce0b52047065851",
+      "1-purpose": "f70b14f7372942d5dcfb30bf864465115c1dcc1e172015955dfe4f57ad6ad792",
+      "2-territory": "f564015d38449fb7f20b6bfe7a37747b45d6f7bd1fc898ef818cec11968722f0",
+      "3-behavior": "3af7fe9575d364d34d7458c9a8f58dbeb2714923195149ba584e9de5141ebe53",
+      "4-evidence-and-its-limits": "8fa7c07b201706535aeae6149c6795b84d89a68b240351445c833757b733daf5",
+      "5-known-defects": "031a205f07c850fd9b7e8d615da2698e09578067ca71a8c0b5b0ecddb66937a8",
+      "6-resolved-decisions": "6b399b4312968986a8d831856739b5e82a6de956c09684037ae9114bd62ce594",
+      "7-out-of-scope": "533cc2632f89967b1be99a9090511d7ff3c5254cbe38d830a9c8cd483d887424",
+      "b-1-a-bracketed-ipv6-advertised-address-yields-a-parsable-listen-address-f-037": "ad04a4c5a1133c4e6a5c8f100d98314062aeba7038977d8a4538643824915a94",
+      "b-10-hql-health-check-delay-and-health-check-delay-are-accepted": "d2e9f123fe191f9f0d88afd1c2084f16ec152f18ca7eda14f912ff6472f0e8cf",
+      "b-2-node-id-is-an-id-everywhere-f-038": "2b779028787475d85781179a31efd5c39b99f11a6d94c88ad98171ad64b8e2b5",
+      "b-3-the-proxy-finds-its-documented-default-file-f-070": "8b30dc23f428259676b627559b34ab782cad9e73d340cc86ce5cca26d251f170",
+      "b-4-start-proxy-returns-the-errors-upstream-returns-f-072-in-part": "1ba66e09b63ed19a94d78f72cc96d785d0277979d53a1e4f3a34641181983639",
+      "b-5-the-dead-server-cache-rs-module-is-removed-f-075": "abd6d550742daadd77c00d888353597c4454a7b645517efa7529c22adbf954a9",
+      "b-6-derive-fromrow-on-an-enum-or-a-union-is-a-diagnostic-f-080": "2322252366189b5b2ba6167d2a77106ee4eb539357b47895bc8a44961c03df50",
+      "b-7-no-global-login-cooldown-one-hashing-permit-and-a-per-failure-delay-f-087-f-095-f-084": "26d94df8c65e02146131857554e1a88de9201576044ce0d0d37c1e78c416709f",
+      "b-8-a-remote-listener-cannot-park-the-notify-handler-f-117": "43f34e1d0ea54b72546065e760f90fee8db41d0d4fac1fc843e3bb07d2b9f6ef",
+      "b-9-the-environment-constructor-reads-hql-log-sync-and-hql-wal-size-f-035": "0d038c24d039d9f4364047a0fac9f021767c69d075ee90219f53125f0a24f406",
+      "verification": "e366869044f0e179b3f7d58b5ed48c894db5884be3c07bbdaef6346809b874b5"
+    },
+    "sectionHeadings": [
+      "044: Port the upstream 0.15.0 fixes the fork lacked",
+      "1. Purpose",
+      "2. Territory",
+      "3. Behavior",
+      "B-1. A bracketed IPv6 advertised address yields a parsable listen address (F-037)",
+      "B-2. `node_id` is an id everywhere (F-038)",
+      "B-3. The proxy finds its documented default file (F-070)",
+      "B-4. `start_proxy` returns the errors upstream returns (F-072, in part)",
+      "B-5. The dead `server/cache.rs` module is removed (F-075)",
+      "B-6. `#[derive(FromRow)]` on an enum or a union is a diagnostic (F-080)",
+      "B-7. No global login cooldown; one hashing permit and a per-failure delay (F-087, F-095, F-084)",
+      "B-8. A remote listener cannot park the notify handler (F-117)",
+      "B-9. The environment constructor reads `HQL_LOG_SYNC` and `HQL_WAL_SIZE` (F-035)",
+      "B-10. `HQL_HEALTH_CHECK_DELAY` and `health_check_delay` are accepted",
+      "4. Evidence and its limits",
+      "5. Known defects",
+      "6. Resolved decisions",
+      "7. Out of scope",
+      "Verification"
+    ],
+    "specPath": "specs/044-port-upstream-015-fixes/spec.md",
+    "status": "draft",
+    "summary": "Ports, by hand, the fixes upstream hiqlite 0.15.0 made for ten findings this fork still carried open: an IPv6 advertised address, `node_id` read as a position, the proxy's unloadable default file and two of its panics, a dead module, a panicking derive, the dashboard's global login cooldown that let an unauthenticated client lock the operator out, a notify channel that could park the handler thread, and `HQL_LOG_SYNC` on the environment route. Accepts upstream's `HQL_HEALTH_CHECK_DELAY` / `health_check_delay` names and duration syntax, keeping the old `_SECS` spellings as deprecated aliases and the public Rust field unchanged. Must not merge before `v0.15.0-patched.4` is tagged.\n",
+    "title": "Port the upstream 0.15.0 fixes the fork lacked, and accept upstream's health-check delay names"
+  },
+  "shardHash": "d79156287e1d4cf31e7fe0cc59f6568f20a7ec51dfd7bd9552fe43795c33aba5",
+  "specVersion": "1.8.0"
+}

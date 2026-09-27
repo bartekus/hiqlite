@@ -69,9 +69,7 @@ pub async fn health(state: AppStateExt) -> Result<(), Error> {
 #[cfg(any(feature = "sqlite", feature = "cache"))]
 async fn check_health(state: &AppStateExt) -> Result<(), Error> {
     if Utc::now().sub(state.app_start).num_seconds() < state.health_check_delay_secs as i64 {
-        info!(
-            "Early health check within the HQL_HEALTH_CHECK_DELAY_SECS timeframe - returning true"
-        );
+        info!("Early health check within the HQL_HEALTH_CHECK_DELAY timeframe - returning true");
         return Ok(());
     }
 
@@ -360,7 +358,10 @@ pub async fn listen(
     // `037`: an event stream is not opened before recovery; the remote listener reconnects.
     state.ensure_recovered()?;
 
-    let (tx, rx) = flume::bounded(1);
+    // F-117 (`044` B-8): this was `flume::bounded(1)`, and the notify handler forwards with the
+    // blocking `send`, so a subscriber that had not drained its first event parked the OS thread
+    // the handler runs on. Unbounded, as upstream 0.15.0 has it; the handler asserts it.
+    let (tx, rx) = flume::unbounded();
     let (ack, ack_rx) = tokio::sync::oneshot::channel();
     state
         .raft_cache

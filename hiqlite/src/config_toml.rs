@@ -1,4 +1,7 @@
-use crate::config::RateLimitConfig;
+use crate::config::{
+    HEALTH_CHECK_DELAY_ENV, HEALTH_CHECK_DELAY_SECS_ENV, RateLimitConfig,
+    health_check_delay_secs_from_str, pick_health_check_delay,
+};
 use crate::tls::{ServerTlsConfig, ServerTlsConfigCerts};
 use crate::{Error, Node, NodeConfig};
 use hiqlite_wal::LogSync;
@@ -250,16 +253,23 @@ impl NodeConfig {
             )));
         };
 
-        let health_check_delay_secs =
-            // F-032: the empty `env_var` meant `HQL_HEALTH_CHECK_DELAY_SECS` was documented in
-            // `hiqlite.env` and read by nothing.
-            t_u32(
-                &mut map,
-                t_name,
-                "health_check_delay_secs",
-                HEALTH_CHECK_DELAY_ENV,
+        // F-032: the empty `env_var` meant `HQL_HEALTH_CHECK_DELAY_SECS` was documented in
+        // `hiqlite.env` and read by nothing.
+        // `044` B-10: `health_check_delay` / `HQL_HEALTH_CHECK_DELAY` are upstream 0.15.0's
+        // names and take its duration syntax; the `_secs` spellings are deprecated aliases. The
+        // preferred name wins wherever it is set. Both keys are always consumed, so neither
+        // reaches the unknown-key check.
+        let health_check_delay_secs = {
+            let preferred = t_health_check_delay(&mut map, t_name);
+            let deprecated = t_health_check_delay_secs(&mut map, t_name);
+            pick_health_check_delay(
+                preferred,
+                "health_check_delay / HQL_HEALTH_CHECK_DELAY",
+                deprecated,
+                "health_check_delay_secs / HQL_HEALTH_CHECK_DELAY_SECS",
             )?
-            .unwrap_or(30);
+            .unwrap_or(30)
+        };
         let learner_only =
             t_bool(&mut map, t_name, "learner_only", "HQL_LEARNER_ONLY")?.unwrap_or(false);
 
@@ -512,11 +522,46 @@ fn t_bool(
     }
 }
 
-/// The documented environment variable for `health_check_delay_secs`.
+/// `health_check_delay` or `HQL_HEALTH_CHECK_DELAY` (the variable wins), in upstream 0.15.0's
+/// duration syntax: an integer is seconds, a string may carry one unit of `s,m,h,d,w,y`.
+/// `None` when neither is set. `044` B-10.
 ///
-/// Named rather than inlined so a test can assert the parser is given it: F-032 was an empty
-/// string in this position, which made the variable a documentation-only fiction.
-pub(crate) const HEALTH_CHECK_DELAY_ENV: &str = "HQL_HEALTH_CHECK_DELAY_SECS";
+/// The variable names are the constants in `config`, so a test can assert the parser is given
+/// them: F-032 was an empty string in this position, which made the variable a
+/// documentation-only fiction.
+fn t_health_check_delay(map: &mut toml::Table, parent: &str) -> Option<Result<u32, Error>> {
+    const KEY: &str = "health_check_delay";
+    let value = map.remove(KEY);
+    if let Ok(v) = env::var(HEALTH_CHECK_DELAY_ENV) {
+        return Some(health_check_delay_secs_from_str(&v, HEALTH_CHECK_DELAY_ENV));
+    }
+    let sep = if parent.is_empty() { "" } else { "." };
+    Some(match value? {
+        Value::String(v) => health_check_delay_secs_from_str(&v, &format!("{parent}{sep}{KEY}")),
+        Value::Integer(i) => {
+            u32::try_from(i).map_err(|_| Error::config(err_t(KEY, parent, "Duration")))
+        }
+        _ => Err(Error::config(err_t(KEY, parent, "Duration"))),
+    })
+}
+
+/// The deprecated `health_check_delay_secs` or `HQL_HEALTH_CHECK_DELAY_SECS` (the variable
+/// wins), an integer number of seconds as before. `None` when neither is set.
+fn t_health_check_delay_secs(map: &mut toml::Table, parent: &str) -> Option<Result<u32, Error>> {
+    const KEY: &str = "health_check_delay_secs";
+    let value = map.remove(KEY);
+    if let Ok(v) = env::var(HEALTH_CHECK_DELAY_SECS_ENV) {
+        return Some(
+            v.trim()
+                .parse::<u32>()
+                .map_err(|_| Error::config(err_t(KEY, parent, "u32"))),
+        );
+    }
+    Some(match value? {
+        Value::Integer(i) => u32::try_from(i).map_err(|_| Error::config(err_t(KEY, parent, "u32"))),
+        _ => Err(Error::config(err_t(KEY, parent, "u32"))),
+    })
+}
 
 fn t_i64(
     map: &mut toml::Table,
@@ -998,16 +1043,18 @@ mod tests {
     /// parser passed an empty `env_var`, so the `HQL_HEALTH_CHECK_DELAY_SECS` documented in
     /// `hiqlite.env` was read by nothing on either route.
     ///
-    /// It now has both. The environment half cannot be asserted here, for the reason the
-    /// module comment above gives and which this repair made sharper: `from_toml_table` calls
-    /// `dotenvy::dotenv()` and `t_u32` prefers the variable, and `config::tests`'s
-    /// `from_env_file("hiqlite.env")` loads that whole file into the **process** environment,
-    /// so any variable set uncommented there leaks into every later test in this binary. That
-    /// is F-055's shape inside the library's own test binary. The line for this variable in
-    /// `hiqlite.env` is commented out for exactly that reason, which is also what keeps this
-    /// assertion about the TOML key meaningful.
+    /// It now has both, and since `044` B-10 the upstream 0.15.0 spelling as well. The
+    /// environment half cannot be asserted here, for the reason the module comment above gives
+    /// and which this repair made sharper: `from_toml_table` calls `dotenvy::dotenv()` and the
+    /// parser prefers the variable, and `config::tests`'s `from_env_file("hiqlite.env")` loads
+    /// that whole file into the **process** environment, so any variable set uncommented there
+    /// leaks into every later test in this binary. That is F-055's shape inside the library's
+    /// own test binary. The lines for these variables in `hiqlite.env` are commented out for
+    /// exactly that reason, which is also what keeps these assertions about the TOML keys
+    /// meaningful.
     #[tokio::test]
     async fn health_check_delay_secs_is_settable_from_toml_and_from_the_environment() {
+        // The deprecated key still works on its own.
         let cfg = parse_cfg("health_check_delay_secs = 7\n").await.unwrap();
         assert_eq!(cfg.health_check_delay_secs, 7);
 
@@ -1016,9 +1063,30 @@ mod tests {
 
         // The environment route is a source change, asserted at the parser's own boundary
         // rather than by mutating the process environment.
-        assert!(
-            HEALTH_CHECK_DELAY_ENV == "HQL_HEALTH_CHECK_DELAY_SECS",
-            "the parser must be given the documented variable name"
-        );
+        assert_eq!(HEALTH_CHECK_DELAY_ENV, "HQL_HEALTH_CHECK_DELAY");
+        assert_eq!(HEALTH_CHECK_DELAY_SECS_ENV, "HQL_HEALTH_CHECK_DELAY_SECS");
+    }
+
+    /// `044` B-10: `health_check_delay` takes upstream 0.15.0's syntax, wins over the
+    /// deprecated key when both are set, and neither key is left for the unknown-key check.
+    #[tokio::test]
+    async fn health_check_delay_takes_upstreams_name_and_syntax_and_wins_over_the_old_key() {
+        let cfg = parse_cfg("health_check_delay = \"2m\"\n").await.unwrap();
+        assert_eq!(cfg.health_check_delay_secs, 120);
+
+        let cfg = parse_cfg("health_check_delay = 45\n").await.unwrap();
+        assert_eq!(cfg.health_check_delay_secs, 45);
+
+        let cfg = parse_cfg("health_check_delay = \"120s\"\nhealth_check_delay_secs = 7\n")
+            .await
+            .unwrap();
+        assert_eq!(cfg.health_check_delay_secs, 120, "the preferred key wins");
+
+        let err = parse_cfg("health_check_delay = \"soon\"\n")
+            .await
+            .expect_err("an unparsable duration is a configuration error");
+        assert!(err.to_string().contains("health_check_delay"), "got: {err}");
+
+        assert!(parse_cfg("health_check_delay = -1\n").await.is_err());
     }
 }

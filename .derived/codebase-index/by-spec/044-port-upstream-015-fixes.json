@@ -1,0 +1,241 @@
+{
+  "mapping": {
+    "amends": [
+      "009-configuration-contract",
+      "010-node-lifecycle-and-split-brain",
+      "015-server-binary-and-proxy",
+      "016-derive-macros",
+      "018-dashboard-service-and-ui",
+      "029-consumer-surface-repairs",
+      "030-transport-security-and-dashboard-repairs",
+      "035-n1-upgrade-exclusion"
+    ],
+    "dependsOn": [
+      "000-hiqlite-ownership-bootstrap",
+      "005-adoption-assessment-and-plan",
+      "009-configuration-contract",
+      "010-node-lifecycle-and-split-brain",
+      "015-server-binary-and-proxy",
+      "016-derive-macros",
+      "018-dashboard-service-and-ui",
+      "027-node-lifecycle-and-startup-errors",
+      "029-consumer-surface-repairs",
+      "030-transport-security-and-dashboard-repairs",
+      "032-listen-notify-subscription-readiness",
+      "035-n1-upgrade-exclusion",
+      "041-wal-creation-durability-release"
+    ],
+    "implementingPaths": [
+      {
+        "path": "hiqlite-derive/src/from_row.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite.env",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite.toml",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/config.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/config_toml.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/dashboard/",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/init.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/network/",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/server/",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/start.rs",
+        "source": "spec-edge"
+      },
+      {
+        "path": "hiqlite/src/store/state_machine/memory/",
+        "source": "spec-edge"
+      },
+      {
+        "path": "standards/spec/findings-register.md",
+        "source": "spec-edge"
+      }
+    ],
+    "resolvedUnits": [
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/dashboard/"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/dashboard/"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/network/"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/network/"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/server/"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/server/"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/store/state_machine/memory/"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/store/state_machine/memory/"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite-derive/src/from_row.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite-derive/src/from_row.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite.env"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite.env"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite.toml"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite.toml"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/config.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/config.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/config_toml.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/config_toml.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/init.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/init.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/start.rs"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/start.rs"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "standards/spec/findings-register.md"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "file",
+          "path": "standards/spec/findings-register.md"
+        }
+      }
+    ],
+    "specId": "044-port-upstream-015-fixes",
+    "specStatus": "draft"
+  },
+  "schemaVersion": "1.1.0",
+  "shardHash": "7c55c6470acb5d06ffe051a7e3d2b5968342fc7176564e09f3317701651dfda3"
+}
