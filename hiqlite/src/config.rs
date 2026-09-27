@@ -3,7 +3,8 @@ use crate::{Error, Node, NodeId};
 use openraft::SnapshotPolicy;
 use std::borrow::Cow;
 use std::env;
-use tracing::{debug, warn};
+use std::time::Duration;
+use tracing::{debug, error, warn};
 
 #[cfg(feature = "backup")]
 use crate::backup;
@@ -182,11 +183,7 @@ impl Default for NodeConfig {
             // `Default` cannot return an error, and this used to `expect`, so a malformed value
             // panicked in every consumer that built a configuration. It now leaves `0`, which
             // no WAL accepts, and `is_valid` refuses it by name at startup.
-            wal_size: env::var("HQL_WAL_SIZE")
-                .as_deref()
-                .unwrap_or("2097152")
-                .parse()
-                .unwrap_or(0),
+            wal_size: wal_size_from_env_value(env::var("HQL_WAL_SIZE").ok().as_deref()),
             #[cfg(feature = "cache")]
             cache_storage_disk: true,
             raft_config: Self::default_raft_config(10_000),
@@ -353,8 +350,12 @@ impl NodeConfig {
                 .unwrap_or("4")
                 .parse()
                 .expect("Cannot parse HQL_READ_POOL_SIZE as usize"),
-            wal_sync: hiqlite_wal::LogSync::ImmediateAsync,
-            wal_size: 2 * 1024 * 1024,
+            // F-035 (`044` B-9): the environment constructor hardcoded both, so a deployment
+            // configured through it could not select the WAL durability mode, and did not get
+            // the `HQL_WAL_SIZE` that `Default` reads either. A malformed value leaves a
+            // sentinel `is_valid` refuses by name, the same policy as `HQL_WAL_SIZE`.
+            wal_sync: log_sync_from_env_value(env::var("HQL_LOG_SYNC").ok().as_deref()),
+            wal_size: wal_size_from_env_value(env::var("HQL_WAL_SIZE").ok().as_deref()),
             #[cfg(feature = "cache")]
             cache_storage_disk,
             raft_config: Self::default_raft_config(logs_keep),
@@ -378,11 +379,11 @@ impl NodeConfig {
             password_dashboard: DashboardState::from_env().password_dashboard,
             #[cfg(feature = "dashboard")]
             insecure_cookie,
-            health_check_delay_secs: env::var("HQL_HEALTH_CHECK_DELAY_SECS")
-                .as_deref()
-                .unwrap_or("30")
-                .parse()
-                .expect("Cannot parse HQL_HEALTH_CHECK_DELAY_SECS as u32"),
+            // `044` B-10: `HQL_HEALTH_CHECK_DELAY` (upstream 0.15.0's name and syntax) is
+            // preferred; `HQL_HEALTH_CHECK_DELAY_SECS` still works and warns. Still a panic on a
+            // bad value, like every other `expect` in this constructor (`027` KD-1).
+            health_check_delay_secs: health_check_delay_secs_from_env()
+                .unwrap_or_else(|err| panic!("{err}")),
             learner_only: env::var("HQL_LEARNER_ONLY")
                 .as_deref()
                 .unwrap_or("false")
@@ -446,8 +447,13 @@ impl NodeConfig {
             return Err(Error::Config("'node_id' must be >= 1".into()));
         }
 
-        if self.node_id as usize > self.nodes.len() {
-            return Err(Error::Config("'node_id' not found in 'nodes'".into()));
+        // F-038 (`044` B-2): this bounded `node_id` by the length of `nodes`, so a list whose
+        // ids are not `1..=n` was accepted with an id nothing carries, or refused with one it
+        // does. The id is what the node is looked up by, so the id is what is checked.
+        if !self.nodes.iter().any(|node| node.id == self.node_id) {
+            return Err(Error::Config(
+                format!("'node_id' {} not found in 'nodes'", self.node_id).into(),
+            ));
         }
 
         // `hiqlite_wal`'s minimum, which it does not export. Below it the WAL panics in a debug
@@ -462,6 +468,16 @@ impl NodeConfig {
                     self.wal_size
                 )
                 .into(),
+            ));
+        }
+
+        // `044` B-9: a ticker of zero milliseconds panics the WAL's sync task, and `0` is also
+        // what a malformed `HQL_LOG_SYNC` leaves.
+        if self.wal_sync == hiqlite_wal::LogSync::IntervalMillis(0) {
+            return Err(Error::Config(
+                "'wal_sync' must not be an interval of 0 ms; if 'HQL_LOG_SYNC' is set, it must be \
+                 'immediate', 'immediate_async' or 'interval_<ms>' with ms > 0"
+                    .into(),
             ));
         }
 
@@ -530,6 +546,121 @@ clean up logs after debugging!
     }
 }
 
+/// The environment variable for the health-check delay, in upstream 0.15.0's name and syntax.
+pub(crate) const HEALTH_CHECK_DELAY_ENV: &str = "HQL_HEALTH_CHECK_DELAY";
+/// The deprecated spelling, an integer number of seconds. Still read, with a warning.
+pub(crate) const HEALTH_CHECK_DELAY_SECS_ENV: &str = "HQL_HEALTH_CHECK_DELAY_SECS";
+
+/// Upstream 0.15.0's duration syntax: an integer is seconds; otherwise a whole number followed by
+/// one unit of `s`, `m`, `h`, `d`, `w` or `y` (either case), e.g. `120s` or `2m`.
+///
+/// Upstream splits the unit off at `len - 1` bytes, which panics on a multi-byte last
+/// character; this takes the last `char`, so any input is either a duration or `None`.
+pub(crate) fn parse_duration(input: &str) -> Option<Duration> {
+    let input = input.trim();
+    let unit = input.chars().last()?;
+    let mul: u64 = match unit {
+        's' | 'S' => 1,
+        'm' | 'M' => 60,
+        'h' | 'H' => 60 * 60,
+        'd' | 'D' => 60 * 60 * 24,
+        'w' | 'W' => 60 * 60 * 24 * 7,
+        'y' | 'Y' => 60 * 60 * 24 * 365,
+        _ => return input.parse::<u64>().ok().map(Duration::from_secs),
+    };
+    input[..input.len() - unit.len_utf8()]
+        .trim()
+        .parse::<u32>()
+        .ok()
+        .map(|v| Duration::from_secs(u64::from(v).saturating_mul(mul)))
+}
+
+/// Parses a health-check delay in the preferred syntax into the whole seconds
+/// `NodeConfig::health_check_delay_secs` holds. `name` is the key or variable it came from.
+pub(crate) fn health_check_delay_secs_from_str(value: &str, name: &str) -> Result<u32, Error> {
+    let delay = parse_duration(value).ok_or_else(|| {
+        Error::Config(
+            format!(
+                "Cannot parse {name} '{value}' as a duration: an integer number of seconds, or a \
+                 whole number with one unit of s, m, h, d, w, y (e.g. '120s', '2m')"
+            )
+            .into(),
+        )
+    })?;
+    u32::try_from(delay.as_secs()).map_err(|_| {
+        Error::Config(format!("{name} '{value}' is longer than {} seconds", u32::MAX).into())
+    })
+}
+
+/// Chooses between the preferred and the deprecated spelling of the health-check delay.
+///
+/// `044` B-10: the preferred name wins wherever it is set, and a deprecated one that is also set
+/// is ignored with a warning; a deprecated one on its own is used, with a warning naming its
+/// replacement. A value that failed to parse is only an error if it is the one chosen.
+pub(crate) fn pick_health_check_delay(
+    preferred: Option<Result<u32, Error>>,
+    preferred_name: &str,
+    deprecated: Option<Result<u32, Error>>,
+    deprecated_name: &str,
+) -> Result<Option<u32>, Error> {
+    match (preferred, deprecated) {
+        (Some(value), Some(_)) => {
+            warn!(
+                "Both {preferred_name} and the deprecated {deprecated_name} are set: \
+                 {preferred_name} wins and {deprecated_name} is ignored"
+            );
+            value.map(Some)
+        }
+        (Some(value), None) => value.map(Some),
+        (None, Some(value)) => {
+            warn!("{deprecated_name} is deprecated; use {preferred_name} instead");
+            value.map(Some)
+        }
+        (None, None) => Ok(None),
+    }
+}
+
+/// The environment constructor's health-check delay, in seconds.
+fn health_check_delay_secs_from_env() -> Result<u32, Error> {
+    let preferred = env::var(HEALTH_CHECK_DELAY_ENV)
+        .ok()
+        .map(|v| health_check_delay_secs_from_str(&v, HEALTH_CHECK_DELAY_ENV));
+    let deprecated = env::var(HEALTH_CHECK_DELAY_SECS_ENV).ok().map(|v| {
+        v.trim().parse::<u32>().map_err(|_| {
+            Error::Config(format!("Cannot parse {HEALTH_CHECK_DELAY_SECS_ENV} as u32").into())
+        })
+    });
+    Ok(pick_health_check_delay(
+        preferred,
+        HEALTH_CHECK_DELAY_ENV,
+        deprecated,
+        HEALTH_CHECK_DELAY_SECS_ENV,
+    )?
+    .unwrap_or(30))
+}
+
+/// `HQL_WAL_SIZE`, or the 2 MiB default when unset. A malformed value leaves `0`, which
+/// `is_valid` refuses naming the variable (`029` B-5).
+fn wal_size_from_env_value(value: Option<&str>) -> u32 {
+    match value {
+        None => 2 * 1024 * 1024,
+        Some(v) => v.trim().parse().unwrap_or(0),
+    }
+}
+
+/// `HQL_LOG_SYNC`, or `ImmediateAsync` when unset. A malformed value is logged and leaves
+/// `IntervalMillis(0)`, which `is_valid` refuses naming the variable: the same policy as
+/// `HQL_WAL_SIZE`, because the environment constructor cannot return an error.
+fn log_sync_from_env_value(value: Option<&str>) -> hiqlite_wal::LogSync {
+    match value {
+        None => hiqlite_wal::LogSync::ImmediateAsync,
+        Some(v) => hiqlite_wal::LogSync::try_from(v.trim()).unwrap_or_else(|err| {
+            error!("Cannot parse HQL_LOG_SYNC '{v}': {err}");
+            hiqlite_wal::LogSync::IntervalMillis(0)
+        }),
+    }
+}
+
 impl From<&str> for Node {
     fn from(s: &str) -> Self {
         let (id, rest) = s
@@ -566,7 +697,9 @@ impl Node {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::{Node, NodeConfig};
+    use hiqlite_wal::LogSync;
 
     /// A malformed `HQL_WAL_SIZE` used to panic inside `NodeConfig::default()`, in every
     /// consumer that built a configuration. It now leaves `0`, and validation names it. Driven
@@ -600,6 +733,127 @@ mod tests {
             !err.contains("wal_size"),
             "the minimum itself is accepted, got: {err}"
         );
+    }
+
+    fn valid_config() -> NodeConfig {
+        NodeConfig {
+            node_id: 1,
+            nodes: vec![Node {
+                id: 1,
+                addr_raft: "localhost:8100".into(),
+                addr_api: "localhost:8200".into(),
+            }],
+            secret_raft: "a".repeat(16),
+            secret_api: "b".repeat(16),
+            #[cfg(any(feature = "dashboard", feature = "s3"))]
+            enc_keys: cryptr::EncKeys {
+                enc_key_active: "test".to_string(),
+                enc_keys: vec![("test".to_string(), vec![0_u8; 32])],
+            },
+            #[cfg(feature = "dashboard")]
+            password_dashboard: None,
+            ..Default::default()
+        }
+    }
+
+    /// F-035 (`044` B-9): the environment constructor now reads `HQL_LOG_SYNC` and
+    /// `HQL_WAL_SIZE`. Driven through the value parsers rather than the process environment
+    /// (`009` D-3).
+    #[test]
+    fn the_env_route_reads_log_sync_and_refuses_a_malformed_value_by_name() {
+        assert_eq!(log_sync_from_env_value(None), LogSync::ImmediateAsync);
+        assert_eq!(
+            log_sync_from_env_value(Some("immediate")),
+            LogSync::Immediate
+        );
+        assert_eq!(
+            log_sync_from_env_value(Some("interval_200")),
+            LogSync::IntervalMillis(200)
+        );
+
+        let mut c = valid_config();
+        assert!(c.is_valid().is_ok());
+        c.wal_sync = log_sync_from_env_value(Some("sometimes"));
+        let err = c
+            .is_valid()
+            .expect_err("a malformed HQL_LOG_SYNC must be refused");
+        assert!(err.to_string().contains("HQL_LOG_SYNC"), "got: {err}");
+
+        // `interval_0` parses, and would panic the WAL's ticker; it is refused the same way.
+        c.wal_sync = log_sync_from_env_value(Some("interval_0"));
+        assert!(c.is_valid().is_err());
+
+        assert_eq!(wal_size_from_env_value(None), 2 * 1024 * 1024);
+        assert_eq!(wal_size_from_env_value(Some("65536")), 65536);
+        assert_eq!(wal_size_from_env_value(Some("two megs")), 0);
+        let from_env = include_str!("config.rs");
+        assert!(
+            !from_env.contains(
+                &[
+                    "wal_sync: hiqlite_wal::LogSync::",
+                    "ImmediateAsync,\n            wal_size: 2"
+                ]
+                .concat()
+            ),
+            "the environment constructor must not hardcode the WAL settings"
+        );
+    }
+
+    /// `044` B-10: upstream 0.15.0's duration syntax for the health-check delay.
+    #[test]
+    fn the_health_check_delay_accepts_upstreams_duration_syntax() {
+        use std::time::Duration;
+        assert_eq!(parse_duration("30"), Some(Duration::from_secs(30)));
+        assert_eq!(parse_duration("120s"), Some(Duration::from_secs(120)));
+        assert_eq!(parse_duration("2m"), Some(Duration::from_secs(120)));
+        assert_eq!(parse_duration("1h"), Some(Duration::from_secs(3600)));
+        assert_eq!(parse_duration("1d"), Some(Duration::from_secs(86_400)));
+        assert_eq!(parse_duration("1w"), Some(Duration::from_secs(604_800)));
+        assert_eq!(parse_duration("1y"), Some(Duration::from_secs(31_536_000)));
+        assert_eq!(parse_duration(""), None);
+        assert_eq!(parse_duration("-5s"), None);
+        assert_eq!(parse_duration("5x"), None);
+        // Upstream's byte split panics here; this is a clean `None`.
+        assert_eq!(parse_duration("5\u{20ac}"), None);
+
+        assert_eq!(health_check_delay_secs_from_str("2m", "k").unwrap(), 120);
+        let err = health_check_delay_secs_from_str("soon", "HQL_HEALTH_CHECK_DELAY").unwrap_err();
+        assert!(
+            err.to_string().contains("HQL_HEALTH_CHECK_DELAY"),
+            "got: {err}"
+        );
+        assert!(health_check_delay_secs_from_str("200y", "k").is_err());
+    }
+
+    /// `044` B-10: the preferred name wins over the deprecated one; the deprecated one on its
+    /// own still works; a malformed value that was not chosen is not an error.
+    #[test]
+    fn the_preferred_health_check_delay_name_wins_over_the_deprecated_one() {
+        let bad = || Err(crate::Error::Config("bad".into()));
+        assert_eq!(
+            pick_health_check_delay(None, "new", None, "old").unwrap(),
+            None
+        );
+        assert_eq!(
+            pick_health_check_delay(Some(Ok(5)), "new", None, "old").unwrap(),
+            Some(5)
+        );
+        assert_eq!(
+            pick_health_check_delay(None, "new", Some(Ok(7)), "old").unwrap(),
+            Some(7)
+        );
+        assert_eq!(
+            pick_health_check_delay(Some(Ok(5)), "new", Some(Ok(7)), "old").unwrap(),
+            Some(5)
+        );
+        assert_eq!(
+            pick_health_check_delay(Some(Ok(5)), "new", Some(bad()), "old").unwrap(),
+            Some(5)
+        );
+        assert!(pick_health_check_delay(Some(bad()), "new", Some(Ok(7)), "old").is_err());
+        assert!(pick_health_check_delay(None, "new", Some(bad()), "old").is_err());
+        assert_eq!(HEALTH_CHECK_DELAY_ENV, "HQL_HEALTH_CHECK_DELAY");
+        assert_eq!(HEALTH_CHECK_DELAY_SECS_ENV, "HQL_HEALTH_CHECK_DELAY_SECS");
     }
 
     #[test]

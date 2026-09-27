@@ -65,6 +65,9 @@ async fn handler(rx_req: flume::Receiver<NotifyRequest>, tx_local: flume::Sender
                 }
             }
             NotifyRequest::Listen((tx, ack)) => {
+                // F-117 (`044` B-8): the send above is the blocking one, so every listener's
+                // channel must be unbounded or a slow subscriber parks this handler's thread.
+                debug_assert!(tx.capacity().is_none());
                 listeners.push(tx);
                 info!("New notification listener subscribed");
                 // Sent **after** the push, so a caller that awaits it knows the subscriber is
@@ -91,8 +94,8 @@ mod tests {
         oneshot::Sender<()>,
         oneshot::Receiver<()>,
     ) {
-        // `bounded(1)` is what `api::listen` uses, so the test subscriber is the real one.
-        let (tx, rx) = flume::bounded(1);
+        // `unbounded` is what `api::listen` uses (F-117), so the test subscriber is the real one.
+        let (tx, rx) = flume::unbounded();
         let (ack, ack_rx) = oneshot::channel();
         (tx, rx, ack, ack_rx)
     }
@@ -201,5 +204,58 @@ mod tests {
                 .unwrap()
                 .unwrap();
         }
+    }
+
+    /// F-117 (`044` B-8): a subscriber that drains nothing does not stop the handler. With the
+    /// one-slot channel `api::listen` used, the second event parked the handler's thread on the
+    /// blocking `send`, so nothing after it, including the local receiver, was served.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_subscriber_that_never_drains_does_not_stall_the_handler() {
+        let (tx_req, rx_local) = spawn();
+        let (tx, _rx_never_read, ack, ack_rx) = subscribe();
+        tx_req
+            .send_async(NotifyRequest::Listen((tx, ack)))
+            .await
+            .unwrap();
+        tokio::time::timeout(Duration::from_secs(5), ack_rx)
+            .await
+            .expect("the subscription was never acknowledged")
+            .unwrap();
+
+        for ts in 0..3 {
+            tx_req
+                .send_async(NotifyRequest::Notify((ts, b"x".to_vec())))
+                .await
+                .unwrap();
+        }
+        for ts in 0..3 {
+            let (got, _) = tokio::time::timeout(Duration::from_secs(5), rx_local.recv_async())
+                .await
+                .unwrap_or_else(|_| panic!("the handler stalled before local event {ts}"))
+                .unwrap();
+            assert_eq!(got, ts);
+        }
+
+        let api = include_str!("../../../network/api.rs");
+        assert!(api.contains("let (tx, rx) = flume::unbounded();"));
+    }
+
+    /// The handler asserts, in a debug build, that a listener cannot block it.
+    #[cfg(debug_assertions)]
+    #[tokio::test]
+    async fn a_bounded_listener_is_refused_in_a_debug_build() {
+        let (tx_req, _rx_local) = spawn();
+        let (tx, _rx) = flume::bounded::<Result<sse::Event, Error>>(1);
+        let (ack, ack_rx) = oneshot::channel();
+        tx_req
+            .send_async(NotifyRequest::Listen((tx, ack)))
+            .await
+            .unwrap();
+        // The assertion panics the handler task before the push, so no acknowledgement arrives.
+        let res = tokio::time::timeout(Duration::from_secs(5), ack_rx).await;
+        assert!(
+            matches!(res, Ok(Err(_))),
+            "a bounded listener must not be accepted"
+        );
     }
 }

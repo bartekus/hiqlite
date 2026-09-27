@@ -78,8 +78,16 @@ pub fn impl_from_row(input: DeriveInput) -> proc_macro2::TokenStream {
                 Some(ts)
             })
             .collect::<Vec<TokenStream>>(),
-        Data::Enum(_) => unimplemented!(),
-        Data::Union(_) => unimplemented!(),
+        // F-080 (`044` B-6): these were `unimplemented!()`, so the derive on an enum or a union
+        // ended the compilation with "proc-macro derive panicked: not implemented". A spanned
+        // diagnostic names the supported shape instead, as upstream 0.15.0 does.
+        Data::Enum(_) | Data::Union(_) => {
+            return syn::Error::new(
+                name.span(),
+                "FromRow can only be derived for a `struct` with named fields",
+            )
+            .to_compile_error();
+        }
     };
 
     let from_str = if with_from_str {
@@ -362,12 +370,23 @@ mod tests {
         assert_eq!(first, second);
     }
 
-    /// F-080: a non-struct input ends the compilation with a proc-macro panic
-    /// rather than a spanned `compile_error!`.
+    /// Replaces `an_enum_input_panics_instead_of_emitting_a_diagnostic`, which pinned F-080:
+    /// a non-struct input ended the compilation with a proc-macro panic. It is a spanned
+    /// `compile_error!` now, for an enum and for a union, and emits no impl. `044` B-6.
     #[test]
-    #[should_panic(expected = "not implemented")]
-    fn an_enum_input_panics_instead_of_emitting_a_diagnostic() {
-        let _ = generate(r#"enum Test { A }"#);
+    fn a_non_struct_input_emits_a_diagnostic_instead_of_panicking() {
+        for src in [r#"enum Test { A }"#, r#"union Test { a: u32, b: f32 }"#] {
+            let out = generate(src);
+            assert!(
+                out.contains("compile_error"),
+                "no diagnostic for {src}: {out}"
+            );
+            assert!(
+                out.contains("FromRow can only be derived for a `struct`"),
+                "the diagnostic names the supported shape: {out}"
+            );
+            assert!(!out.contains("impl"), "no impl is emitted: {out}");
+        }
     }
 
     #[test]

@@ -23,10 +23,6 @@
       },
       {
         "kind": "file",
-        "path": "hiqlite/src/server/cache.rs"
-      },
-      {
-        "kind": "file",
         "path": "hiqlite/src/server/config.rs"
       },
       {
@@ -137,6 +133,6 @@
     "summary": "Adopts the three subcommands of the hiqlite binary and the proxy that one of them starts. The proxy does not start: it registers an axum 0.7 route literal against the pinned axum 0.8, which panics at router construction before the bind, and nothing caught it because CI never enables the server feature for a test. Ten findings recorded, four executed, including a non-constant-time comparison of the API secret in the proxy's copy of a function the node hardened. Repairs no runtime behavior.\n",
     "title": "Adopt the server binary and the proxy"
   },
-  "shardHash": "63055127931a95b8931bdefee29a5bbb2588a9b1328bf2dce5fc3d6ea6fbffaa",
+  "shardHash": "b8c1327a44a1bec7da479c57e7f48f816d0a37d0879f370fb29f8371ce24b02a",
   "specVersion": "1.8.0"
 }

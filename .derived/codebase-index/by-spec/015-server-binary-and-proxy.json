@@ -17,10 +17,6 @@
         "source": "spec-edge"
       },
       {
-        "path": "hiqlite/src/server/cache.rs",
-        "source": "spec-edge"
-      },
-      {
         "path": "hiqlite/src/server/config.rs",
         "source": "spec-edge"
       },
@@ -94,19 +90,6 @@
         "unit": {
           "kind": "file",
           "path": "hiqlite/src/server/args.rs"
-        }
-      },
-      {
-        "locations": [
-          {
-            "file": "hiqlite/src/server/cache.rs"
-          }
-        ],
-        "ownership": true,
-        "sourceField": "establishes",
-        "unit": {
-          "kind": "file",
-          "path": "hiqlite/src/server/cache.rs"
         }
       },
       {
@@ -270,5 +253,5 @@
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "673700614885b7cb8e1fef6f4ed938cc1cade8fe880cb4ca9e72ecab41afeaef"
+  "shardHash": "447a62c6431d27274ab0491d9cfde8f5d7640c4f077c97c56b15c21990437a8c"
 }
