@@ -1,9 +1,13 @@
 use crate::app_state::AppState;
 use crate::network::raft_server;
+use crate::network::tcp_socket::{
+    ConfiguredStreamAcceptor, configure_tcp_stream, create_listening_socket,
+};
 use crate::network::{api, management};
 use crate::{CacheVariants, Client, Error, NodeConfig, init, split_brain_check, store};
 use axum::Router;
 use axum::routing::{get, post};
+use axum::serve::ListenerExt;
 use chrono::Utc;
 use std::fmt::Debug;
 use std::net::SocketAddr;
@@ -101,7 +105,7 @@ pub(crate) async fn bind_listener(
         Error::Startup(format!("{what} address `{addr}` is not a socket address: {err}").into())
     })?;
 
-    let listener = TcpListener::bind(parsed).await.map_err(|err| {
+    let listener = create_listening_socket(parsed).await.map_err(|err| {
         Error::Startup(format!("{what} could not bind to `{addr}`: {err}").into())
     })?;
 
@@ -148,7 +152,7 @@ async fn serve_router(
             });
 
             task::spawn(Box::pin(async move {
-                let server = match axum_server::from_tcp_rustls(listener, config) {
+                let server = match axum_server::from_tcp(listener) {
                     Ok(server) => server,
                     Err(err) => {
                         lifecycle.fail(
@@ -159,6 +163,10 @@ async fn serve_router(
                     }
                 };
                 let res = server
+                    .acceptor(
+                        axum_server::tls_rustls::RustlsAcceptor::new(config)
+                            .acceptor(ConfiguredStreamAcceptor),
+                    )
                     .handle(handle)
                     .serve(router.into_make_service())
                     .await;
@@ -170,9 +178,12 @@ async fn serve_router(
                 .expect("a listener this process just bound to be convertible back");
             task::spawn(Box::pin(async move {
                 let shutdown = shutdown_signal(rx_shutdown.clone());
-                let res = axum::serve(listener, router.into_make_service())
-                    .with_graceful_shutdown(shutdown)
-                    .await;
+                let res = axum::serve(
+                    listener.tap_io(configure_tcp_stream),
+                    router.into_make_service(),
+                )
+                .with_graceful_shutdown(shutdown)
+                .await;
                 report_listener_exit(lifecycle, what, &addr, res);
             }));
         }

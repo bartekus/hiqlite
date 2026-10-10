@@ -111,6 +111,19 @@ sqlite = [
     "dep:deadpool",
     "dep:rusqlite",
     "dep:serde_rusqlite",
+    "rusqlite/backup",
+    "rusqlite/cache",
+    "rusqlite/chrono",
+    "rusqlite/column_decltype",
+    "rusqlite/csvtab",
+    "rusqlite/functions",
+    "rusqlite/load_extension",
+    "rusqlite/modern_sqlite",
+    "rusqlite/serde_json",
+    "rusqlite/series",
+    "rusqlite/url",
+    "rusqlite/uuid",
+    "rusqlite/vtab",
 ]
 webpki-roots = [
     "dep:webpki-root-certs",
@@ -123,6 +136,7 @@ __cluster = [
     "dep:axum-server",
     "dep:bytes",
     "dep:chrono",
+    "dep:constant_time_eq",
     "dep:crossbeam",
     "dep:cryptr",
     "dep:dotenvy",
@@ -144,6 +158,7 @@ __cluster = [
     "dep:rust-embed",
     "dep:rustls",
     "dep:rustls-webpki",
+    "dep:socket2",
     "dep:serde_json",
     "dep:serde_rusqlite",
     "dep:time",
@@ -183,7 +198,7 @@ bytes = { workspace = true, optional = true }
 chrono = { workspace = true, optional = true }
 clap = { workspace = true, optional = true }
 console-subscriber = { workspace = true, optional = true }
-constant_time_eq = { workspace = true }
+constant_time_eq = { workspace = true, optional = true }
 cron = { workspace = true, optional = true }
 crossbeam = { workspace = true, optional = true }
 cryptr = { workspace = true, optional = true }
@@ -214,6 +229,7 @@ serde_json = { workspace = true, optional = true }
 serde_rusqlite = { workspace = true, optional = true }
 sha2.workspace = true
 spow = { workspace = true, optional = true }
+socket2 = { workspace = true, optional = true }
 thiserror.workspace = true
 thread-priority.workspace = true
 time = { workspace = true, optional = true }

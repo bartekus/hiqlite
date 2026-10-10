@@ -19,6 +19,7 @@ pub(crate) mod handshake;
 pub(crate) mod management;
 mod raft_client;
 pub(crate) mod raft_server;
+pub(crate) mod tcp_socket;
 pub(crate) mod web_socket_connect;
 
 pub(crate) type AppStateExt = axum::extract::State<Arc<AppState>>;
