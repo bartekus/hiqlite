@@ -13,6 +13,9 @@ origin:
 establishes:
   - { kind: file, path: "standards/spec/upstream-reconciliation.md" }
 extends:
+  - spec: "025-snapshot-crash-recovery-contract"
+    unit: { kind: directory, path: "hiqlite/src/store/state_machine/sqlite/" }
+    nature: additive
   - spec: "003-client-consistency-and-retry-outcomes"
     unit: { kind: directory, path: "hiqlite/src/network/" }
     nature: additive
@@ -97,6 +100,12 @@ acknowledged writes; `LogSync::Immediate` is the synchronous configuration to
 qualify for that requirement. Socket keepalives do not establish N=3 support.
 
 ## 4. Evidence and its limits
+
+Linux CI exposed a fixture race in the invalid received-snapshot regression. Its
+snapshot builder acknowledges shutdown before its SQLite connection destructor
+finishes the final WAL checkpoint. The test now copies the published snapshot to
+an independent database fixture with no background writer. The byte-identical
+assertion and restart selection check remain intact; runtime behavior is unchanged.
 
 The cancellation regression runs child tasks holding real TCP halves, cancels their
 owner, and requires the peer to observe EOF within a fixed bound. Demonstrate failure

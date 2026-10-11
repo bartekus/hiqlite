@@ -21,6 +21,10 @@
         "source": "spec-edge"
       },
       {
+        "path": "hiqlite/src/store/state_machine/sqlite/",
+        "source": "spec-edge"
+      },
+      {
         "path": "standards/spec/upstream-reconciliation.md",
         "source": "spec-edge"
       }
@@ -63,6 +67,19 @@
         "unit": {
           "kind": "directory",
           "path": "hiqlite/src/server/"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "hiqlite/src/store/state_machine/sqlite/"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "extends",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/store/state_machine/sqlite/"
         }
       },
       {
@@ -122,5 +139,5 @@
     "specStatus": "draft"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "8dc682f2579f499fc09eec7b80e34cd55e15313999187c987647cfc4d88634ef"
+  "shardHash": "81e3855b924c1370a3e08070bf019a885d3c8fb1ac373a6eaec67fc2c533a6ee"
 }
