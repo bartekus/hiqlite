@@ -1525,12 +1525,29 @@ mod tests {
         let (root, root_str) = scratch_root("install-invalid");
         let snapshots = format!("{root_str}/state_machine/snapshots");
 
+        // Build elsewhere: the writer acknowledges shutdown before its connection is dropped,
+        // so its final WAL checkpoint must not race this test's byte-identical assertion.
+        let source = format!("{root_str}/source");
         let good_id = build_one_snapshot(
-            &root_str,
+            &source,
             1,
             "CREATE TABLE t (id INTEGER PRIMARY KEY); INSERT INTO t VALUES (1);",
         )
         .await;
+        fs::create_dir_all(&snapshots).await.unwrap();
+        fs::create_dir_all(format!("{root_str}/state_machine/db"))
+            .await
+            .unwrap();
+        let source_snapshot = format!("{source}/state_machine/snapshots/{good_id}");
+        fs::copy(&source_snapshot, format!("{snapshots}/{good_id}"))
+            .await
+            .unwrap();
+        fs::copy(
+            &source_snapshot,
+            format!("{root_str}/state_machine/db/state.sqlite"),
+        )
+        .await
+        .unwrap();
         let live_before = fs::read(format!("{root_str}/state_machine/db/state.sqlite"))
             .await
             .unwrap();

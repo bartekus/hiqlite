@@ -169,6 +169,32 @@ enum WritePayload {
     Close,
 }
 
+/// A [`JoinHandle`] that aborts its task when dropped.
+///
+/// `ws_handler` owns the handles of the reader and writer tasks that hold the
+/// two halves of the WebSocket, and aborts them on its own reconnect path. That
+/// path never runs when `ws_handler` is itself aborted, and dropping a bare
+/// `JoinHandle` only detaches its task instead of cancelling it, so the two
+/// tasks would keep the socket open for good. Wrapping the handles propagates
+/// the cancellation: aborting `ws_handler` drops its locals, and dropping this
+/// guard aborts the task it holds.
+struct AbortOnDrop(JoinHandle<()>);
+
+impl AbortOnDrop {
+    /// Abort eagerly. Idempotent, so the explicit aborts on the reconnect path
+    /// and the later `Drop` do not conflict.
+    #[inline]
+    fn abort(&self) {
+        self.0.abort();
+    }
+}
+
+impl Drop for AbortOnDrop {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
+}
+
 #[allow(clippy::type_complexity)]
 impl NetworkStreaming {
     #[allow(clippy::too_many_arguments)]
@@ -274,8 +300,14 @@ impl NetworkStreaming {
             // IMPORTANT: the reader is NOT CANCEL SAFE in v0.8!
             let read = FragmentCollectorRead::new(read);
 
-            let handle_read = task::spawn(Box::pin(Self::stream_reader(read, tx_read.clone())));
-            let handle_write = task::spawn(Box::pin(Self::stream_writer(write, rx_write)));
+            // Guarded: `ws_handler` may be aborted before it reaches the
+            // aborts below, and these must then cancel and not detach.
+            let handle_read = AbortOnDrop(task::spawn(Box::pin(Self::stream_reader(
+                read,
+                tx_read.clone(),
+            ))));
+            let handle_write =
+                AbortOnDrop(task::spawn(Box::pin(Self::stream_writer(write, rx_write))));
 
             loop {
                 let res = select! {
@@ -615,5 +647,68 @@ impl RaftNetwork<TypeConfigKV> for NetworkConnectionStreaming {
             }
             _ => unreachable!(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::io::AsyncReadExt;
+    use tokio::net::{TcpListener, TcpStream};
+
+    #[tokio::test]
+    async fn aborting_the_owner_releases_both_socket_halves() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let socket = TcpStream::connect(listener.local_addr().unwrap())
+            .await
+            .unwrap();
+        let (mut peer, _) = listener.accept().await.unwrap();
+        let (read, write) = socket.into_split();
+        let (ready_tx, ready_rx) = oneshot::channel();
+        let (read_gone_tx, read_gone_rx) = oneshot::channel::<()>();
+        let (write_gone_tx, write_gone_rx) = oneshot::channel::<()>();
+
+        let owner = task::spawn(async move {
+            let (read_started_tx, read_started_rx) = oneshot::channel();
+            let (write_started_tx, write_started_rx) = oneshot::channel();
+            let _reader = AbortOnDrop(task::spawn(async move {
+                read_started_tx.send(()).unwrap();
+                std::future::pending::<()>().await;
+                drop((read, read_gone_tx));
+            }));
+            let _writer = AbortOnDrop(task::spawn(async move {
+                write_started_tx.send(()).unwrap();
+                std::future::pending::<()>().await;
+                drop((write, write_gone_tx));
+            }));
+            read_started_rx.await.unwrap();
+            write_started_rx.await.unwrap();
+            ready_tx.send(()).unwrap();
+            std::future::pending::<()>().await;
+        });
+        let (sender, _receiver) = flume::bounded(1);
+        let connection = NetworkConnectionStreaming {
+            node: Node {
+                id: 2,
+                addr_raft: String::new(),
+                addr_api: String::new(),
+            },
+            sender,
+            task: Some(owner),
+        };
+
+        time::timeout(Duration::from_secs(2), ready_rx)
+            .await
+            .expect("socket tasks started")
+            .unwrap();
+        drop(connection);
+        time::timeout(Duration::from_secs(2), async {
+            assert!(read_gone_rx.await.is_err(), "reader resources dropped");
+            assert!(write_gone_rx.await.is_err(), "writer resources dropped");
+            let mut buf = [0];
+            assert_eq!(peer.read(&mut buf).await.unwrap(), 0, "socket closed");
+        })
+        .await
+        .expect("aborting the owner must cancel both children, not detach them");
     }
 }

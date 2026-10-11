@@ -934,6 +934,15 @@ disagrees with anything. What was missing is that the limit had never been
 stated where a reader would find it; `009` B-5 states it. Evidence: read at
 source, not executed. `009` KD-5's sibling, recorded at `009` B-5.
 
+**Repaired 2026-09-27 by `044-port-upstream-015-fixes`.** `NodeConfig::from_env` reads `HQL_LOG_SYNC`, as
+upstream 0.15.0 does, and a value that does not parse leaves `IntervalMillis(0)`, which
+`is_valid` refuses naming the variable (the `HQL_WAL_SIZE` policy, because that constructor
+cannot return an error). `interval_0` is refused the same way on every route, since it would
+panic the WAL's ticker. The repair also found that `029` KD-4 overstated the ceiling half:
+`Default` read `HQL_WAL_SIZE`, but `from_env` built its own value and hardcoded 2 MiB, so the
+environment constructor never honoured it. It does now. Regression:
+`config::tests::the_env_route_reads_log_sync_and_refuses_a_malformed_value_by_name`.
+
 ### F-036 `defect`, confidence `high`
 
 **A parse-error message names the wrong type.** `config.rs:335-339` parses
@@ -965,6 +974,12 @@ no listener on that address; under `panic = "abort"` it ends the process.
 `NodeConfig::is_valid` (`config.rs:420-480`) validates no address at all, so
 nothing rejects the configuration earlier. `010` KD-1.
 
+**Repaired 2026-09-27 by `044-port-upstream-015-fixes`.** The port is what follows the last `:` outside the
+brackets (upstream 0.15.0's `rsplit_once(':')`), a bracketed address with no port takes the
+scheme default, and a bare IPv6 listen host is bracketed. The test that pinned the unparsable
+result was replaced by
+`start::tests::an_ipv6_advertised_address_yields_a_parsable_listen_address`.
+
 ### F-038 `defect`, confidence `high`
 
 **`node_id` names a position in one file and an id in another.**
@@ -986,6 +1001,14 @@ shape is accepted as valid), and
 Consequence: a `nodes` list whose ids are not their positions either binds one
 node's ports while joining as another, or panics on the join path instead of
 returning a configuration error. `010` KD-2.
+
+**Repaired 2026-09-27 by `044-port-upstream-015-fixes`.** `start.rs` looks this node up by id, before either
+raft group starts; `init::get_this_node` returns a configuration error for an absent id; and
+`is_valid` checks that `node_id` is present in `nodes` instead of bounding it by the length of
+the list, all as upstream 0.15.0 does. The three pinning tests were replaced by
+`init::tests::node_identity_is_resolved_by_id_on_both_routes`,
+`init::tests::is_valid_checks_that_the_node_id_exists_rather_than_bounding_it_by_length` and
+`init::tests::get_this_node_returns_a_config_error_when_the_id_is_absent`.
 
 ### F-039 `defect`, confidence `high`
 
@@ -1784,6 +1807,12 @@ Consequence: an operator who follows the help text and puts a file at
 from `HQL_SECRET_API not found` (`proxy/config.rs:45`), with no indication that
 the file was looked for in the wrong place. Source-established. `015` KD-4.
 
+**Repaired 2026-09-27 by `044-port-upstream-015-fixes`.** The proxy resolves the documented
+`$HOME/.hiqlite/hiqlite.env` sentinel against the real home directory, the same way `serve`
+resolves its own. Upstream 0.15.0 fixed this inside a TOML redesign of the proxy configuration,
+which is not ported. Regression:
+`server::config::tests::the_proxy_default_config_file_resolves_under_the_home_directory`.
+
 ### F-071 `evidence`, confidence `high`
 
 **The generated configuration is a second reference file, and it has drifted.**
@@ -1818,6 +1847,12 @@ the crypto provider installation (`:19-21`), `expect`s the socket address parse
 material failure therefore ends the process instead of returning through
 `server()` to `main`. Same class as F-038 and F-040, and part of W-22.
 Source-established. `015` KD-6.
+
+**Partly repaired 2026-09-27 by `044-port-upstream-015-fixes`.** The crypto provider installation and the
+address parse return or ignore as upstream 0.15.0 does. The two `unwrap`s on the serve futures
+remain, as they do upstream, so a port already in use or a TLS failure still ends the process
+(`044` KD-3). Source-asserted by
+`server::proxy::tests::start_proxy_returns_the_errors_upstream_returns_and_keeps_the_unwraps_it_keeps`.
 
 ### F-073 `limit`, confidence `high`
 
@@ -1855,6 +1890,9 @@ Recorded rather than deleted: deleting it is a change and `015` is an adoption,
 and the commented type is a two-variant cache enum that would answer what the
 server binary's `Empty` cache (`server/mod.rs:24`) was meant to become.
 Source-established. `015` KD-9.
+
+**Repaired 2026-09-27 by `044-port-upstream-015-fixes`.** The file and its `mod` line are removed, as upstream
+0.15.0 removed them, and `015`'s `establishes` list no longer names the file (`044` D-3).
 
 ### F-076 `limit`, confidence `high`
 
@@ -1955,6 +1993,11 @@ execution** for the `FromRow` half
 (`from_row::tests::an_enum_input_panics_instead_of_emitting_a_diagnostic`).
 `016` KD-4.
 
+**Repaired 2026-09-27 by `044-port-upstream-015-fixes`** for `FromRow`. An enum or a union gets a spanned
+`compile_error!` naming the supported shape, as upstream 0.15.0 emits. `CacheVariants` was
+already repaired by `029`. The pinning test was replaced by
+`from_row::tests::a_non_struct_input_emits_a_diagnostic_instead_of_panicking`.
+
 ### F-081 `evidence`, confidence `high`
 
 **Fifty-four example assertions are compiled and never evaluated.** The six
@@ -2040,6 +2083,11 @@ acquires the lock exactly as `verify_password` does, then acquires it again.
 binding. The test that pinned the released guard was replaced by one that
 asserts the difference between the two forms and one that asserts
 `verify_password` itself holds it.
+
+**Mechanism replaced 2026-09-27 by `044-port-upstream-015-fixes`, still repaired.** The `RwLock` is now
+upstream 0.15.0's single-permit `Semaphore`, bound to a name and held across the hash.
+Regression: `dashboard::password::tests::the_hashing_permit_is_held_while_the_hash_runs`.
+
 ### F-085 `defect`, confidence `high`
 
 **The unauthenticated dashboard fallback panics on a multi-byte path.**
@@ -2119,6 +2167,13 @@ does not take.
 
 **An operator who exposes the dashboard to an untrusted network should expect
 this**, and the release notes say so.
+
+**Repaired 2026-09-27 by `044-port-upstream-015-fixes`.** The global cooldown is removed. The rate limit is
+upstream 0.15.0's: one hashing permit, and a failed attempt is answered after a three-second
+delay that starts once the permit is released, so it costs the failing caller its own time and
+nobody else's. Regression:
+`dashboard::password::tests::a_failed_attempt_is_delayed_without_locking_anyone_else_out`.
+
 ### F-088 `defect`, confidence `high`
 
 **A dashboard read that does not begin with one of three keywords is replicated
@@ -2234,6 +2289,9 @@ acceptance block and is **not** a fix: `cargo test` does not. Recorded rather th
 repaired, because serializing them changes tests the adoption did not write and
 the right fix is a per-test lock or a reset fixture, which is a small design
 choice. `018` KD-9.
+
+**Repaired 2026-09-27 by `044-port-upstream-015-fixes`.** The three tests are gone with the global they raced
+over; the tests that replace them each use their own semaphore.
 
 ## Summary by class
 
@@ -2759,6 +2817,12 @@ review of `b5039d2`, read from source, not observed.
 **Not repaired, and outside this release's supported feature sets:** the path
 exists only with `listen_notify` (remote SSE subscriptions). Rauthy and Rahi
 enable `listen_notify_local`, which does not reach it (`029` section 4).
+
+**Repaired 2026-09-27 by `044-port-upstream-015-fixes`.** `api::listen` creates the listener channel
+unbounded, as upstream 0.15.0 does, and the handler `debug_assert`s that every listener is.
+**Observed**, which the original entry was not: with the old one-slot channel,
+`store::state_machine::memory::notify_handler::tests::a_subscriber_that_never_drains_does_not_stall_the_handler`
+fails on its second event.
 
 ### F-116 `evidence`, confidence `high`
 

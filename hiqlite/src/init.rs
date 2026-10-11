@@ -79,7 +79,7 @@ pub async fn init_pristine_node_1_db(
     tls_no_verify: bool,
 ) -> Result<(), Error> {
     if node_id == 1 {
-        let this_node = get_this_node(node_id, nodes);
+        let this_node = get_this_node(node_id, nodes)?;
 
         if is_initialized_timeout_sqlite(node_id, raft).await? {
             info!("node 1 raft is already initialized");
@@ -114,7 +114,7 @@ pub async fn init_pristine_node_1_cache(
     tls_no_verify: bool,
 ) -> Result<(), Error> {
     if node_id == 1 {
-        let this_node = get_this_node(node_id, nodes);
+        let this_node = get_this_node(node_id, nodes)?;
 
         if wal_on_disk && is_initialized_timeout_cache(node_id, raft).await? {
             info!("node 1 raft is already initialized");
@@ -135,16 +135,18 @@ pub async fn init_pristine_node_1_cache(
     Ok(())
 }
 
-fn get_this_node(this_node: u64, nodes: &[Node]) -> Node {
-    let filtered = nodes
+/// F-038 (`044` B-2): an absent id is a returned configuration error, not a panic on the join
+/// path. Upstream 0.15.0 made the same change.
+fn get_this_node(this_node: u64, nodes: &[Node]) -> Result<Node, Error> {
+    nodes
         .iter()
-        .filter(|node| node.id == this_node)
-        .collect::<Vec<&Node>>();
-    let node = filtered
-        .first()
+        .find(|node| node.id == this_node)
         .cloned()
-        .expect("this node to always exist in all nodes");
-    (*node).clone()
+        .ok_or_else(|| {
+            Error::Config(
+                format!("This node ({this_node}) is not part of the configured node list").into(),
+            )
+        })
 }
 
 #[tracing::instrument(skip(nodes, secret_api, tls, tls_no_verify))]
@@ -289,7 +291,7 @@ pub async fn become_cluster_member(
     }
     set_raft_running(&state, raft_type);
 
-    let this_node = get_this_node(this_node, nodes);
+    let this_node = get_this_node(this_node, nodes)?;
     let payload = serialize(&LearnerReq {
         node_id: this_node.id,
         addr_api: this_node.addr_api,
@@ -919,26 +921,32 @@ mod tests {
         }
     }
 
-    /// 010 KD-2, first half. This module resolves "this node" by matching `id`;
-    /// `start.rs:65-68` resolves it by indexing `nodes[node_id - 1]`. The two
-    /// agree only when the ids are exactly `1..=n` in order, which nothing
-    /// validates. With ids `2,3,4` the same `node_id` names two different nodes.
+    /// Replaces `node_identity_is_resolved_by_id_here_and_by_position_in_start`, which pinned
+    /// F-038's first half: `start.rs` indexed `nodes[node_id - 1]` while this module matched
+    /// `id`. Both match `id` now (`044` B-2), so with ids `2,3,4` and `node_id = 3` the node
+    /// is the one whose id is 3, and `start.rs` no longer indexes by position.
     #[test]
-    fn node_identity_is_resolved_by_id_here_and_by_position_in_start() {
+    fn node_identity_is_resolved_by_id_on_both_routes() {
         let nodes = vec![node(2), node(3), node(4)];
 
-        assert_eq!(get_this_node(3, &nodes).id, 3);
-        assert_eq!(nodes.get(3_usize - 1).expect("index in range").id, 4);
+        assert_eq!(get_this_node(3, &nodes).expect("id 3 is present").id, 3);
+        let start = include_str!("start.rs");
+        assert!(
+            !start.contains(&[".get(node_config.node_id", " as usize - 1)"].concat()),
+            "start.rs must not resolve this node by position"
+        );
+        assert!(start.contains(".find(|node| node.id == node_config.node_id)"));
     }
 
-    /// 010 KD-2, second half. `NodeConfig::is_valid` bounds `node_id` against
-    /// the *length* of `nodes`, never against the ids in it, so the diverging
-    /// shape above is accepted as valid configuration.
+    /// Replaces `is_valid_accepts_a_nodes_list_whose_ids_are_not_positions`, which pinned
+    /// F-038's second half. Ids that are not positions are still valid; what `is_valid`
+    /// refuses now is a `node_id` that no node carries, where it used to bound `node_id`
+    /// against the length of the list.
     #[test]
-    fn is_valid_accepts_a_nodes_list_whose_ids_are_not_positions() {
-        let config = NodeConfig {
-            node_id: 3,
-            nodes: vec![node(2), node(3), node(4)],
+    fn is_valid_checks_that_the_node_id_exists_rather_than_bounding_it_by_length() {
+        let config = |node_id: u64, nodes: Vec<Node>| NodeConfig {
+            node_id,
+            nodes,
             secret_raft: "a".repeat(16),
             secret_api: "b".repeat(16),
             #[cfg(any(feature = "dashboard", feature = "s3"))]
@@ -951,16 +959,29 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(config.is_valid().is_ok());
+        assert!(
+            config(3, vec![node(2), node(3), node(4)])
+                .is_valid()
+                .is_ok()
+        );
+        // id 4 is present although 4 > len: the old length bound refused this.
+        assert!(config(4, vec![node(2), node(4)]).is_valid().is_ok());
+        // id 1 is within the length and absent: the old length bound accepted this.
+        let err = config(1, vec![node(2), node(3)])
+            .is_valid()
+            .expect_err("an absent node_id must be refused");
+        assert!(
+            err.to_string().contains("'node_id' 1 not found in 'nodes'"),
+            "got: {err}"
+        );
     }
 
-    /// 010 KD-2, third part: when the two routes disagree badly enough that the
-    /// id is absent entirely, the join path panics rather than returning a
-    /// configuration error.
+    /// Replaces `get_this_node_panics_when_the_id_is_absent`, which pinned F-038's third part.
     #[test]
-    #[should_panic(expected = "this node to always exist in all nodes")]
-    fn get_this_node_panics_when_the_id_is_absent() {
+    fn get_this_node_returns_a_config_error_when_the_id_is_absent() {
         let nodes = vec![node(2), node(3)];
-        let _ = get_this_node(1, &nodes);
+        let err = get_this_node(1, &nodes).expect_err("an absent id is an error");
+        assert!(matches!(err, Error::Config(_)), "got: {err:?}");
+        assert!(err.to_string().contains("This node (1)"), "got: {err}");
     }
 }

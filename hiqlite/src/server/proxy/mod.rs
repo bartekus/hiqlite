@@ -1,3 +1,4 @@
+use crate::network::tcp_socket::{ConfiguredStreamAcceptor, create_listening_socket};
 use crate::server::proxy::state::AppStateProxy;
 use crate::{Client, Error};
 use axum::Router;
@@ -44,9 +45,9 @@ fn routes() -> Router<Arc<AppStateProxy>> {
 
 pub async fn start_proxy(config: Config) -> Result<(), Error> {
     if config.tls_config.is_some() {
-        rustls::crypto::ring::default_provider()
-            .install_default()
-            .expect("default CryptoProvider installation to succeed");
+        // F-072 (`044` B-4): this `expect`ed, but installing fails only when a provider is
+        // already installed, which is what this call wants anyway. Upstream 0.15.0 ignores it.
+        let _ = rustls::crypto::ring::default_provider().install_default();
     }
 
     let tls_client_config = config.tls_config.as_ref().map(|c| c.client_config());
@@ -79,17 +80,32 @@ pub async fn start_proxy(config: Config) -> Result<(), Error> {
 
     let addr_str = format!("0.0.0.0:{}", config.listen_port);
     info!("listening on {}", addr_str);
-    let addr = SocketAddr::from_str(&addr_str).expect("valid socket address");
+    // F-072 (`044` B-4): an `expect` in a function that returns `Result`. The two `unwrap`s on
+    // the serve futures below are left as upstream 0.15.0 also leaves them (`044` KD-3).
+    let addr = SocketAddr::from_str(&addr_str)
+        .map_err(|err| Error::Config(format!("Invalid proxy listen address: {err}").into()))?;
+
+    let listener = create_listening_socket(addr).await?;
+    let listener = listener
+        .into_std()
+        .map_err(|err| Error::Config(err.to_string().into()))?;
 
     if let Some(config) = &config.tls_config {
         let tls_config = config.server_config(&addr_str).await;
 
-        axum_server::bind_rustls(addr, tls_config)
+        axum_server::from_tcp(listener)
+            .map_err(|err| Error::Config(err.to_string().into()))?
+            .acceptor(
+                axum_server::tls_rustls::RustlsAcceptor::new(tls_config)
+                    .acceptor(ConfiguredStreamAcceptor),
+            )
             .serve(router.into_make_service())
             .await
             .unwrap();
     } else {
-        axum_server::bind(addr)
+        axum_server::from_tcp(listener)
+            .map_err(|err| Error::Config(err.to_string().into()))?
+            .acceptor(ConfiguredStreamAcceptor)
             .serve(router.into_make_service())
             .await
             .unwrap();
@@ -102,6 +118,20 @@ pub async fn start_proxy(config: Config) -> Result<(), Error> {
 mod tests {
     use super::*;
     use axum::routing::get;
+
+    /// F-072 (`044` B-4), as far as it is ported. `start_proxy` needs a live upstream client, so
+    /// this is a source assertion, not an execution: the crypto provider and the address parse
+    /// no longer `expect`, and the two serve `unwrap`s upstream 0.15.0 also keeps are still
+    /// there, so KD-3 stays true until a later change removes them.
+    #[test]
+    fn start_proxy_returns_the_errors_upstream_returns_and_keeps_the_unwraps_it_keeps() {
+        let src = include_str!("mod.rs");
+        let body = &src[..src.find("#[cfg(test)]").unwrap()];
+        assert!(!body.contains(&["default CryptoProvider installation", " to succeed"].concat()));
+        assert!(!body.contains(&[".expect(\"valid socket", " address\")"].concat()));
+        assert!(body.contains("Invalid proxy listen address"));
+        assert_eq!(body.matches(".await\n            .unwrap();").count(), 2);
+    }
 
     /// Replaces `the_proxy_metrics_route_is_rejected_by_the_pinned_axum`, which pinned F-067
     /// by asserting that the literal the proxy used panics. It does; the proxy no longer uses

@@ -1,0 +1,117 @@
+{
+  "record": {
+    "created": "2026-10-10",
+    "dependsOn": [
+      "044-port-upstream-015-fixes"
+    ],
+    "establishes": [
+      {
+        "kind": "file",
+        "path": "standards/spec/upstream-reconciliation.md"
+      }
+    ],
+    "extends": [
+      {
+        "nature": "additive",
+        "spec": "025-snapshot-crash-recovery-contract",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/store/state_machine/sqlite/"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "003-client-consistency-and-retry-outcomes",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/network/"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "010-node-lifecycle-and-split-brain",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/start.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "010-node-lifecycle-and-split-brain",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/src/split_brain_check.rs"
+        }
+      },
+      {
+        "nature": "additive",
+        "spec": "015-server-binary-and-proxy",
+        "unit": {
+          "kind": "directory",
+          "path": "hiqlite/src/server/"
+        }
+      }
+    ],
+    "id": "045-upstream-reconciliation",
+    "implementation": "complete",
+    "origin": {
+      "retroactive": false
+    },
+    "owner": "hiqlite maintainers",
+    "references": [
+      {
+        "role": "dependency feature boundary",
+        "unit": {
+          "kind": "file",
+          "path": "Cargo.toml"
+        }
+      },
+      {
+        "role": "dependency feature boundary",
+        "unit": {
+          "kind": "file",
+          "path": "hiqlite/Cargo.toml"
+        }
+      }
+    ],
+    "risk": "high",
+    "sectionDigests": {
+      "045-reconcile-compatible-upstream-improvements": "42b44a05e63574f98f7185c759b8a140314b98dc7bdc7a1004e9a25d3ee32ffc",
+      "1-purpose": "f39f7c42d25fcd69fc3f5283fbb65827e660bc9a9f812199e2567cd2f83da8eb",
+      "2-territory": "4cb27d4dd3ed36d96d6f22c9ed9ea3c148e3f8da86df487650da317ff73e30dc",
+      "3-behavior": "22f793c5a960f849e75e7a6c4b47bb8e5d719f9adf846b6981310be6bcc42e6c",
+      "4-evidence-and-its-limits": "180d4288bf98cf0e50aa9a010e14b009b7c1653a014eef5463b4ae0409d91f58",
+      "5-known-defects": "7b6cce7102af6b2e817d256ba71c51d0c67d2f1678928f5028c38d6eac2f88c9",
+      "6-out-of-scope": "122a5cd2d5271f077200102cc693675aa6c69dea6f5793bdbe5327985e9ed1c8",
+      "7-resolved-decisions": "9ca6157a9d22e1164bf02338b8be73a92372a87e132b4688b181357100d244aa",
+      "b-1-aborting-a-raft-connection-cancels-its-socket-tasks": "7a27e2e9f8722e50c34bc9291c8da44ceb762bde29449939ecc9d310b21139d5",
+      "b-2-configure-tcp-keepalives-on-transport-sockets": "588ae4442c6c2a11a0059a4d9a8cac3cd5907641a262b98ea5f5d803d1ee41c3",
+      "b-3-reuse-the-split-brain-http-client": "dfd027b3184e9175dc0c0513f7ffca3e9d1c0bf713d01d049c2dad485ec12b5b",
+      "b-4-isolate-external-state-machine-dependencies": "a63548856c554d9f0e41094e723e56c4190d1de91b54868d5e7da6ccafce57b1",
+      "b-5-retain-the-consumer-contract": "3c8146ca97efff9632973ee75db7d6607933dd0fd6f4acf88c6de2c188d5f1a0",
+      "verification": "c183267d0128ceb6d794a9785706b4ea70b6aa3db59c6a292f76260df96a02af"
+    },
+    "sectionHeadings": [
+      "045: Reconcile compatible upstream improvements",
+      "1. Purpose",
+      "2. Territory",
+      "3. Behavior",
+      "B-1. Aborting a Raft connection cancels its socket tasks",
+      "B-2. Configure TCP keepalives on transport sockets",
+      "B-3. Reuse the split-brain HTTP client",
+      "B-4. Isolate external state-machine dependencies",
+      "B-5. Retain the consumer contract",
+      "4. Evidence and its limits",
+      "5. Known defects",
+      "6. Out of scope",
+      "7. Resolved decisions",
+      "Verification"
+    ],
+    "specPath": "specs/045-upstream-reconciliation/spec.md",
+    "status": "draft",
+    "summary": "Builds on the pending 044 port with upstream WebSocket task cancellation, TCP keepalives, reusable split-brain HTTP clients, and a smaller external state-machine dependency surface. Preserves fork persistence formats, recovery gates, storage ownership, truthful shutdown, and durability behavior. Does not release or qualify either downstream consumer.\n",
+    "title": "Reconcile compatible upstream transport and dependency improvements"
+  },
+  "shardHash": "4ae8530ba20a06c3ee55134dac537492defb9af778cb029fa0b9b9767dc23c31",
+  "specVersion": "1.8.0"
+}

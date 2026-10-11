@@ -86,6 +86,25 @@ fn default_config_file_path() -> String {
     format!("{}/hiqlite.toml", default_config_dir())
 }
 
+/// The literal `hiqlite proxy --help` documents as the default `--config-file`.
+pub(crate) const PROXY_CONFIG_FILE_DEFAULT: &str = "$HOME/.hiqlite/hiqlite.env";
+
+/// The file the proxy loads for its `--config-file` argument.
+///
+/// F-070 (`044` B-3): `clap` does not expand shell variables, so the documented default was
+/// passed on as the relative path `$HOME/.hiqlite/hiqlite.env`, which never exists, and the
+/// file an operator put at `~/.hiqlite/hiqlite.env` was never read. The `serve` path already
+/// special-cased its own sentinel (`build_node_config`); this is the same for the proxy.
+/// Upstream 0.15.0 fixed this inside a TOML redesign of the proxy configuration, which is not
+/// ported: the proxy keeps reading an env file.
+pub(crate) fn proxy_config_file_path(arg: String) -> String {
+    if arg == PROXY_CONFIG_FILE_DEFAULT {
+        format!("{}/hiqlite.env", default_config_dir())
+    } else {
+        arg
+    }
+}
+
 fn default_config(password_dashboard_b64: &str, insecure_cookie: bool) -> Result<String, Error> {
     let data_dir = format!("{}/data", default_config_dir());
     let secret_raft = utils::secure_random_alnum(32);
@@ -272,14 +291,21 @@ secret_raft = "{secret_raft}"
 # overwritten by: HQL_SECRET_API
 secret_api = "{secret_api}"
 
-# Configures the initial delay in seconds that should be applied
-# to `<API>/health` checks. During the first X seconds after node
-# start, health checks will always return true to solve a chicken-
+# Configures the initial delay that should be applied to
+# `<API>/health` checks. During that time after node start,
+# health checks will always return true to solve a chicken-
 # and-egg problem when you want to cold-start a cluster while
 # relying on `readinessProbe` checks.
+# Accepts an integer number of seconds, or a whole number with
+# one unit of s, m, h, d, w, y, for example "120s" or "2m".
+# The previous key `health_check_delay_secs` (an integer number
+# of seconds, overwritten by HQL_HEALTH_CHECK_DELAY_SECS) is
+# still read as a deprecated alias and logs a warning. If both
+# are set, `health_check_delay` wins.
 #
 # default: 30
-#health_check_delay_secs = 30
+# overwritten by: HQL_HEALTH_CHECK_DELAY
+#health_check_delay = "30s"
 
 # Set a newly joining node to stay a learner during startup reconciliation.
 # This is useful for read-only replicas that should not become voting
@@ -443,6 +469,22 @@ insecure_cookie = {insecure_cookie}
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// F-070 (`044` B-3): the documented default resolves under the real home directory, and
+    /// an explicit path is passed through untouched.
+    #[test]
+    fn the_proxy_default_config_file_resolves_under_the_home_directory() {
+        let resolved = proxy_config_file_path(PROXY_CONFIG_FILE_DEFAULT.to_string());
+        assert_eq!(resolved, format!("{}/.hiqlite/hiqlite.env", home_dir()));
+        assert!(!resolved.contains('$'), "got {resolved}");
+        assert_eq!(proxy_config_file_path("proxy.env".into()), "proxy.env");
+
+        let args = include_str!("args.rs");
+        assert!(
+            args.contains(&format!("default_value = \"{PROXY_CONFIG_FILE_DEFAULT}\"")),
+            "the sentinel must be the literal the CLI documents"
+        );
+    }
 
     /// Collects the top-level keys a reference configuration documents, whether
     /// the line is active or commented out, which is how both files mark

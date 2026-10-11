@@ -48,6 +48,8 @@ pub fn spawn(state: Arc<AppState>, nodes: Vec<Node>, tls: bool) -> Result<(), cr
 }
 
 async fn check_split_brain(state: Arc<AppState>, nodes: Vec<Node>, tls: bool, interval: Duration) {
+    // Reuse the API trust configuration for both groups and all check intervals.
+    let client = crate::http_client::build_http_client(crate::tls::api_no_verify());
     loop {
         time::sleep(interval).await;
 
@@ -63,6 +65,7 @@ async fn check_split_brain(state: Arc<AppState>, nodes: Vec<Node>, tls: bool, in
 
                 if let Err(err) = check_compare_membership(
                     &state,
+                    &client,
                     &nodes,
                     membership,
                     leader_expected,
@@ -91,6 +94,7 @@ async fn check_split_brain(state: Arc<AppState>, nodes: Vec<Node>, tls: bool, in
 
                 if let Err(err) = check_compare_membership(
                     &state,
+                    &client,
                     &nodes,
                     membership,
                     leader_expected,
@@ -135,6 +139,7 @@ If however the missing node is currently offline or just starting up, you can ig
 
 async fn check_compare_membership(
     state: &Arc<AppState>,
+    client: &reqwest::Client,
     nodes: &[Node],
     membership: Arc<StoredMembership<u64, Node>>,
     leader_expected: u64,
@@ -152,11 +157,8 @@ async fn check_compare_membership(
 
     let scheme = if tls { "https" } else { "http" };
 
-    // F-044: this was `reqwest::Client::new()`, which honours no override at all, while the
-    // scheme four lines above comes from the API endpoint's configuration. A node with a
-    // properly configured API endpoint could not have its split-brain checker verify it, and a
-    // node with `danger_tls_no_verify` could not have it accept one.
-    let client = crate::http_client::build_http_client(crate::tls::api_no_verify());
+    // F-044: the client supplied by the checker uses API trust and verification configuration,
+    // matching the endpoint that supplied the scheme above.
     for node in nodes_to_check {
         let url = format!("{}://{}/cluster/metrics/{}", scheme, node.addr_api, path);
         let res = client
