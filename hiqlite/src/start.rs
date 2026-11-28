@@ -159,10 +159,10 @@ where
     // would replay the log from ID 1 and never receive the existing data. A single node 1 is
     // always its own leader here, which `restore_backup_finish` needs.
     #[cfg(all(feature = "backup", feature = "sqlite"))]
-    if restore == backup::RestoreStart::Applied
-        || (_do_reset_metadata && node_config.node_id == 1 && node_config.nodes.len() == 1)
-    {
-        backup::restore_backup_finish(&state).await;
+    if let backup::RestoreStart::Applied(src) = &restore {
+        backup::restore_backup_finish(&state, &node_config.data_dir, src.as_ref()).await;
+    } else if _do_reset_metadata && node_config.node_id == 1 && node_config.nodes.len() == 1 {
+        backup::restore_backup_finish(&state, &node_config.data_dir, None).await;
     }
 
     let (tx_shutdown, rx_shutdown) = tokio::sync::watch::channel(None);
@@ -412,10 +412,11 @@ where
     #[cfg(feature = "sqlite")]
     member_db.await??;
     #[cfg(all(feature = "backup", feature = "sqlite"))]
-    if restore == backup::RestoreStart::Rejoin {
+    if let backup::RestoreStart::Rejoin(src) = restore {
         task::spawn(backup::discard_pre_restore_state(
             state.clone(),
             node_config.data_dir.to_string(),
+            src,
         ));
     }
     #[cfg(feature = "cache")]
