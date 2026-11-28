@@ -1,0 +1,66 @@
+name: Check (parallel, no cache)
+
+on:
+    pull_request:
+        types:
+            - opened
+            - reopened
+            - synchronize
+            - ready_for_review
+
+# A new push to a PR cancels its run that is still going.
+concurrency:
+    group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+    cancel-in-progress: true
+
+permissions:
+    contents: read
+
+env:
+    CARGO_RESOLVER_INCOMPATIBLE_PUBLISH_AGE: allow
+    CARGO_TERM_COLOR: always
+    # `clear` in the just recipes fails without TERM on CI runners
+    TERM: xterm
+
+jobs:
+    clippy:
+        if: github.event_name == 'push' || github.event.pull_request.draft == false
+        name: Format and Clippy
+        runs-on: ubuntu-latest
+        container:
+            image: ghcr.io/sebadob/rauthy-builder:20261123
+        steps:
+            - uses: actions/checkout@v4
+            - name: Code Format
+              run: cargo fmt --check
+            - name: Clippy
+              run: cargo clippy
+            - name: Clippy (feature matrix)
+              run: just clippy
+
+    examples:
+        if: github.event_name == 'push' || github.event.pull_request.draft == false
+        name: Clippy (examples)
+        runs-on: ubuntu-latest
+        container:
+            image: ghcr.io/sebadob/rauthy-builder:20261123
+        steps:
+            - uses: actions/checkout@v4
+            # One target dir for all examples: each one would otherwise build every dependency
+            # and hiqlite itself again in its own `examples/*/target`.
+            - name: Shared target dir
+              run: echo "CARGO_TARGET_DIR=$GITHUB_WORKSPACE/target" >> "$GITHUB_ENV"
+            - name: Clippy (examples)
+              run: just clippy-examples
+
+    test:
+        if: github.event_name == 'push' || github.event.pull_request.draft == false
+        name: Tests
+        runs-on: ubuntu-latest
+        container:
+            image: ghcr.io/sebadob/rauthy-builder:20261123
+        steps:
+            - uses: actions/checkout@v4
+            - name: Tests
+              # S3 tests cannot be done inside GitHub CI
+              run: just test-no-s3
